@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
-import 'scanner_screen.dart'; // Importamos la pantalla del escáner
+import 'scanner_screen.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final String eventName;
@@ -23,7 +23,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   String _searchQuery = '';
   final _searchController = TextEditingController();
 
-  Future<void> _processSale() async {
+  Future<void> _processSale(String paymentMethod) async {
     final vendorId = AuthManager().loggedInVendor?.id;
     if (vendorId == null) return;
 
@@ -33,9 +33,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         .collection('vendedores')
         .doc(vendorId);
 
+    final salesCollectionRef = FirebaseFirestore.instance
+        .collection('eventos')
+        .doc(widget.eventId)
+        .collection('sales');
+
     WriteBatch batch = FirebaseFirestore.instance.batch();
     double totalSaleValue = 0;
     int totalItemsSold = 0;
+
+    final saleDocRef = salesCollectionRef.doc();
+
+    List<Map<String, dynamic>> itemsList = [];
 
     _shoppingCart.forEach((productId, quantity) {
       if (quantity > 0) {
@@ -45,9 +54,26 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         batch.update(productDoc.reference, {
           'stock': FieldValue.increment(-quantity),
         });
-        totalSaleValue += (productData['precio'] * quantity);
+
+        double salePrice = (productData['precio'] * quantity).toDouble();
+        totalSaleValue += salePrice;
         totalItemsSold += quantity;
+
+        itemsList.add({
+          'productId': productId,
+          'productName': productData['nombreproduct'],
+          'quantity': quantity,
+          'price': salePrice,
+        });
       }
+    });
+
+    batch.set(saleDocRef, {
+      'vendorId': vendorId,
+      'paymentMethod': paymentMethod,
+      'timestamp': FieldValue.serverTimestamp(),
+      'total': totalSaleValue,
+      'items': itemsList,
     });
 
     batch.update(vendorDocRef, {
@@ -59,7 +85,15 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     setState(() {
       _shoppingCart.clear();
     });
-    print('¡Venta registrada!');
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Venta realizada con éxito!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   @override
@@ -140,12 +174,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   return productName.contains(_searchQuery.toLowerCase());
                 }).toList();
 
-                if (filteredProducts.isEmpty) {
-                  return const Center(
-                    child: Text('No se encontraron productos.'),
-                  );
-                }
-
                 return ListView(
                   children: filteredProducts.map((document) {
                     final data = document.data()! as Map<String, dynamic>;
@@ -211,14 +239,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     child: const Text('Efectivo'),
                     onPressed: () {
                       Navigator.of(context).pop();
-                      _processSale();
+                      _processSale('Efectivo');
                     },
                   ),
                   TextButton(
                     child: const Text('Tarjeta'),
                     onPressed: () {
                       Navigator.of(context).pop();
-                      _processSale();
+                      _processSale('Tarjeta');
+                    },
+                  ),
+                  // --- BOTÓN DE CANCELAR AÑADIDO ---
+                  TextButton(
+                    child: const Text('Cancelar'),
+                    onPressed: () {
+                      Navigator.of(
+                        context,
+                      ).pop(); // Simplemente cierra el diálogo
                     },
                   ),
                 ],

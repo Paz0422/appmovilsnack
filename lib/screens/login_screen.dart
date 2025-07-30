@@ -2,18 +2,30 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
-import 'package:front_appsnack/screens/vendedores/vendor_home_screen.dart'; // <-- Importamos la nueva pantalla
 import 'package:front_appsnack/screens/admin/admin_home_screen.dart';
+import 'package:front_appsnack/screens/vendedores/pantalla_seleccion_sector.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  late final AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+  }
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
@@ -26,8 +38,12 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) =>
-          Center(child: Image.asset('assets/imagenes/logo.png', width: 100)),
+      builder: (context) => Center(
+        child: RotationTransition(
+          turns: _animationController,
+          child: Image.asset('assets/imagenes/logo.png', width: 100),
+        ),
+      ),
     );
 
     try {
@@ -57,15 +73,28 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (mounted) {
         if (userRole == 'vendedor') {
-          // Si es vendedor, va a su nuevo panel
+          final String eventId = vendorData['idEventoAsig'] ?? '';
+          final String eventName = vendorData['eventoAsignado'] ?? 'Evento';
+
+          final eventDoc = await FirebaseFirestore.instance
+              .collection('eventos')
+              .doc(eventId)
+              .get();
+          final eventData = eventDoc.data();
+          final Map<String, dynamic> puntosDeVenta = Map<String, dynamic>.from(
+            eventData?['puntos_de_venta'] ?? {},
+          );
+
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) =>
-                  const VendorHomeScreen(), // <-- LÍNEA CORREGIDA
+              builder: (context) => PantallaSeleccionSector(
+                eventId: eventId,
+                eventName: eventName,
+                puntosDeVenta: puntosDeVenta,
+              ),
             ),
           );
         } else {
-          // Si es admin o dueño, va a la lista de eventos
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const AdminHomeScreen()),
           );
@@ -76,7 +105,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _showErrorSnackBar('PIN o usuario incorrecto.');
     } catch (e) {
       if (mounted) Navigator.of(context).pop();
-      print('Ocurrió un error: ${e.toString()}');
+      _showErrorSnackBar('Ocurrió un error: ${e.toString()}');
     }
   }
 
@@ -84,6 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -97,20 +127,13 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Image.asset('assets/imagenes/logo.png', width: 150),
-              const Text(
-                'Bienvenido!',
-                style: TextStyle(
-                  fontSize: 28, // Tamaño de letra
-                  fontWeight: FontWeight.bold, // Letra en negrita
-                ),
-              ),
               const SizedBox(height: 40),
               TextField(
                 controller: _usernameController,
                 decoration: const InputDecoration(
                   labelText: 'Nombre de Usuario',
-                  labelStyle: TextStyle(fontStyle: FontStyle.italic),
                   border: OutlineInputBorder(),
+                  labelStyle: TextStyle(fontStyle: FontStyle.italic),
                 ),
               ),
               const SizedBox(height: 20),
@@ -118,8 +141,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 controller: _passwordController,
                 decoration: const InputDecoration(
                   labelText: 'PIN (Contraseña)',
-                  labelStyle: TextStyle(fontStyle: FontStyle.italic),
                   border: OutlineInputBorder(),
+                  labelStyle: TextStyle(fontStyle: FontStyle.italic),
                 ),
                 keyboardType: TextInputType.number,
                 obscureText: true,

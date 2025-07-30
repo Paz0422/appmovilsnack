@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:front_appsnack/main.dart'; // Importamos HomeScreen
+import 'package:front_appsnack/main.dart';
+import 'package:front_appsnack/screens/home_screen.dart';
 
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});

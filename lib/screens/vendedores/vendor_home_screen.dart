@@ -3,7 +3,9 @@ import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/screens/pantalla_detalle_evento.dart';
 import 'package:front_appsnack/screens/vendedores/pantalla_estadisticas_vendedor.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:front_appsnack/screens/vendedores/pantalla_seleccion_sector.dart';
 import '../login_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class VendorHomeScreen extends StatelessWidget {
   const VendorHomeScreen({super.key});
@@ -23,26 +25,25 @@ class VendorHomeScreen extends StatelessWidget {
             context: context,
             icon: Icons.point_of_sale,
             title: 'Realizar Venta',
-            onTap: () {
+            onTap: () async {
+              // Lógica para ir DIRECTO a la pantalla de venta (detalle del evento)
               final vendorData =
                   AuthManager().loggedInVendor?.data() as Map<String, dynamic>?;
+              if (vendorData == null) return;
 
-              if (vendorData != null) {
-                final String eventId = vendorData['idEventoAsig'] ?? '';
-                final String eventName =
-                    vendorData['eventoAsignado'] ?? 'Evento';
+              final String eventId = vendorData['idEventoAsig'] ?? '';
+              final String eventName = vendorData['eventoAsignado'] ?? 'Evento';
 
-                // Navegamos a la pantalla de detalle, pasándole los datos del evento
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => EventDetailScreen(
-                      eventName: eventName,
-                      eventId: eventId,
-                    ),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => EventDetailScreen(
+                    // <-- Debe ir aquí
+                    eventId: eventId,
+                    eventName: eventName,
                   ),
-                );
-              }
+                ),
+              );
             },
           ),
           _buildMenuCard(
@@ -83,6 +84,32 @@ class VendorHomeScreen extends StatelessWidget {
                 );
               }
             },
+          ),
+          _buildMenuCard(
+            context: context,
+            icon: Icons.receipt_long,
+            title: 'Registro de Ventas',
+            onTap: () {
+              // Lógica para ir a la nueva pantalla de registro
+            },
+          ),
+          _buildMenuCard(
+            context: context,
+            icon: Icons.fastfood,
+            title: 'Bandejeo',
+            onTap: () {},
+          ),
+          _buildMenuCard(
+            context: context,
+            icon: Icons.person_pin,
+            title: 'Consumo personal',
+            onTap: () {},
+          ),
+          _buildMenuCard(
+            context: context,
+            icon: Icons.report_problem,
+            title: 'Reportes productos',
+            onTap: () {},
           ),
           _buildMenuCard(
             context: context,
