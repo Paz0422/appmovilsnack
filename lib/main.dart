@@ -1,11 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart'
+    show kIsWeb; // Importante para detectar la web
+
 import 'firebase_options.dart';
-import 'screens/login_screen.dart';
+import 'auth/auth_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // --- LÓGICA DE INICIALIZACIÓN PARA MÚLTIPLES PLATAFORMAS ---
+  if (kIsWeb) {
+    // --- Ejecución en la WEB ---
+
+    // Configuración de Firebase para la web (obtenida de tu captura)
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyDyGxBTz7ZoGo7VHg-BW1hnsQLjfVbibc",
+        authDomain: "snack-estadio.firebaseapp.com",
+        projectId: "snack-estadio",
+        storageBucket: "snack-estadio.firebasestorage.app",
+        messagingSenderId: "300612690116",
+        appId: "1:300612690116:web:0846b7b0b9c961eb172991",
+        measurementId: "G-6868QCC7VD",
+      ),
+    );
+  } else {
+    // --- Ejecución en ANDROID o iOS ---
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
+
+  // Habilita la persistencia (solo funciona en móvil, en web se ignora sin dar error)
+  try {
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+    );
+  } catch (e) {
+    // Ignorar error en web, donde la persistencia se maneja de otra forma.
+  }
+
   runApp(const MyApp());
 }
 
@@ -23,7 +59,7 @@ class MyApp extends StatelessWidget {
         fontFamily: 'WinkyRough',
         useMaterial3: true,
       ),
-      home: const LoginScreen(),
+      home: const AuthGate(),
     );
   }
 }

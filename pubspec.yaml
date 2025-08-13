@@ -15,6 +15,10 @@ dependencies:
   firebase_auth: ^5.7.0
   mobile_scanner: ^7.0.1
   page_transition: ^2.2.1
+  animate_do: ^3.3.4
+  flutter_animate: ^4.5.0
+  google_fonts: ^6.2.1
+  
 
 dev_dependencies:
   flutter_test:
@@ -31,3 +35,8 @@ flutter:
     - family: WinkyRough
       fonts:
         - asset: fonts/WinkyRough-Light.ttf
+
+    - family: Roboto
+      fonts:
+        - asset: fonts/RobotoCondensed-VariableFont_wght.ttf
+
