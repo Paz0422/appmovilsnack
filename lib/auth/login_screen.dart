@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/screens/admin/admin_home_screen.dart';
 import 'package:front_appsnack/screens/vendedores/vendor_home_screen.dart';
-
-// NUEVO: Imports para las mejoras visuales
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -50,10 +48,26 @@ class _LoginScreenState extends State<LoginScreen>
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Center(
-        child: RotationTransition(
-          turns: _animationController,
-          child: Image.asset('assets/imagenes/logo.png', width: 100),
+      builder: (context) => const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(
+              color: Color.fromARGB(255, 200, 173, 73),
+              strokeWidth: 5.0, // Usamos strokeWidth para darle grosor
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+            SizedBox(height: 20),
+            Text(
+              "Cargando...",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18.0,
+                fontWeight: FontWeight.bold,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -75,6 +89,7 @@ class _LoginScreenState extends State<LoginScreen>
       final vendorData = vendorDocument.data();
       final String email = vendorData['email'];
       final String userRole = vendorData['rol'];
+      final String eventoId = vendorData['idEventoAsignado'];
 
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
@@ -86,7 +101,9 @@ class _LoginScreenState extends State<LoginScreen>
       if (mounted) {
         if (userRole == 'vendedor') {
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const HomeVendedor()),
+            MaterialPageRoute(
+              builder: (context) => HomeVendedor(eventId: eventoId),
+            ),
           );
         } else {
           Navigator.of(context).pushReplacement(
@@ -111,9 +128,6 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  // =================================================================
-  // AQUI COMIENZAN TODOS LOS CAMBIOS VISUALES
-  // =================================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -121,27 +135,35 @@ class _LoginScreenState extends State<LoginScreen>
         // 1. FONDO CON GRADIENTE
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF6E45E2), Color.fromARGB(255, 255, 243, 132)],
+            colors: [
+              Color.fromARGB(255, 161, 149, 35),
+              Color.fromARGB(255, 255, 243, 132),
+            ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
         ),
         child: Center(
-          // 2. SCROLL PARA EVITAR OVERFLOW CON EL TECLADO
+          //SCROLL PARA EVITAR OVERFLOW CON EL TECLADO
           child: SingleChildScrollView(
             child: Container(
-              // 3. TARJETA PARA AGRUPAR EL FORMULARIO
+              //TARJETA PARA AGRUPAR EL FORMULARIO
               margin: const EdgeInsets.symmetric(horizontal: 24.0),
               padding: const EdgeInsets.symmetric(
                 horizontal: 24.0,
                 vertical: 32.0,
               ),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.95),
-                borderRadius: BorderRadius.circular(20.0),
+                color: const Color.fromARGB(
+                  255,
+                  243,
+                  222,
+                  165,
+                ).withOpacity(0.9),
+                borderRadius: BorderRadius.circular(50.0),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withOpacity(0.5),
                     blurRadius: 15,
                     spreadRadius: 5,
                   ),
@@ -218,7 +240,7 @@ class _LoginScreenState extends State<LoginScreen>
                   TextField(
                         controller: _passwordController,
                         decoration: InputDecoration(
-                          labelText: 'PIN (Contraseña)',
+                          labelText: 'Pin (Contraseña)',
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(20.0),
                           ),
