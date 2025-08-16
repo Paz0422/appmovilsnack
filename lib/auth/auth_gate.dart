@@ -1,85 +1,86 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:front_appsnack/auth/auth_manager.dart';
-import 'package:front_appsnack/auth/login_screen.dart';
-import 'package:front_appsnack/screens/admin/admin_home_screen.dart'; // Corregido: Nombre de la pantalla de admin
-import 'package:front_appsnack/screens/vendedores/vendor_home_screen.dart'; // Corregido: Nombre de la pantalla de vendedor
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:front_appsnack/screens/admin/home_admin.dart';
+import 'package:front_appsnack/screens/estadio_selection.dart';
+import 'package:front_appsnack/auth/login_screen.dart'; // Asegúrate de que la ruta sea correcta
+import 'package:front_appsnack/screens/panel_ventas.dart'; // Asegúrate de que la ruta sea correcta
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const LoginScreen();
-        }
+    return Scaffold(
+      body: StreamBuilder<User?>(
+        // 1. Escuchamos el estado de autenticación de Firebase
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, authSnapshot) {
+          // Si está esperando, muestra un cargador
+          if (authSnapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-        return FutureBuilder<DocumentSnapshot?>(
-          future: _getUserData(snapshot.data!.uid),
-          builder: (context, userSnapshot) {
-            if (userSnapshot.connectionState == ConnectionState.waiting) {
-              return Scaffold(
-                body: Center(
-                  // Es buena idea usar un indicador de carga aquí también
-                  child: Image.asset('assets/imagenes/logo.png', width: 100),
-                ),
-              );
-            }
+          // Si el usuario TIENE sesión iniciada
+          if (authSnapshot.hasData) {
+            final user = authSnapshot.data!;
 
-            if (!userSnapshot.hasData ||
-                userSnapshot.data == null ||
-                !userSnapshot.data!.exists) {
-              // Si no encuentra al usuario en la BD, lo desloguea por seguridad
-              FirebaseAuth.instance.signOut();
-              return const LoginScreen();
-            }
+            // 2. Ahora que sabemos que está logueado, buscamos sus datos en Firestore
+            return FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance
+                  .collection('vendedores')
+                  .doc(user.uid)
+                  .get(),
+              builder: (context, userSnapshot) {
+                // Mientras busca los datos del vendedor...
+                if (userSnapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-            // --- INICIO DE LA MODIFICACIÓN ---
+                // Si no encuentra el documento del vendedor o hay un error...
+                if (userSnapshot.hasError ||
+                    !userSnapshot.hasData ||
+                    !userSnapshot.data!.exists) {
+                  // Lo mandamos a la pantalla de login para evitar problemas.
+                  // También podrías mostrar un mensaje de error.
+                  return const LoginScreen();
+                }
 
-            final userData = userSnapshot.data!.data() as Map<String, dynamic>;
-            final userRole = userData['rol'];
-            AuthManager().loggedInVendor = userSnapshot.data;
+                // 3. ¡Tenemos los datos del vendedor! Aplicamos la misma lógica del signIn.
+                final vendorData =
+                    userSnapshot.data!.data() as Map<String, dynamic>;
+                final String? eventoIdAsignado = vendorData['idEventoAsignado'];
+                final String? sectorAsignado = vendorData['sectorAsignado'];
+                final String userRole = vendorData['rol'] ?? 'vendedor';
 
-            if (userRole == 'vendedor') {
-              // 1. Extraemos el ID del evento desde los datos del usuario
-              final eventId = userData['idEventoAsignado'];
+                // 4. Decidimos a qué pantalla redirigir
 
-              // 2. Verificamos por seguridad que el eventId no sea nulo
-              if (eventId != null) {
-                // 3. Pasamos el eventId a HomeVendedor y quitamos 'const'
-                return HomeVendedor(eventId: eventId as String);
-              }
-            } else if (userRole == 'admin') {
-              // Corregido para usar el nombre correcto de la pantalla de admin
-              return const HomeAdmin();
-            }
+                // Caso 1: Vendedor con puesto asignado
+                if (eventoIdAsignado != null &&
+                    sectorAsignado != null &&
+                    eventoIdAsignado.isNotEmpty &&
+                    sectorAsignado.isNotEmpty) {
+                  return PanelVentas(
+                    eventoId: eventoIdAsignado,
+                    nombreSector: sectorAsignado,
+                  );
+                }
 
-            // Si el rol no es reconocido o falta el eventId, lo mandamos al login
-            FirebaseAuth.instance.signOut();
+                // Caso 2 y 3: Sin asignación, decidimos por rol
+                if (userRole == 'admin') {
+                  return const HomeAdmin(); // Admin
+                } else {
+                  return const EstadioSelection(); // Vendedor sin asignar
+                }
+              },
+            );
+          }
+          // Si el usuario NO tiene sesión iniciada
+          else {
             return const LoginScreen();
-
-            // --- FIN DE LA MODIFICACIÓN ---
-          },
-        );
-      },
+          }
+        },
+      ),
     );
-  }
-
-  // --- MODIFICACIÓN SUGERIDA EN LA CONSULTA ---
-  Future<DocumentSnapshot?> _getUserData(String uid) async {
-    // Basado en tus capturas, 'vendedores' es una colección principal
-    // y el ID de cada documento debería ser el UID del usuario de Firebase.
-    // Esta consulta es más directa y correcta para tu estructura.
-    final userDoc = await FirebaseFirestore.instance
-        .collection('vendedores')
-        .doc(uid)
-        .get();
-
-    // Si el documento existe, lo devolvemos, si no, devolvemos null.
-    return userDoc.exists ? userDoc : null;
   }
 }
