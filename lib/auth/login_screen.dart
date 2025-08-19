@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/screens/admin/home_admin.dart';
 import 'package:front_appsnack/screens/estadio_selection.dart';
-import 'package:front_appsnack/screens/panel_ventas.dart'; // <-- Importante: Asegúrate de que este import sea correcto
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:ui'; // Necesario para ImageFilter.blur
 import 'package:wave/wave.dart';
 import 'package:wave/config.dart';
+import 'package:front_appsnack/auth/register_screen.dart';
+import 'package:front_appsnack/auth/reset_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -43,7 +44,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- FUNCIÓN signIn CON LA LÓGICA DE REDIRECCIÓN COMPLETA ---
   Future<void> signIn() async {
     final username = _usernameController.text.trim();
     final password = _passwordController.text.trim();
@@ -77,8 +77,6 @@ class _LoginScreenState extends State<LoginScreen> {
       final vendorDocument = querySnapshot.docs.first;
       final vendorData = vendorDocument.data() as Map<String, dynamic>;
 
-      final String? eventoIdAsignado = vendorData['idEventoAsignado'];
-      final String? sectorAsignado = vendorData['sectorAsignado'];
       final String userRole = vendorData['rol'] ?? 'vendedor';
 
       await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -89,43 +87,45 @@ class _LoginScreenState extends State<LoginScreen> {
       AuthManager().loggedInVendor = vendorDocument;
 
       if (mounted) {
-        Navigator.of(context).pop();
+        Navigator.of(context).pop(); // Cierra el indicador de carga
 
-        // 1. ¿Tiene asignación directa?
-        if (eventoIdAsignado != null &&
-            sectorAsignado != null &&
-            eventoIdAsignado.isNotEmpty &&
-            sectorAsignado.isNotEmpty) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (context) => PanelVentas(
-                eventoId: eventoIdAsignado,
-                nombreSector: sectorAsignado,
-              ),
-            ),
-            (route) => false,
-          );
-        } else {
-          // 2. Si no tiene, decidimos por rol
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (context) => (userRole == 'admin')
-                  ? const HomeAdmin() // Si es admin, va a su home
-                  : const EstadioSelection(), // Si es vendedor, va a la selección
-            ),
-            (route) => false,
-          );
-        }
+        // Lógica de redirección
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => (userRole == 'admin')
+                ? const HomeAdmin() // Si es admin, va a su home
+                : const EstadioSelection(), // Si es vendedor, va a la selección del estadio
+          ),
+          (route) => false, // Elimina todas las rutas anteriores de la pila
+        );
       }
-    } on FirebaseAuthException {
+    } on FirebaseAuthException catch (e) {
       if (mounted) Navigator.of(context).pop();
-      _showErrorSnackBar('PIN o usuario incorrecto.');
+      // Manejo de errores más específico para FirebaseAuthException
+      if (e.code == 'user-not-found' || e.code == 'wrong-password') {
+        _showErrorSnackBar('PIN o usuario incorrecto.');
+      } else {
+        _showErrorSnackBar('Error de autenticación: ${e.message}');
+      }
     } catch (e) {
       if (mounted) Navigator.of(context).pop();
       _showErrorSnackBar('Ocurrió un error inesperado: ${e.toString()}');
     }
+  }
+
+  void _navigateToRegister() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const RegisterScreen()),
+    );
+  }
+
+  void _navigateToResetPassword() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ResetPasswordScreen()),
+    );
   }
 
   @override
@@ -172,7 +172,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 waveAmplitude: 0,
               ),
             ),
-
           // Capa 3: Formulario
           Center(
             child: SingleChildScrollView(
@@ -241,11 +240,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               curve: Curves.easeOut,
                             ),
                         const SizedBox(height: 20),
+                        // CAMBIO AQUÍ: Eliminado keyboardType para permitir letras y números
                         TextField(
                               controller: _passwordController,
                               style: _inputStyle,
                               obscureText: !_isPasswordVisible,
-                              keyboardType: TextInputType.number,
+                              // keyboardType: TextInputType.number, // <--- ESTA LÍNEA FUE ELIMINADA
                               decoration:
                                   _buildInputDecoration(
                                     'Pin (Contraseña)',
@@ -301,6 +301,30 @@ class _LoginScreenState extends State<LoginScreen> {
                             .animate()
                             .fade(delay: 1100.ms)
                             .slideY(begin: 1.0, curve: Curves.easeOut),
+                        const SizedBox(height: 10),
+
+                        TextButton(
+                          onPressed: _navigateToResetPassword,
+                          child: Text(
+                            '¿Olvidaste tu contraseña?',
+                            style: GoogleFonts.lato(
+                              color: primaryColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+
+                        TextButton(
+                          onPressed: _navigateToRegister,
+                          child: Text(
+                            '¿No tienes cuenta? Regístrate',
+                            style: GoogleFonts.lato(
+                              color: primaryColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),

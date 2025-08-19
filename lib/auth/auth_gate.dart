@@ -6,8 +6,30 @@ import 'package:front_appsnack/screens/estadio_selection.dart';
 import 'package:front_appsnack/auth/login_screen.dart'; // Asegúrate de que la ruta sea correcta
 import 'package:front_appsnack/screens/panel_ventas.dart'; // Asegúrate de que la ruta sea correcta
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  @override
+  void initState() {
+    super.initState();
+    // Verificar si hay una sesión existente al iniciar la app
+    _checkExistingSession();
+  }
+
+  Future<void> _checkExistingSession() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        // Hay una sesión activa, verificar que sea válida
+        await user.reload();
+      }
+    } catch (e) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +59,6 @@ class AuthGate extends StatelessWidget {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                // Si no encuentra el documento del vendedor o hay un error...
                 if (userSnapshot.hasError ||
                     !userSnapshot.hasData ||
                     !userSnapshot.data!.exists) {
@@ -49,24 +70,8 @@ class AuthGate extends StatelessWidget {
                 // 3. ¡Tenemos los datos del vendedor! Aplicamos la misma lógica del signIn.
                 final vendorData =
                     userSnapshot.data!.data() as Map<String, dynamic>;
-                final String? eventoIdAsignado = vendorData['idEventoAsignado'];
-                final String? sectorAsignado = vendorData['sectorAsignado'];
                 final String userRole = vendorData['rol'] ?? 'vendedor';
 
-                // 4. Decidimos a qué pantalla redirigir
-
-                // Caso 1: Vendedor con puesto asignado
-                if (eventoIdAsignado != null &&
-                    sectorAsignado != null &&
-                    eventoIdAsignado.isNotEmpty &&
-                    sectorAsignado.isNotEmpty) {
-                  return PanelVentas(
-                    eventoId: eventoIdAsignado,
-                    nombreSector: sectorAsignado,
-                  );
-                }
-
-                // Caso 2 y 3: Sin asignación, decidimos por rol
                 if (userRole == 'admin') {
                   return const HomeAdmin(); // Admin
                 } else {

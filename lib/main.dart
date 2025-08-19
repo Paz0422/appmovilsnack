@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart'
     show kIsWeb; // Importante para detectar la web
@@ -33,13 +34,26 @@ void main() async {
     );
   }
 
-  // Habilita la persistencia (solo funciona en móvil, en web se ignora sin dar error)
+  // Habilita la persistencia de Firestore (solo funciona en móvil, en web se ignora sin dar error)
   try {
     FirebaseFirestore.instance.settings = const Settings(
       persistenceEnabled: true,
     );
   } catch (e) {
     // Ignorar error en web, donde la persistencia se maneja de otra forma.
+  }
+
+  // Configura la persistencia de Firebase Auth solo en web
+  if (kIsWeb) {
+    try {
+      await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+      print('Persistencia de Auth configurada en web');
+    } catch (e) {
+      print('Error configurando persistencia en web: $e');
+    }
+  } else {
+    // En móvil, la persistencia se maneja automáticamente
+    print('Persistencia de Auth automática en móvil');
   }
 
   runApp(const MyApp());
