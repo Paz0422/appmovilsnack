@@ -26,19 +26,21 @@ class _HomeVendedorState extends State<HomeVendedor> {
 
   // Paleta de colores basada en el logo "Fusión"
   final Color primaryColor = const Color(0xFF2B2B2B); // Negro/marrón oscuro
-  final Color accentColor = const Color(0xFFFFB300); // Dorado brillante real
+  final Color accentColor = const Color(0xFFDABF41); // Dorado brillante
   final Color secondaryColor = const Color(0xFF6B4D2F); // Marrón medio
   final Color backgroundColor = const Color(0xFFFDFBF7); // Fondo claro elegante
 
   // Variables para estadísticas dinámicas
-  String currentSector = '';
-  Map<String, dynamic> sectorStats = {};
-  DateTime currentTime = DateTime.now();
+  Map<String, dynamic> _sectorStats = {};
+  DateTime _currentTime = DateTime.now();
+  late final String _currentSectorNombre;
+  late final String _currentSectorId;
 
   @override
   void initState() {
     super.initState();
-    currentSector = widget.nombreSector;
+    _currentSectorNombre = widget.nombreSector;
+    _currentSectorId = widget.sectorId;
     _loadSectorStats();
     _startTimer();
   }
@@ -48,7 +50,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) {
         setState(() {
-          currentTime = DateTime.now();
+          _currentTime = DateTime.now();
         });
         _startTimer(); // Continuar el timer
       }
@@ -61,22 +63,39 @@ class _HomeVendedorState extends State<HomeVendedor> {
           .collection('eventos')
           .doc(widget.eventId)
           .collection('sectores')
-          .doc(currentSector)
+          .doc(_currentSectorId)
           .get();
 
       if (doc.exists) {
         final data = doc.data()!;
+        final num totalVendido = data['totalVendido'] as num? ?? 0.0;
+        final int productosVendidos = data['productosVendidos'] as int? ?? 0;
+        final num promedio = productosVendidos > 0
+            ? totalVendido / productosVendidos
+            : 0.0;
+
         setState(() {
-          sectorStats = {
-            'totalVendido': data['totalVendido']?.toString() ?? '\$0.00',
-            'productos': data['productos']?.toString() ?? '0',
-            'fecha': data['fecha'] ?? '--',
-            'promedio': data['promedio']?.toString() ?? '\$0.00',
+          _sectorStats = {
+            'totalVendido': '\$${totalVendido.toStringAsFixed(0)}',
+            'productosVendidos': productosVendidos.toString(),
+            'promedio': '\$${promedio.toStringAsFixed(0)}',
           };
         });
       }
     } catch (e) {
       debugPrint("Error cargando estadísticas del sector: $e");
+      // Opcional: Mostrar un SnackBar al usuario
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error al cargar estadísticas: $e',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -149,7 +168,15 @@ class _HomeVendedorState extends State<HomeVendedor> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Sector: $currentSector',
+                            'Sector:',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: secondaryColor,
+                            ),
+                          ),
+                          Text(
+                            _currentSectorNombre,
                             style: GoogleFonts.poppins(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -162,7 +189,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            '${currentTime.hour.toString().padLeft(2, '0')}:${currentTime.minute.toString().padLeft(2, '0')}:${currentTime.second.toString().padLeft(2, '0')}',
+                            '${_currentTime.hour.toString().padLeft(2, '0')}:${_currentTime.minute.toString().padLeft(2, '0')}:${_currentTime.second.toString().padLeft(2, '0')}',
                             style: GoogleFonts.poppins(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
@@ -170,7 +197,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                             ),
                           ),
                           Text(
-                            '${currentTime.day.toString().padLeft(2, '0')}/${currentTime.month.toString().padLeft(2, '0')}/${currentTime.year}',
+                            '${_currentTime.day.toString().padLeft(2, '0')}/${_currentTime.month.toString().padLeft(2, '0')}/${_currentTime.year}',
                             style: GoogleFonts.poppins(
                               fontSize: 12,
                               color: secondaryColor,
@@ -235,15 +262,14 @@ class _HomeVendedorState extends State<HomeVendedor> {
               MaterialPageRoute(
                 builder: (context) => PanelVentas(
                   eventoId: widget.eventId,
-                  nombreSector: currentSector,
+                  nombreSector: _currentSectorNombre,
+                  sectorId: _currentSectorId,
                 ),
               ),
             );
 
-            if (result != null && result is String && result != currentSector) {
-              setState(() {
-                currentSector = result;
-              });
+            // Si el resultado de PanelVentas es 'true', significa que se realizó una venta
+            if (result == true) {
               _loadSectorStats();
             }
           },
@@ -307,7 +333,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                 size: 32,
               ),
               Text(
-                sectorStats['totalVendido'] ?? '\$0.00',
+                _sectorStats['totalVendido'] ?? '\$0',
                 style: GoogleFonts.poppins(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
@@ -324,12 +350,12 @@ class _HomeVendedorState extends State<HomeVendedor> {
             _buildFloatingStatItem(
               icon: Icons.inventory_2,
               title: 'Productos Vendidos',
-              value: sectorStats['productos'] ?? '0',
+              value: _sectorStats['productosVendidos'] ?? '0',
             ),
             _buildFloatingStatItem(
               icon: Icons.trending_up,
               title: 'Promedio',
-              value: sectorStats['promedio'] ?? '\$0.0',
+              value: _sectorStats['promedio'] ?? '\$0',
             ),
           ],
         ),
@@ -396,7 +422,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    currentSector,
+                    _currentSectorNombre,
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       color: Colors.white70,

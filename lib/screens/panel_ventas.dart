@@ -6,11 +6,13 @@ import 'stock_screen.dart';
 class PanelVentas extends StatefulWidget {
   final String eventoId;
   final String nombreSector;
+  final String sectorId;
 
   const PanelVentas({
     super.key,
     required this.eventoId,
     required this.nombreSector,
+    required this.sectorId,
   });
 
   @override
@@ -18,8 +20,9 @@ class PanelVentas extends StatefulWidget {
 }
 
 class _PanelVentasState extends State<PanelVentas> {
-  String? _sectorActual;
-  List<String> _todosLosSectores = [];
+  String? _sectorActualNombre;
+  String? _sectorActualId;
+  List<Map<String, String>> _todosLosSectores = [];
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -39,7 +42,8 @@ class _PanelVentasState extends State<PanelVentas> {
   @override
   void initState() {
     super.initState();
-    _sectorActual = widget.nombreSector;
+    _sectorActualNombre = widget.nombreSector;
+    _sectorActualId = widget.sectorId;
     _cargarDatosIniciales();
     _searchController.addListener(_filtrarProductos);
   }
@@ -52,13 +56,24 @@ class _PanelVentasState extends State<PanelVentas> {
 
   Future<void> _cargarDatosIniciales() async {
     try {
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _errorMessage = null;
+        });
+      }
       await _cargarSectoresDelEvento();
-      await _cargarProductos();
+      await _cargarProductosPorSector();
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Error de conexión: ${e.message}';
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage =
-              'Error al cargar datos. Revisa tu conexión y permisos.';
+          _errorMessage = 'Error inesperado: $e';
         });
       }
     } finally {
@@ -72,42 +87,57 @@ class _PanelVentasState extends State<PanelVentas> {
 
   Future<void> _cargarSectoresDelEvento() async {
     try {
-      final docSnapshot = await FirebaseFirestore.instance
+      final snapshot = await FirebaseFirestore.instance
           .collection('eventos')
           .doc(widget.eventoId)
+          .collection('sectores')
           .get();
 
-      if (docSnapshot.exists) {
-        final data = docSnapshot.data() as Map<String, dynamic>;
-        final List<dynamic> sectoresFromDB = data['sectores'] ?? [];
-        final List<String> nombresSectores = sectoresFromDB
-            .map((sector) {
-              if (sector is Map<String, dynamic>) {
-                return sector['nombre'] as String;
-              } else if (sector is String) {
-                return sector;
-              }
-              return '';
-            })
-            .where((name) => name.isNotEmpty)
-            .toList();
-        setState(() {
-          _todosLosSectores = nombresSectores;
-        });
-      }
+      setState(() {
+        _todosLosSectores = snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return {
+            'id': doc.id,
+            'nombre': data['nombre'] as String? ?? 'Sin Nombre',
+          };
+        }).toList();
+      });
     } catch (e) {
       rethrow;
     }
   }
 
-  Future<void> _cargarProductos() async {
+  Future<void> _cargarProductosPorSector() async {
+    if (_sectorActualId == null) return;
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('productos')
+      final sectorDoc = await FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(widget.eventoId)
+          .collection('sectores')
+          .doc(_sectorActualId)
           .get();
+
+      if (!sectorDoc.exists) {
+        setState(() {
+          _productos = [];
+          _productosFiltrados = [];
+          _stockInicialAgregado = false;
+        });
+        return;
+      }
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(widget.eventoId)
+          .collection('sectores')
+          .doc(_sectorActualId)
+          .collection('stockInicial')
+          .get();
+
       setState(() {
         _productos = snapshot.docs;
         _productosFiltrados = _productos;
+        _stockInicialAgregado = _productos.isNotEmpty;
       });
     } catch (e) {
       rethrow;
@@ -133,7 +163,6 @@ class _PanelVentasState extends State<PanelVentas> {
       bool itemEncontrado = false;
       for (var item in _carritoItems) {
         if (item['nombre'] == nombre) {
-          // Verificar que no exceda el stock disponible
           if (item['cantidad'] < stock) {
             item['cantidad']++;
           } else {
@@ -221,25 +250,102 @@ class _PanelVentasState extends State<PanelVentas> {
     }
   }
 
+  Future<void> _realizarVenta(String metodoPago) async {
+    if (_carritoItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('El carrito está vacío.', style: GoogleFonts.poppins()),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        // 1. Registrar la venta en la colección 'ventas'
+        final ventaRef = FirebaseFirestore.instance.collection('ventas').doc();
+        transaction.set(ventaRef, {
+          'eventoId': widget.eventoId,
+          'sectorId': _sectorActualId,
+          'fecha': FieldValue.serverTimestamp(),
+          'montoTotal': _montoTotal,
+          'metodoPago': metodoPago,
+          'items': _carritoItems,
+        });
+
+        // 2. Actualizar el stock de cada producto en la subcolección 'stockInicial' del sector
+        for (var item in _carritoItems) {
+          final productoNombre = item['nombre'] as String;
+          final cantidadVendida = item['cantidad'] as int;
+
+          final productoQuery = await FirebaseFirestore.instance
+              .collection('eventos')
+              .doc(widget.eventoId)
+              .collection('sectores')
+              .doc(_sectorActualId)
+              .collection('stockInicial')
+              .where('nombre', isEqualTo: productoNombre)
+              .get();
+
+          if (productoQuery.docs.isNotEmpty) {
+            final productoDoc = productoQuery.docs.first;
+            final productoRef = productoDoc.reference;
+            final currentStock = productoDoc.data()['stock'] as int? ?? 0;
+
+            if (currentStock >= cantidadVendida) {
+              transaction.update(productoRef, {
+                'stock': currentStock - cantidadVendida,
+              });
+            } else {
+              // Si el stock es insuficiente, la transacción fallará
+              throw Exception('Stock insuficiente para $productoNombre');
+            }
+          }
+        }
+      });
+
+      // Si la transacción fue exitosa
+      _limpiarCarrito();
+      Navigator.of(context).pop(); // Cierra el panel de pago
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Venta realizada con éxito',
+            style: GoogleFonts.poppins(color: primaryColor),
+          ),
+          backgroundColor: accentColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on FirebaseException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Error al realizar la venta: ${e.message}',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error inesperado: $e', style: GoogleFonts.poppins()),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   void _limpiarCarrito() {
     setState(() {
       _carritoItems = [];
       _montoTotal = 0.0;
     });
-  }
-
-  void _realizarVenta() {
-    _limpiarCarrito();
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Venta realizada con éxito',
-          style: GoogleFonts.poppins(color: primaryColor),
-        ),
-        backgroundColor: accentColor,
-      ),
-    );
   }
 
   void _agregarStockInicial() async {
@@ -248,16 +354,15 @@ class _PanelVentasState extends State<PanelVentas> {
       MaterialPageRoute(
         builder: (context) => StockScreen(
           eventoId: widget.eventoId,
-          nombreSector: _sectorActual ?? widget.nombreSector,
+          nombreSector: _sectorActualNombre ?? widget.nombreSector,
+          sectorId: _sectorActualId ?? widget.sectorId,
           esStockInicial: true,
         ),
       ),
     );
 
     if (result == true) {
-      setState(() {
-        _stockInicialAgregado = true;
-      });
+      _cargarProductosPorSector();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -277,7 +382,8 @@ class _PanelVentasState extends State<PanelVentas> {
       MaterialPageRoute(
         builder: (context) => StockScreen(
           eventoId: widget.eventoId,
-          nombreSector: _sectorActual ?? widget.nombreSector,
+          nombreSector: _sectorActualNombre ?? widget.nombreSector,
+          sectorId: _sectorActualId ?? widget.sectorId,
           esStockInicial: false,
         ),
       ),
@@ -337,7 +443,7 @@ class _PanelVentasState extends State<PanelVentas> {
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                Navigator.of(context).pop(_sectorActual);
+                Navigator.of(context).pop(_sectorActualNombre);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -365,6 +471,16 @@ class _PanelVentasState extends State<PanelVentas> {
   }
 
   void _mostrarPanelPago() {
+    if (_carritoItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('El carrito está vacío.', style: GoogleFonts.poppins()),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -497,7 +613,7 @@ class _PanelVentasState extends State<PanelVentas> {
                   children: [
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: _realizarVenta,
+                        onPressed: () => _realizarVenta('Efectivo'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: secondaryColor,
                           foregroundColor: Colors.white,
@@ -512,7 +628,7 @@ class _PanelVentasState extends State<PanelVentas> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: _realizarVenta,
+                        onPressed: () => _realizarVenta('Tarjeta'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: accentColor,
                           foregroundColor: primaryColor,
@@ -546,7 +662,7 @@ class _PanelVentasState extends State<PanelVentas> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            Navigator.pop(context, _sectorActual);
+            Navigator.pop(context, _sectorActualNombre);
           },
         ),
         title: Row(
@@ -565,7 +681,7 @@ class _PanelVentasState extends State<PanelVentas> {
                   )
                 : Expanded(
                     child: DropdownButton<String>(
-                      value: _sectorActual,
+                      value: _sectorActualNombre,
                       isExpanded: true,
                       icon: Icon(Icons.arrow_drop_down, color: accentColor),
                       style: GoogleFonts.poppins(
@@ -574,19 +690,32 @@ class _PanelVentasState extends State<PanelVentas> {
                       ),
                       dropdownColor: primaryColor,
                       underline: Container(),
-                      onChanged: (String? nuevoSector) {
-                        if (nuevoSector != null) {
-                          setState(() {
-                            _sectorActual = nuevoSector;
-                          });
+                      onChanged: (String? nuevoSectorNombre) async {
+                        if (nuevoSectorNombre != null) {
+                          final nuevoSector = _todosLosSectores.firstWhere(
+                            (sector) => sector['nombre'] == nuevoSectorNombre,
+                          );
+                          if (nuevoSector['id'] != _sectorActualId) {
+                            setState(() {
+                              _isLoading = true;
+                              _sectorActualNombre = nuevoSectorNombre;
+                              _sectorActualId = nuevoSector['id'];
+                              _carritoItems.clear();
+                              _montoTotal = 0.0;
+                            });
+                            await _cargarProductosPorSector();
+                            setState(() {
+                              _isLoading = false;
+                            });
+                          }
                         }
                       },
                       items: _todosLosSectores.map<DropdownMenuItem<String>>((
-                        String sector,
+                        Map<String, String> sector,
                       ) {
                         return DropdownMenuItem<String>(
-                          value: sector,
-                          child: Text(sector),
+                          value: sector['nombre'],
+                          child: Text(sector['nombre']!),
                         );
                       }).toList(),
                     ),
@@ -616,7 +745,6 @@ class _PanelVentasState extends State<PanelVentas> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Barra de acciones
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -745,7 +873,6 @@ class _PanelVentasState extends State<PanelVentas> {
                               final data =
                                   producto.data() as Map<String, dynamic>?;
 
-                              // Si los datos son nulos, no se renderiza el widget
                               if (data == null) {
                                 return const SizedBox.shrink();
                               }
@@ -755,7 +882,7 @@ class _PanelVentasState extends State<PanelVentas> {
                               final num precioProducto =
                                   data['precio'] as num? ?? 0;
                               final int stockProducto =
-                                  data['cantidad'] as int? ?? 0;
+                                  data['stock'] as int? ?? 0;
 
                               return Card(
                                 elevation: stockProducto > 0 ? 4 : 2,
@@ -767,7 +894,6 @@ class _PanelVentasState extends State<PanelVentas> {
                                     : Colors.grey.withOpacity(0.1),
                                 child: InkWell(
                                   onTap: () {
-                                    // Verificar que haya stock disponible
                                     if (stockProducto > 0) {
                                       _agregarItemAlCarrito(
                                         nombreProducto,
@@ -826,66 +952,33 @@ class _PanelVentasState extends State<PanelVentas> {
                                                 color: accentColor,
                                               ),
                                             ),
-                                            const SizedBox(height: 4),
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 6,
-                                                    vertical: 2,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: stockProducto > 0
-                                                    ? Colors.green.withOpacity(
-                                                        0.1,
-                                                      )
-                                                    : Colors.red.withOpacity(
-                                                        0.1,
-                                                      ),
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                                border: Border.all(
-                                                  color: stockProducto > 0
-                                                      ? Colors.green
-                                                      : Colors.red,
-                                                  width: 1,
-                                                ),
-                                              ),
-                                              child: Text(
-                                                'Stock: $stockProducto',
-                                                style: GoogleFonts.poppins(
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: stockProducto > 0
-                                                      ? Colors.green
-                                                      : Colors.red,
-                                                ),
-                                              ),
-                                            ),
                                           ],
                                         ),
                                       ),
-                                      if (stockProducto <= 0)
-                                        Positioned.fill(
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.black.withOpacity(
-                                                0.3,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(15),
+                                      Positioned(
+                                        bottom: 8,
+                                        right: 8,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: primaryColor,
+                                            borderRadius: BorderRadius.circular(
+                                              5,
                                             ),
-                                            child: Center(
-                                              child: Text(
-                                                'SIN STOCK',
-                                                style: GoogleFonts.poppins(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
+                                          ),
+                                          child: Text(
+                                            'Stock: $stockProducto',
+                                            style: GoogleFonts.poppins(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                         ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -893,22 +986,38 @@ class _PanelVentasState extends State<PanelVentas> {
                             },
                           ),
                   ),
+                  if (_carritoItems.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16.0),
+                      child: ElevatedButton(
+                        onPressed: _mostrarPanelPago,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentColor,
+                          foregroundColor: primaryColor,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.shopping_cart),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Ver Carrito (\$${_montoTotal.toStringAsFixed(0)})',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: _montoTotal > 0
-          ? FloatingActionButton.extended(
-              onPressed: _mostrarPanelPago,
-              backgroundColor: accentColor,
-              foregroundColor: primaryColor,
-              icon: const Icon(Icons.shopping_cart),
-              label: Text(
-                'Total: \$${_montoTotal.toStringAsFixed(0)}',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-              ),
-            )
-          : null,
     );
   }
 }
