@@ -2,9 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:front_appsnack/screens/admin/home_admin.dart';
-import 'package:front_appsnack/screens/estadio_selection.dart';
-import 'package:front_appsnack/auth/login_screen.dart'; // Asegúrate de que la ruta sea correcta
-import 'package:front_appsnack/screens/panel_ventas.dart'; // Asegúrate de que la ruta sea correcta
+import 'package:front_appsnack/widgets/estadio_selection.dart';
+import 'package:front_appsnack/auth/login_screen.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -28,7 +27,10 @@ class _AuthGateState extends State<AuthGate> {
         // Hay una sesión activa, verificar que sea válida
         await user.reload();
       }
-    } catch (e) {}
+    } catch (e) {
+      // Si hay un error (por ejemplo, sesión inválida), cerrar sesión
+      await FirebaseAuth.instance.signOut();
+    }
   }
 
   @override
@@ -50,11 +52,11 @@ class _AuthGateState extends State<AuthGate> {
             // 2. Ahora que sabemos que está logueado, buscamos sus datos en Firestore
             return FutureBuilder<DocumentSnapshot>(
               future: FirebaseFirestore.instance
-                  .collection('vendedores')
+                  .collection('usuarios')
                   .doc(user.uid)
                   .get(),
               builder: (context, userSnapshot) {
-                // Mientras busca los datos del vendedor...
+                // Mientras busca los datos del usuario...
                 if (userSnapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
@@ -68,9 +70,9 @@ class _AuthGateState extends State<AuthGate> {
                 }
 
                 // 3. ¡Tenemos los datos del vendedor! Aplicamos la misma lógica del signIn.
-                final vendorData =
+                final userData =
                     userSnapshot.data!.data() as Map<String, dynamic>;
-                final String userRole = vendorData['rol'] ?? 'vendedor';
+                final String userRole = userData['rol'] ?? 'vendedor';
 
                 if (userRole == 'admin') {
                   return const HomeAdmin(); // Admin

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:front_appsnack/screens/panel_ventas.dart';
+import 'package:front_appsnack/widgets/panel_ventas.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class HomeVendedor extends StatefulWidget {
@@ -155,7 +155,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                     borderRadius: BorderRadius.circular(15),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -246,7 +246,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: accentColor.withOpacity(0.3),
+            color: accentColor.withValues(alpha: 0.3),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -490,7 +490,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
         ),
       ),
       onTap: onTap,
-      hoverColor: accentColor.withOpacity(0.1),
+      hoverColor: accentColor.withValues(alpha: 0.1),
     );
   }
 

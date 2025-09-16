@@ -159,7 +159,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       borderRadius: BorderRadius.circular(12.0),
                     ),
                     elevation: 8,
-                    shadowColor: Colors.black.withOpacity(0.5),
+                    shadowColor: Colors.black.withValues(alpha: 0.5),
                   ),
                 ),
               ],
@@ -175,11 +175,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       labelText: label,
       prefixIcon: Icon(prefixIcon, color: const Color.fromARGB(137, 0, 0, 0)),
       filled: true,
-      fillColor: Colors.white.withOpacity(0.8),
+      fillColor: Colors.white.withValues(alpha: 0.8),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12.0),
         borderSide: BorderSide(
-          color: primaryColor.withOpacity(0.5),
+          color: primaryColor.withValues(alpha: 0.5),
           width: 1.0,
         ), // Borde por defecto
       ),

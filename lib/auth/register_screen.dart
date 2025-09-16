@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:ui'; // Necessário para ImageFilter.blur
+// Necessário para ImageFilter.blur
 
 // Paleta de cores baseada no logo "Fusión"
 const Color primaryColor = Color(0xFF2B2B2B); // Preto/marrón oscuro
@@ -122,18 +122,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
           .createUserWithEmailAndPassword(email: email, password: password);
 
       // 2. Salvar dados adicionais no Firestore
-      await _firestore
-          .collection('vendedores')
-          .doc(userCredential.user!.uid)
-          .set({
-            'auth_uid': userCredential.user!.uid,
-            'email': email,
-            'username': username,
-            'rol': 'vendedor', // Função padrão para novos registros
-            'fechaRegistro': FieldValue.serverTimestamp(),
-            'itemsvendidos': 0,
-            'totalvendido': 0,
-          });
+      await _firestore.collection('usuarios').doc(userCredential.user!.uid).set(
+        {
+          'auth_uid': userCredential.user!.uid,
+          'email': email,
+          'username': username,
+          'rol': 'vendedor', // Função padrão para novos registros
+          'fechaRegistro': FieldValue.serverTimestamp(),
+          'itemsvendidos': 0,
+          'totalvendido': 0,
+        },
+      );
 
       if (mounted) Navigator.of(context).pop();
       _showSnackBar('¡Registro exitoso! Ya puedes iniciar sesión.');
@@ -308,7 +307,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderRadius: BorderRadius.circular(12.0),
                     ),
                     elevation: 8,
-                    shadowColor: Colors.black.withOpacity(0.5),
+                    shadowColor: Colors.black.withValues(alpha: 0.5),
                   ),
                 ),
               ],
@@ -324,12 +323,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       labelText: label,
       prefixIcon: Icon(prefixIcon, color: const Color.fromARGB(137, 0, 0, 0)),
       filled: true,
-      fillColor: Colors.white.withOpacity(0.8),
+      fillColor: Colors.white.withValues(alpha: 0.8),
       // --- MODIFICACIÓN AQUÍ: AÑADIDO UN BORDE POR DEFECTO ---
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12.0),
         borderSide: BorderSide(
-          color: primaryColor.withOpacity(0.5),
+          color: primaryColor.withValues(alpha: 0.5),
           width: 1.0,
         ), // Borde por defecto
       ),

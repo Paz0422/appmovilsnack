@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/screens/admin/home_admin.dart';
-import 'package:front_appsnack/screens/estadio_selection.dart';
+import 'package:front_appsnack/widgets/estadio_selection.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:ui'; // Necesario para ImageFilter.blur
@@ -63,7 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final querySnapshot = await FirebaseFirestore.instance
-          .collection('vendedores')
+          .collection('usuarios')
           .where('username', isEqualTo: username)
           .limit(1)
           .get();
@@ -74,17 +74,17 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final vendorDocument = querySnapshot.docs.first;
-      final vendorData = vendorDocument.data() as Map<String, dynamic>;
+      final userDocument = querySnapshot.docs.first;
+      final userData = userDocument.data() as Map<String, dynamic>;
 
-      final String userRole = vendorData['rol'] ?? 'vendedor';
+      final String userRole = userData['rol'] ?? 'vendedor';
 
       await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: vendorData['email'],
+        email: userData['email'],
         password: password,
       );
 
-      AuthManager().loggedInVendor = vendorDocument;
+      AuthManager().loggedInVendor = userDocument;
 
       if (mounted) {
         Navigator.of(context).pop(); // Cierra el indicador de carga
@@ -160,10 +160,15 @@ class _LoginScreenState extends State<LoginScreen> {
               child: WaveWidget(
                 config: CustomConfig(
                   colors: [
-                    const Color.fromARGB(255, 255, 255, 255).withOpacity(0.5),
-                    Colors.white.withOpacity(0.2),
-                    Colors.white.withOpacity(0.1),
-                    Colors.white.withOpacity(0.01),
+                    const Color.fromARGB(
+                      255,
+                      255,
+                      255,
+                      255,
+                    ).withValues(alpha: 0.5),
+                    Colors.white.withValues(alpha: 0.2),
+                    Colors.white.withValues(alpha: 0.1),
+                    Colors.white.withValues(alpha: 0.1),
                   ],
                   durations: [5000, 4000, 3000, 6000],
                   heightPercentages: [0.08, 0.10, 0.12, 0.15],
@@ -188,15 +193,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          Colors.white.withOpacity(0.4),
-                          Colors.white.withOpacity(0.2),
+                          Colors.white.withValues(alpha: 0.4),
+                          Colors.white.withValues(alpha: 0.2),
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(20.0),
                       border: Border.all(
-                        color: Colors.white.withOpacity(0.5),
+                        color: Colors.white.withValues(alpha: 0.5),
                         width: 1.5,
                       ),
                     ),
@@ -288,7 +293,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                   vertical: 15,
                                 ),
                                 elevation: 8,
-                                shadowColor: Colors.black.withOpacity(0.5),
+                                shadowColor: Colors.black.withValues(
+                                  alpha: 0.5,
+                                ),
                               ),
                               child: Text(
                                 'Ingresar',
@@ -342,7 +349,7 @@ class _LoginScreenState extends State<LoginScreen> {
       labelText: label,
       prefixIcon: Icon(prefixIcon, color: const Color.fromARGB(137, 0, 0, 0)),
       filled: true,
-      fillColor: Colors.white.withOpacity(0.8),
+      fillColor: Colors.white.withValues(alpha: 0.8),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12.0),
         borderSide: BorderSide.none,

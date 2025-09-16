@@ -7,12 +7,14 @@ class PanelVentas extends StatefulWidget {
   final String eventoId;
   final String nombreSector;
   final String sectorId;
+  final String? vendedorNombre; // NUEVO: Nombre del vendedor
 
   const PanelVentas({
     super.key,
     required this.eventoId,
     required this.nombreSector,
     required this.sectorId,
+    this.vendedorNombre, // NUEVO parámetro opcional
   });
 
   @override
@@ -250,6 +252,56 @@ class _PanelVentasState extends State<PanelVentas> {
     }
   }
 
+  // NUEVA FUNCIÓN: Actualizar el total del vendedor en el sector
+  Future<void> _actualizarTotalVendedor(Transaction transaction) async {
+    if (widget.vendedorNombre == null) return; // Si no hay vendedor, salir
+
+    final sectorRef = FirebaseFirestore.instance
+        .collection('eventos')
+        .doc(widget.eventoId)
+        .collection('sectores')
+        .doc(_sectorActualId);
+
+    // Obtener los datos actuales del sector
+    final sectorSnapshot = await transaction.get(sectorRef);
+
+    if (sectorSnapshot.exists) {
+      final sectorData = sectorSnapshot.data() as Map<String, dynamic>;
+      List<dynamic> vendedoresAsignados = List.from(
+        sectorData['vendedoresasignados'] ?? [],
+      );
+
+      // Buscar si el vendedor ya existe en el array
+      bool vendedorEncontrado = false;
+      for (int i = 0; i < vendedoresAsignados.length; i++) {
+        if (vendedoresAsignados[i]['nombre'] == widget.vendedorNombre) {
+          // Si existe, sumar al total
+          double totalActual = (vendedoresAsignados[i]['totalVendido'] ?? 0)
+              .toDouble();
+          vendedoresAsignados[i]['totalVendido'] = totalActual + _montoTotal;
+          vendedorEncontrado = true;
+          break;
+        }
+      }
+
+      // Si no existe, agregarlo al array
+      if (!vendedorEncontrado) {
+        vendedoresAsignados.add({
+          'nombre': widget.vendedorNombre,
+          'totalVendido': _montoTotal,
+        });
+      }
+
+      // Actualizar el documento del sector
+      transaction.update(sectorRef, {
+        'vendedoresasignados': vendedoresAsignados,
+        'totalVendido': FieldValue.increment(
+          _montoTotal,
+        ), // También actualizar el total general del sector
+      });
+    }
+  }
+
   Future<void> _realizarVenta(String metodoPago) async {
     if (_carritoItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -264,18 +316,19 @@ class _PanelVentasState extends State<PanelVentas> {
 
     try {
       await FirebaseFirestore.instance.runTransaction((transaction) async {
-        // 1. Registrar la venta en la colección 'ventas'
+        // 1. Crear la venta
         final ventaRef = FirebaseFirestore.instance.collection('ventas').doc();
         transaction.set(ventaRef, {
           'eventoId': widget.eventoId,
           'sectorId': _sectorActualId,
+          'vendedorNombre': widget.vendedorNombre, // NUEVO: Agregar el vendedor
           'fecha': FieldValue.serverTimestamp(),
           'montoTotal': _montoTotal,
           'metodoPago': metodoPago,
           'items': _carritoItems,
         });
 
-        // 2. Actualizar el stock de cada producto en la subcolección 'stockInicial' del sector
+        // 2. Actualizar el stock de cada producto
         for (var item in _carritoItems) {
           final productoNombre = item['nombre'] as String;
           final cantidadVendida = item['cantidad'] as int;
@@ -299,11 +352,13 @@ class _PanelVentasState extends State<PanelVentas> {
                 'stock': currentStock - cantidadVendida,
               });
             } else {
-              // Si el stock es insuficiente, la transacción fallará
               throw Exception('Stock insuficiente para $productoNombre');
             }
           }
         }
+
+        // 3. NUEVA FUNCIONALIDAD: Actualizar el total del vendedor en el sector
+        await _actualizarTotalVendedor(transaction);
       });
 
       // Si la transacción fue exitosa
@@ -442,8 +497,19 @@ class _PanelVentasState extends State<PanelVentas> {
             ),
             ElevatedButton(
               onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pop(_sectorActualNombre);
+                Navigator.of(context).pop(); // Cierra el diálogo
+
+                // NUEVA FUNCIONALIDAD: Devolver información del sector actual
+                final resultado = {
+                  'sectorNombre': _sectorActualNombre,
+                  'sectorId': _sectorActualId,
+                  'actualizado': true,
+                };
+
+                Navigator.of(
+                  context,
+                ).pop(resultado); // Devuelve el resultado al HomeVendedor
+
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -585,7 +651,7 @@ class _PanelVentasState extends State<PanelVentas> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '\$${(item['precio'] as num).toStringAsFixed(0)}',
+                              '${(item['precio'] as num).toStringAsFixed(0)}',
                               style: GoogleFonts.poppins(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
@@ -600,7 +666,7 @@ class _PanelVentasState extends State<PanelVentas> {
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Total: \$${_montoTotal.toStringAsFixed(0)}',
+                  'Total: \${_montoTotal.toStringAsFixed(0)}',
                   style: GoogleFonts.poppins(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -662,7 +728,13 @@ class _PanelVentasState extends State<PanelVentas> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            Navigator.pop(context, _sectorActualNombre);
+            // NUEVA FUNCIONALIDAD: Devolver información actualizada
+            final resultado = {
+              'sectorNombre': _sectorActualNombre,
+              'sectorId': _sectorActualId,
+              'actualizado': true,
+            };
+            Navigator.pop(context, resultado);
           },
         ),
         title: Row(
@@ -945,7 +1017,7 @@ class _PanelVentasState extends State<PanelVentas> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              '\$${precioProducto.toStringAsFixed(0)}',
+                                              '\${precioProducto.toStringAsFixed(0)}',
                                               style: GoogleFonts.poppins(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.bold,
@@ -1005,7 +1077,7 @@ class _PanelVentasState extends State<PanelVentas> {
                             const Icon(Icons.shopping_cart),
                             const SizedBox(width: 8),
                             Text(
-                              'Ver Carrito (\$${_montoTotal.toStringAsFixed(0)})',
+                              'Ver Carrito (\${_montoTotal.toStringAsFixed(0)})',
                               style: GoogleFonts.poppins(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
