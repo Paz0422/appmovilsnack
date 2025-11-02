@@ -3,6 +3,7 @@ import 'package:front_appsnack/auth/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:front_appsnack/widgets/panel_ventas.dart';
+import 'package:front_appsnack/widgets/stock_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class HomeVendedor extends StatefulWidget {
@@ -35,6 +36,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
   DateTime _currentTime = DateTime.now();
   late final String _currentSectorNombre;
   late final String _currentSectorId;
+  bool _stockInicialAgregado = false;
 
   @override
   void initState() {
@@ -43,6 +45,27 @@ class _HomeVendedorState extends State<HomeVendedor> {
     _currentSectorId = widget.sectorId;
     _loadSectorStats();
     _startTimer();
+    _verificarStockInicial();
+  }
+
+  Future<void> _verificarStockInicial() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(widget.eventId)
+          .collection('sectores')
+          .doc(_currentSectorId)
+          .collection('stockInicial')
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _stockInicialAgregado = snapshot.docs.isNotEmpty;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error verificando stock inicial: $e");
+    }
   }
 
   void _startTimer() {
@@ -211,6 +234,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
                 ),
                 const SizedBox(height: 20),
                 _buildMainSaleCard(),
+                const SizedBox(height: 20),
+                _buildActionButtons(),
                 const SizedBox(height: 30),
                 Text(
                   'Estadísticas del Sector',
@@ -223,6 +248,94 @@ class _HomeVendedorState extends State<HomeVendedor> {
                 const SizedBox(height: 16),
                 _buildFloatingStats(),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _stockInicialAgregado
+                  ? _agregarStockFinal
+                  : _agregarStockInicial,
+              icon: Icon(
+                _stockInicialAgregado
+                    ? Icons.inventory_2
+                    : Icons.add_box,
+                size: 18,
+              ),
+              label: Text(
+                _stockInicialAgregado
+                    ? 'Stock Final'
+                    : 'Stock Inicial',
+                style: GoogleFonts.poppins(fontSize: 12),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _stockInicialAgregado
+                    ? Colors.blue
+                    : Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _escanearCodigoBarras,
+              icon: const Icon(Icons.qr_code_scanner, size: 18),
+              label: Text(
+                'Escanear',
+                style: GoogleFonts.poppins(fontSize: 12),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: secondaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _cerrarTurno,
+              icon: const Icon(Icons.logout, size: 18),
+              label: Text(
+                'Cerrar Turno',
+                style: GoogleFonts.poppins(fontSize: 12),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
             ),
           ),
         ],
@@ -504,6 +617,132 @@ class _HomeVendedorState extends State<HomeVendedor> {
         backgroundColor: primaryColor,
         behavior: SnackBarBehavior.floating,
       ),
+    );
+  }
+
+  void _agregarStockInicial() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StockScreen(
+          eventoId: widget.eventId,
+          nombreSector: _currentSectorNombre,
+          sectorId: _currentSectorId,
+          esStockInicial: true,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      await _verificarStockInicial();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Stock inicial configurado exitosamente',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  void _agregarStockFinal() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StockScreen(
+          eventoId: widget.eventId,
+          nombreSector: _currentSectorNombre,
+          sectorId: _currentSectorId,
+          esStockInicial: false,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Stock final configurado exitosamente',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.blue,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  void _escanearCodigoBarras() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Función de escaneo de código de barras - Próximamente',
+          style: GoogleFonts.poppins(),
+        ),
+        backgroundColor: secondaryColor,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _cerrarTurno() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            'Cerrar Turno',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.bold,
+              color: primaryColor,
+            ),
+          ),
+          content: Text(
+            '¿Estás seguro de que quieres cerrar el turno?',
+            style: GoogleFonts.poppins(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Cancelar',
+                style: GoogleFonts.poppins(color: secondaryColor),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Cierra el diálogo
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Turno cerrado exitosamente',
+                      style: GoogleFonts.poppins(),
+                    ),
+                    backgroundColor: Colors.green,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accentColor,
+                foregroundColor: primaryColor,
+              ),
+              child: Text(
+                'Cerrar Turno',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

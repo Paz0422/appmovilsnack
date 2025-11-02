@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'stock_screen.dart';
 
 class PanelVentas extends StatefulWidget {
   final String eventoId;
@@ -34,7 +33,6 @@ class _PanelVentasState extends State<PanelVentas> {
 
   List<Map<String, dynamic>> _carritoItems = [];
   double _montoTotal = 0.0;
-  bool _stockInicialAgregado = false;
 
   final Color primaryColor = const Color(0xFF2B2B2B);
   final Color accentColor = const Color(0xFFDABF41);
@@ -97,10 +95,10 @@ class _PanelVentasState extends State<PanelVentas> {
 
       setState(() {
         _todosLosSectores = snapshot.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.data();
           return {
             'id': doc.id,
-            'nombre': data['nombre'] as String? ?? 'Sin Nombre',
+            'nombre': (data['nombre'] as String?) ?? 'Sin Nombre',
           };
         }).toList();
       });
@@ -123,7 +121,6 @@ class _PanelVentasState extends State<PanelVentas> {
         setState(() {
           _productos = [];
           _productosFiltrados = [];
-          _stockInicialAgregado = false;
         });
         return;
       }
@@ -139,7 +136,6 @@ class _PanelVentasState extends State<PanelVentas> {
       setState(() {
         _productos = snapshot.docs;
         _productosFiltrados = _productos;
-        _stockInicialAgregado = _productos.isNotEmpty;
       });
     } catch (e) {
       rethrow;
@@ -317,7 +313,9 @@ class _PanelVentasState extends State<PanelVentas> {
     try {
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         // 1. Crear la venta
-        final ventaRef = FirebaseFirestore.instance.collection('ventas').doc();
+        final ventaRef = FirebaseFirestore.instance
+            .collection('transacciones')
+            .doc();
         transaction.set(ventaRef, {
           'eventoId': widget.eventoId,
           'sectorId': _sectorActualId,
@@ -325,7 +323,6 @@ class _PanelVentasState extends State<PanelVentas> {
           'fecha': FieldValue.serverTimestamp(),
           'montoTotal': _montoTotal,
           'metodoPago': metodoPago,
-          'items': _carritoItems,
         });
 
         // 2. Actualizar el stock de cada producto
@@ -363,7 +360,6 @@ class _PanelVentasState extends State<PanelVentas> {
 
       // Si la transacción fue exitosa
       _limpiarCarrito();
-      Navigator.of(context).pop(); // Cierra el panel de pago
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -401,320 +397,6 @@ class _PanelVentasState extends State<PanelVentas> {
       _carritoItems = [];
       _montoTotal = 0.0;
     });
-  }
-
-  void _agregarStockInicial() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => StockScreen(
-          eventoId: widget.eventoId,
-          nombreSector: _sectorActualNombre ?? widget.nombreSector,
-          sectorId: _sectorActualId ?? widget.sectorId,
-          esStockInicial: true,
-        ),
-      ),
-    );
-
-    if (result == true) {
-      _cargarProductosPorSector();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Stock inicial configurado exitosamente',
-            style: GoogleFonts.poppins(),
-          ),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  void _agregarStockFinal() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => StockScreen(
-          eventoId: widget.eventoId,
-          nombreSector: _sectorActualNombre ?? widget.nombreSector,
-          sectorId: _sectorActualId ?? widget.sectorId,
-          esStockInicial: false,
-        ),
-      ),
-    );
-
-    if (result == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Stock final configurado exitosamente',
-            style: GoogleFonts.poppins(),
-          ),
-          backgroundColor: Colors.blue,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  void _escanearCodigoBarras() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Función de escaneo de código de barras - Próximamente',
-          style: GoogleFonts.poppins(),
-        ),
-        backgroundColor: secondaryColor,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _cerrarTurno() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(
-            'Cerrar Turno',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.bold,
-              color: primaryColor,
-            ),
-          ),
-          content: Text(
-            '¿Estás seguro de que quieres cerrar el turno?',
-            style: GoogleFonts.poppins(),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Cancelar',
-                style: GoogleFonts.poppins(color: secondaryColor),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop(); // Cierra el diálogo
-
-                // NUEVA FUNCIONALIDAD: Devolver información del sector actual
-                final resultado = {
-                  'sectorNombre': _sectorActualNombre,
-                  'sectorId': _sectorActualId,
-                  'actualizado': true,
-                };
-
-                Navigator.of(
-                  context,
-                ).pop(resultado); // Devuelve el resultado al HomeVendedor
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Turno cerrado exitosamente',
-                      style: GoogleFonts.poppins(),
-                    ),
-                    backgroundColor: Colors.green,
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: accentColor,
-                foregroundColor: primaryColor,
-              ),
-              child: Text(
-                'Cerrar Turno',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _mostrarPanelPago() {
-    if (_carritoItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('El carrito está vacío.', style: GoogleFonts.poppins()),
-          backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: backgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.7,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Detalle de la venta',
-                        style: GoogleFonts.poppins(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: primaryColor,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _carritoItems.length,
-                    itemBuilder: (context, index) {
-                      final item = _carritoItems[index];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: accentColor.withOpacity(0.2),
-                          child: Text(
-                            item['cantidad'].toString(),
-                            style: GoogleFonts.poppins(color: primaryColor),
-                          ),
-                        ),
-                        title: Text(
-                          item['nombre'],
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                        subtitle: Text(
-                          'Stock disponible: ${item['stock'] ?? 0}',
-                          style: GoogleFonts.poppins(
-                            color: secondaryColor,
-                            fontSize: 12,
-                          ),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.remove_circle_outline),
-                              color: secondaryColor,
-                              onPressed: () =>
-                                  _decrementarCantidad(item['nombre']),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: accentColor.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '${item['cantidad']}',
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: primaryColor,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.add_circle_outline),
-                              color: accentColor,
-                              onPressed: () =>
-                                  _incrementarCantidad(item['nombre']),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${(item['precio'] as num).toStringAsFixed(0)}',
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                                color: accentColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Total: \${_montoTotal.toStringAsFixed(0)}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: accentColor,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => _realizarVenta('Efectivo'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: secondaryColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: Text('Efectivo', style: GoogleFonts.poppins()),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => _realizarVenta('Tarjeta'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accentColor,
-                          foregroundColor: primaryColor,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: Text('Tarjeta', style: GoogleFonts.poppins()),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   @override
@@ -817,92 +499,6 @@ class _PanelVentasState extends State<PanelVentas> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _stockInicialAgregado
-                                ? _agregarStockFinal
-                                : _agregarStockInicial,
-                            icon: Icon(
-                              _stockInicialAgregado
-                                  ? Icons.inventory_2
-                                  : Icons.add_box,
-                              size: 18,
-                            ),
-                            label: Text(
-                              _stockInicialAgregado
-                                  ? 'Stock Final'
-                                  : 'Stock Inicial',
-                              style: GoogleFonts.poppins(fontSize: 12),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _stockInicialAgregado
-                                  ? Colors.blue
-                                  : Colors.green,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _escanearCodigoBarras,
-                            icon: const Icon(Icons.qr_code_scanner, size: 18),
-                            label: Text(
-                              'Escanear',
-                              style: GoogleFonts.poppins(fontSize: 12),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: secondaryColor,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _cerrarTurno,
-                            icon: const Icon(Icons.logout, size: 18),
-                            label: Text(
-                              'Cerrar Turno',
-                              style: GoogleFonts.poppins(fontSize: 12),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
@@ -921,6 +517,249 @@ class _PanelVentasState extends State<PanelVentas> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  // Sección del carrito visible
+                  if (_carritoItems.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Carrito de ventas',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryColor,
+                                ),
+                              ),
+                              Text(
+                                'Total: ${_montoTotal.toStringAsFixed(0)}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: accentColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Divider(color: secondaryColor.withOpacity(0.3)),
+                          const SizedBox(height: 8),
+                          // Lista de items del carrito con altura fija y scroll
+                          SizedBox(
+                            height: 200, // Altura fija para el área de items
+                            child: ListView.builder(
+                              itemCount: _carritoItems.length,
+                              itemBuilder: (context, index) {
+                                final item = _carritoItems[index];
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: accentColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      // Cantidad
+                                      Container(
+                                        width: 30,
+                                        height: 30,
+                                        decoration: BoxDecoration(
+                                          color: accentColor,
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            item['cantidad'].toString(),
+                                            style: GoogleFonts.poppins(
+                                              fontWeight: FontWeight.bold,
+                                              color: primaryColor,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      // Nombre del producto
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              item['nombre'],
+                                              style: GoogleFonts.poppins(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                                color: primaryColor,
+                                              ),
+                                            ),
+                                            Text(
+                                              'Stock: ${item['stock'] ?? 0}',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 11,
+                                                color: secondaryColor,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      // Controles de cantidad
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.remove_circle_outline,
+                                            ),
+                                            color: secondaryColor,
+                                            iconSize: 22,
+                                            onPressed: () =>
+                                                _decrementarCantidad(
+                                                  item['nombre'],
+                                                ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            child: Text(
+                                              '${item['cantidad']}',
+                                              style: GoogleFonts.poppins(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                                color: primaryColor,
+                                              ),
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.add_circle_outline,
+                                            ),
+                                            color: accentColor,
+                                            iconSize: 22,
+                                            onPressed: () =>
+                                                _incrementarCantidad(
+                                                  item['nombre'],
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(width: 8),
+                                      // Precio unitario
+                                      Text(
+                                        (item['precio'] as num).toStringAsFixed(
+                                          0,
+                                        ),
+                                        style: GoogleFonts.poppins(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          color: accentColor,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      // Botón eliminar
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline),
+                                        color: Colors.red,
+                                        iconSize: 20,
+                                        onPressed: () => _quitarItemDelCarrito(
+                                          item['nombre'],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Botones de pago
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () => _realizarVenta('Efectivo'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: secondaryColor,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.money, size: 18),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Efectivo',
+                                        style: GoogleFonts.poppins(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () => _realizarVenta('Tarjeta'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: accentColor,
+                                    foregroundColor: primaryColor,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.credit_card, size: 18),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Tarjeta',
+                                        style: GoogleFonts.poppins(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  // Grid de productos
                   Expanded(
                     child:
                         _productosFiltrados.isEmpty &&
@@ -1017,7 +856,7 @@ class _PanelVentasState extends State<PanelVentas> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              '\${precioProducto.toStringAsFixed(0)}',
+                                              precioProducto.toStringAsFixed(0),
                                               style: GoogleFonts.poppins(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.bold,
@@ -1058,35 +897,6 @@ class _PanelVentasState extends State<PanelVentas> {
                             },
                           ),
                   ),
-                  if (_carritoItems.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16.0),
-                      child: ElevatedButton(
-                        onPressed: _mostrarPanelPago,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accentColor,
-                          foregroundColor: primaryColor,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.shopping_cart),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Ver Carrito (\${_montoTotal.toStringAsFixed(0)})',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
