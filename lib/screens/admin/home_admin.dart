@@ -6,6 +6,7 @@ import 'package:front_appsnack/auth/login_screen.dart';
 import 'package:front_appsnack/widgets/dashboard_card.dart';
 import 'package:front_appsnack/widgets/revenue_chart.dart'
     show RevenueChart, ChartRange;
+import 'package:front_appsnack/widgets/gestion_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class HomeAdmin extends StatefulWidget {
@@ -298,7 +299,20 @@ class _HomeAdminState extends State<HomeAdmin> {
               },
             ),
             _buildDrawerItem(
-              icon: Icons.inventory_2_outlined,
+              icon: Icons.settings_outlined,
+              title: 'Gestión',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const GestionScreen(),
+                  ),
+                );
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.shopping_basket_outlined,
               title: 'Bandejeo',
               onTap: () {
                 Navigator.pop(context);
