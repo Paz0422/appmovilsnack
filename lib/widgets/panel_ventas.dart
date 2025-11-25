@@ -399,6 +399,19 @@ class _PanelVentasState extends State<PanelVentas> {
     });
   }
 
+  void _escanearCodigoBarras() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Función de escaneo de código de barras - Próximamente',
+          style: GoogleFonts.poppins(),
+        ),
+        backgroundColor: accentColor,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -477,6 +490,28 @@ class _PanelVentasState extends State<PanelVentas> {
           ],
         ),
         centerTitle: true,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+            child: ElevatedButton.icon(
+              onPressed: _escanearCodigoBarras,
+              icon: const Icon(Icons.qr_code_scanner, size: 18),
+              label: Text('Escanear', style: GoogleFonts.poppins(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: accentColor,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: accentColor))

@@ -7,6 +7,8 @@ import 'package:front_appsnack/widgets/dashboard_card.dart';
 import 'package:front_appsnack/widgets/revenue_chart.dart'
     show RevenueChart, ChartRange;
 import 'package:front_appsnack/widgets/gestion_screen.dart';
+import 'package:front_appsnack/widgets/stock_reports.dart';
+import 'package:front_appsnack/widgets/transaction_reports.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class HomeAdmin extends StatefulWidget {
@@ -148,6 +150,24 @@ class _HomeAdminState extends State<HomeAdmin> {
 
             // Gráfico Mensual
             const RevenueChart(range: ChartRange.monthly),
+
+            const SizedBox(height: 24),
+
+            // Ingresos por Evento - Widget scrolleable vertical
+            const Text(
+              'Ingresos por Evento',
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            SizedBox(
+              height: 300,
+              child: _EventosIngresosWidget(),
+            ),
 
             const SizedBox(height: 24),
 
@@ -312,6 +332,30 @@ class _HomeAdminState extends State<HomeAdmin> {
               },
             ),
             _buildDrawerItem(
+              icon: Icons.assessment_outlined,
+              title: 'Reportes de Stock',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const StockReports()),
+                );
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.receipt_long_outlined,
+              title: 'Reportes de Transacciones',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const TransactionReports(),
+                  ),
+                );
+              },
+            ),
+            _buildDrawerItem(
               icon: Icons.shopping_basket_outlined,
               title: 'Bandejeo',
               onTap: () {
@@ -421,6 +465,191 @@ class _HeaderStrip extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+// Widget scrolleable de ingresos por evento
+class _EventosIngresosWidget extends StatelessWidget {
+  const _EventosIngresosWidget();
+
+  Future<List<Map<String, dynamic>>> _cargarIngresosPorEvento() async {
+    try {
+      // Obtener todos los eventos
+      final eventosSnapshot = await FirebaseFirestore.instance
+          .collection('eventos')
+          .get();
+
+      // Obtener todas las transacciones
+      final transaccionesSnapshot = await FirebaseFirestore.instance
+          .collection('transacciones')
+          .get();
+
+      // Crear mapa de ingresos por evento
+      final Map<String, double> ingresosPorEvento = {};
+      final Map<String, String> nombresEventos = {};
+
+      // Inicializar mapas con eventos
+      for (var eventoDoc in eventosSnapshot.docs) {
+        final eventoId = eventoDoc.id;
+        final eventoData = eventoDoc.data();
+        nombresEventos[eventoId] = eventoData['nombre']?.toString() ?? 'Sin nombre';
+        ingresosPorEvento[eventoId] = 0.0;
+      }
+
+      // Calcular ingresos por evento
+      for (var transDoc in transaccionesSnapshot.docs) {
+        final transData = transDoc.data();
+        final eventoId = transData['eventoId']?.toString();
+        
+        if (eventoId != null && ingresosPorEvento.containsKey(eventoId)) {
+          final montoTotal = transData['montoTotal'];
+          double monto = 0.0;
+          
+          if (montoTotal != null) {
+            if (montoTotal is num) {
+              monto = montoTotal.toDouble();
+            } else if (montoTotal is int) {
+              monto = montoTotal.toDouble();
+            } else if (montoTotal is double) {
+              monto = montoTotal;
+            }
+          }
+          
+          ingresosPorEvento[eventoId] = (ingresosPorEvento[eventoId] ?? 0.0) + monto;
+        }
+      }
+
+      // Convertir a lista y ordenar por ingresos descendente
+      final List<Map<String, dynamic>> eventosIngresos = [];
+      ingresosPorEvento.forEach((eventoId, ingresos) {
+        eventosIngresos.add({
+          'eventoId': eventoId,
+          'nombre': nombresEventos[eventoId] ?? 'Sin nombre',
+          'ingresos': ingresos,
+        });
+      });
+
+      // Ordenar por ingresos descendente
+      eventosIngresos.sort((a, b) => (b['ingresos'] as double).compareTo(a['ingresos'] as double));
+
+      return eventosIngresos;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  String _formatearMonto(double monto) {
+    return '\$${monto.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
+    )}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _cargarIngresosPorEvento(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(
+            child: Text(
+              snapshot.hasError 
+                  ? 'Error al cargar datos'
+                  : 'No hay eventos disponibles',
+              style: GoogleFonts.poppins(
+                color: Colors.grey[600],
+                fontSize: 14,
+              ),
+            ),
+          );
+        }
+
+        final eventos = snapshot.data!;
+
+        return ListView.builder(
+          scrollDirection: Axis.vertical,
+          padding: const EdgeInsets.symmetric(horizontal: 0),
+          itemCount: eventos.length,
+          itemBuilder: (context, index) {
+            final evento = eventos[index];
+            final nombre = evento['nombre'] as String;
+            final ingresos = evento['ingresos'] as double;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Card(
+                elevation: 3,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDABF41).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.event,
+                          color: Color(0xFFDABF41),
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              nombre,
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF2B2B2B),
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Ingresos totales',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            _formatearMonto(ingresos),
+                            style: GoogleFonts.poppins(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

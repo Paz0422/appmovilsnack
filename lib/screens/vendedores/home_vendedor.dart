@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:front_appsnack/widgets/panel_ventas.dart';
 import 'package:front_appsnack/widgets/stock_screen.dart';
+import 'package:front_appsnack/widgets/estadio_selection.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class HomeVendedor extends StatefulWidget {
@@ -37,6 +38,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
   late final String _currentSectorNombre;
   late final String _currentSectorId;
   bool _stockInicialAgregado = false;
+  String? _nombreEvento;
 
   @override
   void initState() {
@@ -46,6 +48,34 @@ class _HomeVendedorState extends State<HomeVendedor> {
     _loadSectorStats();
     _startTimer();
     _verificarStockInicial();
+    _cargarNombreEvento();
+  }
+
+  Future<void> _cargarNombreEvento() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(widget.eventId)
+          .get();
+
+      if (doc.exists && mounted) {
+        final data = doc.data();
+        setState(() {
+          _nombreEvento = data?['nombre'] as String? ?? widget.eventId;
+        });
+      } else if (mounted) {
+        setState(() {
+          _nombreEvento = widget.eventId;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error cargando nombre del evento: $e");
+      if (mounted) {
+        setState(() {
+          _nombreEvento = widget.eventId;
+        });
+      }
+    }
   }
 
   Future<void> _verificarStockInicial() async {
@@ -184,48 +214,53 @@ class _HomeVendedorState extends State<HomeVendedor> {
                       ),
                     ],
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Sector:',
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: secondaryColor,
-                            ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Evento:',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: secondaryColor,
+                                ),
+                              ),
+                              Text(
+                                _nombreEvento ?? widget.eventId,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryColor,
+                                ),
+                              ),
+                            ],
                           ),
-                          Text(
-                            _currentSectorNombre,
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: primaryColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '${_currentTime.hour.toString().padLeft(2, '0')}:${_currentTime.minute.toString().padLeft(2, '0')}:${_currentTime.second.toString().padLeft(2, '0')}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: accentColor,
-                            ),
-                          ),
-                          Text(
-                            '${_currentTime.day.toString().padLeft(2, '0')}/${_currentTime.month.toString().padLeft(2, '0')}/${_currentTime.year}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: secondaryColor,
-                              fontWeight: FontWeight.w500,
-                            ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '${_currentTime.hour.toString().padLeft(2, '0')}:${_currentTime.minute.toString().padLeft(2, '0')}:${_currentTime.second.toString().padLeft(2, '0')}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: accentColor,
+                                ),
+                              ),
+                              Text(
+                                '${_currentTime.day.toString().padLeft(2, '0')}/${_currentTime.month.toString().padLeft(2, '0')}/${_currentTime.year}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: secondaryColor,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -277,40 +312,17 @@ class _HomeVendedorState extends State<HomeVendedor> {
                   ? _agregarStockFinal
                   : _agregarStockInicial,
               icon: Icon(
-                _stockInicialAgregado
-                    ? Icons.inventory_2
-                    : Icons.add_box,
+                _stockInicialAgregado ? Icons.inventory_2 : Icons.add_box,
                 size: 18,
               ),
               label: Text(
-                _stockInicialAgregado
-                    ? 'Stock Final'
-                    : 'Stock Inicial',
+                _stockInicialAgregado ? 'Stock Final' : 'Stock Inicial',
                 style: GoogleFonts.poppins(fontSize: 12),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _stockInicialAgregado
                     ? Colors.blue
                     : Colors.green,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: _escanearCodigoBarras,
-              icon: const Icon(Icons.qr_code_scanner, size: 18),
-              label: Text(
-                'Escanear',
-                style: GoogleFonts.poppins(fontSize: 12),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: secondaryColor,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 shape: RoundedRectangleBorder(
@@ -381,9 +393,18 @@ class _HomeVendedorState extends State<HomeVendedor> {
               ),
             );
 
-            // Si el resultado de PanelVentas es 'true', significa que se realizó una venta
-            if (result == true) {
+            // Si el resultado de PanelVentas contiene información actualizada del sector
+            if (result != null && result['actualizado'] == true) {
+              setState(() {
+                _currentSectorNombre = result['sectorNombre'] as String;
+                _currentSectorId = result['sectorId'] as String;
+              });
               _loadSectorStats();
+              await _verificarStockInicial();
+            } else if (result == true) {
+              // Si solo se indica una venta exitosa sin cambio de sector
+              _loadSectorStats();
+              await _verificarStockInicial();
             }
           },
           child: Padding(
@@ -545,20 +566,36 @@ class _HomeVendedorState extends State<HomeVendedor> {
                 ],
               ),
             ),
-            _buildDrawerItem(
-              icon: Icons.bar_chart_outlined,
-              title: 'Mis Estadísticas',
-              onTap: () {
-                Navigator.pop(context);
-                _showComingSoon(context, 'Mis Estadísticas');
-              },
-            ),
+
             _buildDrawerItem(
               icon: Icons.inventory_2_outlined,
               title: 'Bandejeo',
               onTap: () {
                 Navigator.pop(context);
                 _showComingSoon(context, 'Bandejeo');
+              },
+            ),
+            const Divider(color: Colors.white24, height: 1),
+            _buildDrawerItem(
+              icon: Icons.delete_outline,
+              title: 'Merma',
+              onTap: () {
+                Navigator.pop(context);
+                _showComingSoon(context, 'Merma');
+              },
+            ),
+            const Divider(color: Colors.white24, height: 1),
+            _buildDrawerItem(
+              icon: Icons.event_outlined,
+              title: 'Cambiar Evento',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const EstadioSelection(),
+                  ),
+                );
               },
             ),
             const Divider(color: Colors.white24, height: 1),
@@ -679,19 +716,6 @@ class _HomeVendedorState extends State<HomeVendedor> {
     }
   }
 
-  void _escanearCodigoBarras() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Función de escaneo de código de barras - Próximamente',
-          style: GoogleFonts.poppins(),
-        ),
-        backgroundColor: secondaryColor,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
   void _cerrarTurno() {
     showDialog(
       context: context,
@@ -705,7 +729,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
             ),
           ),
           content: Text(
-            '¿Estás seguro de que quieres cerrar el turno?',
+            '¿Estás seguro de que quieres cerrar el turno? No se podra realizar ninguna venta despues de cerrar el turno',
             style: GoogleFonts.poppins(),
           ),
           actions: [
