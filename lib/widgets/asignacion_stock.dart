@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/widgets/gestion_stock.dart';
 
 class AsignacionStock extends StatefulWidget {
   const AsignacionStock({super.key});
@@ -57,7 +58,11 @@ class _AsignacionStockState extends State<AsignacionStock> {
           ? _buildSeleccionEvento()
           : _sectorSeleccionadoId == null
               ? _buildSeleccionSector()
-              : _buildGestionStock(),
+              : GestionStock(
+                  eventoId: _eventoSeleccionadoId!,
+                  sectorId: _sectorSeleccionadoId!,
+                  nombreSector: _nombreSectorSeleccionado ?? 'Sin nombre',
+                ),
     );
   }
 
@@ -623,7 +628,7 @@ class _StockProductoCardState extends State<_StockProductoCard> {
           .doc(widget.eventoId)
           .collection('sectores')
           .doc(widget.sectorId)
-          .collection('stockInicial')
+          .collection('stock')
           .where('productoId', isEqualTo: widget.productoId)
           .limit(1)
           .get();
@@ -631,7 +636,7 @@ class _StockProductoCardState extends State<_StockProductoCard> {
       if (stockQuery.docs.isNotEmpty) {
         final stockData = stockQuery.docs.first.data();
         setState(() {
-          _stockActual = stockData['stock'] as int? ?? 0;
+          _stockActual = stockData['cantidad'] as int? ?? 0;
           _isLoading = false;
         });
       } else {
@@ -672,7 +677,7 @@ class _StockProductoCardState extends State<_StockProductoCard> {
           .doc(widget.eventoId)
           .collection('sectores')
           .doc(widget.sectorId)
-          .collection('stockInicial')
+          .collection('stock')
           .where('productoId', isEqualTo: widget.productoId)
           .limit(1);
 
@@ -682,7 +687,7 @@ class _StockProductoCardState extends State<_StockProductoCard> {
         'productoId': widget.productoId,
         'nombre': widget.nombreProducto,
         'precio': widget.precioProducto,
-        'stock': nuevoStock,
+        'cantidad': nuevoStock,
         'actualizado': FieldValue.serverTimestamp(),
       };
 
@@ -696,8 +701,9 @@ class _StockProductoCardState extends State<_StockProductoCard> {
             .doc(widget.eventoId)
             .collection('sectores')
             .doc(widget.sectorId)
-            .collection('stockInicial')
-            .add(stockData);
+            .collection('stock')
+            .doc(widget.productoId)
+            .set(stockData);
       }
 
       setState(() {

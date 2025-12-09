@@ -93,7 +93,7 @@ class _StockReportsState extends State<StockReports> {
               .doc(eventoId)
               .collection('sectores')
               .doc(sectorId)
-              .collection('stockInicial')
+              .collection('stock')
               .get();
 
           for (var stockDoc in stockSnapshot.docs) {
@@ -105,7 +105,7 @@ class _StockReportsState extends State<StockReports> {
               'sectorNombre': sectorNombre,
               'productoId': stockInfo['productoId']?.toString() ?? stockDoc.id,
               'productoNombre': stockInfo['nombre']?.toString() ?? 'Sin nombre',
-              'stock': stockInfo['stock'] as int? ?? 0,
+              'stock': stockInfo['cantidad'] as int? ?? 0,
               'precio': (stockInfo['precio'] as num?)?.toDouble() ?? 0.0,
             });
           }

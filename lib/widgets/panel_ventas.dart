@@ -130,7 +130,7 @@ class _PanelVentasState extends State<PanelVentas> {
           .doc(widget.eventoId)
           .collection('sectores')
           .doc(_sectorActualId)
-          .collection('stockInicial')
+          .collection('stock')
           .get();
 
       setState(() {
@@ -335,18 +335,18 @@ class _PanelVentasState extends State<PanelVentas> {
               .doc(widget.eventoId)
               .collection('sectores')
               .doc(_sectorActualId)
-              .collection('stockInicial')
+              .collection('stock')
               .where('nombre', isEqualTo: productoNombre)
               .get();
 
           if (productoQuery.docs.isNotEmpty) {
             final productoDoc = productoQuery.docs.first;
             final productoRef = productoDoc.reference;
-            final currentStock = productoDoc.data()['stock'] as int? ?? 0;
+            final currentStock = productoDoc.data()['cantidad'] as int? ?? 0;
 
             if (currentStock >= cantidadVendida) {
               transaction.update(productoRef, {
-                'stock': currentStock - cantidadVendida,
+                'cantidad': currentStock - cantidadVendida,
               });
             } else {
               throw Exception('Stock insuficiente para $productoNombre');
@@ -828,7 +828,7 @@ class _PanelVentasState extends State<PanelVentas> {
                               final num precioProducto =
                                   data['precio'] as num? ?? 0;
                               final int stockProducto =
-                                  data['stock'] as int? ?? 0;
+                                  data['cantidad'] as int? ?? 0;
 
                               return Card(
                                 elevation: stockProducto > 0 ? 4 : 2,

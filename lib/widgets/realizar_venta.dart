@@ -36,18 +36,18 @@ class VentasService {
             .doc(eventoId)
             .collection('sectores')
             .doc(sectorId)
-            .collection('stockInicial')
+            .collection('stock')
             .where('nombre', isEqualTo: item.nombre)
             .limit(1)
             .get();
 
         if (productoQuery.docs.isNotEmpty) {
           final productoDoc = productoQuery.docs.first;
-          final currentStock = productoDoc.data()['stock'] as int? ?? 0;
+          final currentStock = productoDoc.data()['cantidad'] as int? ?? 0;
 
           if (currentStock >= item.cantidad) {
             transaction.update(productoDoc.reference, {
-              'stock': FieldValue.increment(
+              'cantidad': FieldValue.increment(
                 -item.cantidad,
               ), // Forma más segura de restar
             });

@@ -3,7 +3,9 @@ import 'package:front_appsnack/auth/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:front_appsnack/widgets/panel_ventas.dart';
-import 'package:front_appsnack/widgets/stock_screen.dart';
+import 'package:front_appsnack/widgets/gestion_stock.dart';
+import 'package:front_appsnack/widgets/registro_merma.dart';
+import 'package:front_appsnack/widgets/bandejeo_flow.dart';
 import 'package:front_appsnack/widgets/estadio_selection.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -33,7 +35,6 @@ class _HomeVendedorState extends State<HomeVendedor> {
   final Color backgroundColor = const Color(0xFFFDFBF7); // Fondo claro elegante
 
   // Variables para estadísticas dinámicas
-  Map<String, dynamic> _sectorStats = {};
   DateTime _currentTime = DateTime.now();
   late final String _currentSectorNombre;
   late final String _currentSectorId;
@@ -45,7 +46,6 @@ class _HomeVendedorState extends State<HomeVendedor> {
     super.initState();
     _currentSectorNombre = widget.nombreSector;
     _currentSectorId = widget.sectorId;
-    _loadSectorStats();
     _startTimer();
     _verificarStockInicial();
     _cargarNombreEvento();
@@ -85,7 +85,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
           .doc(widget.eventId)
           .collection('sectores')
           .doc(_currentSectorId)
-          .collection('stockInicial')
+          .collection('stock')
           .get();
 
       if (mounted) {
@@ -94,7 +94,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
         });
       }
     } catch (e) {
-      debugPrint("Error verificando stock inicial: $e");
+      debugPrint("Error verificando stock: $e");
     }
   }
 
@@ -110,47 +110,6 @@ class _HomeVendedorState extends State<HomeVendedor> {
     });
   }
 
-  Future<void> _loadSectorStats() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(widget.eventId)
-          .collection('sectores')
-          .doc(_currentSectorId)
-          .get();
-
-      if (doc.exists) {
-        final data = doc.data()!;
-        final num totalVendido = data['totalVendido'] as num? ?? 0.0;
-        final int productosVendidos = data['productosVendidos'] as int? ?? 0;
-        final num promedio = productosVendidos > 0
-            ? totalVendido / productosVendidos
-            : 0.0;
-
-        setState(() {
-          _sectorStats = {
-            'totalVendido': '\$${totalVendido.toStringAsFixed(0)}',
-            'productosVendidos': productosVendidos.toString(),
-            'promedio': '\$${promedio.toStringAsFixed(0)}',
-          };
-        });
-      }
-    } catch (e) {
-      debugPrint("Error cargando estadísticas del sector: $e");
-      // Opcional: Mostrar un SnackBar al usuario
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Error al cargar estadísticas: $e',
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
 
   @override
   void dispose() {
@@ -316,7 +275,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                 size: 18,
               ),
               label: Text(
-                _stockInicialAgregado ? 'Stock Final' : 'Stock Inicial',
+                'Gestionar Stock',
                 style: GoogleFonts.poppins(fontSize: 12),
               ),
               style: ElevatedButton.styleFrom(
@@ -399,11 +358,9 @@ class _HomeVendedorState extends State<HomeVendedor> {
                 _currentSectorNombre = result['sectorNombre'] as String;
                 _currentSectorId = result['sectorId'] as String;
               });
-              _loadSectorStats();
               await _verificarStockInicial();
             } else if (result == true) {
               // Si solo se indica una venta exitosa sin cambio de sector
-              _loadSectorStats();
               await _verificarStockInicial();
             }
           },
@@ -467,7 +424,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                 size: 32,
               ),
               Text(
-                _sectorStats['totalVendido'] ?? '\$0',
+                '\$0',
                 style: GoogleFonts.poppins(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
@@ -484,12 +441,12 @@ class _HomeVendedorState extends State<HomeVendedor> {
             _buildFloatingStatItem(
               icon: Icons.inventory_2,
               title: 'Productos Vendidos',
-              value: _sectorStats['productosVendidos'] ?? '0',
+              value: '0',
             ),
             _buildFloatingStatItem(
               icon: Icons.trending_up,
               title: 'Promedio',
-              value: _sectorStats['promedio'] ?? '\$0',
+              value: '\$0',
             ),
           ],
         ),
@@ -572,7 +529,16 @@ class _HomeVendedorState extends State<HomeVendedor> {
               title: 'Bandejeo',
               onTap: () {
                 Navigator.pop(context);
-                _showComingSoon(context, 'Bandejeo');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => BandejeoFlow(
+                      eventoId: widget.eventId,
+                      sectorId: _currentSectorId,
+                      nombreSector: _currentSectorNombre,
+                    ),
+                  ),
+                );
               },
             ),
             const Divider(color: Colors.white24, height: 1),
@@ -581,7 +547,16 @@ class _HomeVendedorState extends State<HomeVendedor> {
               title: 'Merma',
               onTap: () {
                 Navigator.pop(context);
-                _showComingSoon(context, 'Merma');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => RegistroMerma(
+                      eventoId: widget.eventId,
+                      sectorId: _currentSectorId,
+                      nombreSector: _currentSectorNombre,
+                    ),
+                  ),
+                );
               },
             ),
             const Divider(color: Colors.white24, height: 1),
@@ -658,62 +633,36 @@ class _HomeVendedorState extends State<HomeVendedor> {
   }
 
   void _agregarStockInicial() async {
-    final result = await Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => StockScreen(
+        builder: (context) => GestionStock(
           eventoId: widget.eventId,
           nombreSector: _currentSectorNombre,
           sectorId: _currentSectorId,
-          esStockInicial: true,
         ),
       ),
     );
 
-    if (result == true) {
-      await _verificarStockInicial();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Stock inicial configurado exitosamente',
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
+    await _verificarStockInicial();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Stock actualizado',
+            style: GoogleFonts.poppins(),
           ),
-        );
-      }
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
   void _agregarStockFinal() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => StockScreen(
-          eventoId: widget.eventId,
-          nombreSector: _currentSectorNombre,
-          sectorId: _currentSectorId,
-          esStockInicial: false,
-        ),
-      ),
-    );
-
-    if (result == true) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Stock final configurado exitosamente',
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.blue,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
+    // Ya no hay distinción entre stock inicial y final
+    // Usamos la misma función
+    _agregarStockInicial();
   }
 
   void _cerrarTurno() {
