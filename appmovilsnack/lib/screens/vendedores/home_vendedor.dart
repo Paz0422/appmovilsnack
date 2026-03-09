@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,6 +7,8 @@ import 'package:front_appsnack/widgets/gestion_stock.dart';
 import 'package:front_appsnack/widgets/registro_merma.dart';
 import 'package:front_appsnack/widgets/bandejeo_flow.dart';
 import 'package:front_appsnack/widgets/estadio_selection.dart';
+import 'package:front_appsnack/widgets/resumen_cierre_turno.dart';
+import 'package:front_appsnack/widgets/traspaso_stock.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class HomeVendedor extends StatefulWidget {
@@ -26,13 +28,13 @@ class HomeVendedor extends StatefulWidget {
 }
 
 class _HomeVendedorState extends State<HomeVendedor> {
-  // Paleta de colores basada en el logo "Fusión"
-  final Color primaryColor = const Color(0xFF2B2B2B); // Negro/marrón oscuro
+  // Paleta de colores basada en el logo "FusiÃ³n"
+  final Color primaryColor = const Color(0xFF2B2B2B); // Negro/marrÃ³n oscuro
   final Color accentColor = const Color(0xFFDABF41); // Dorado brillante
-  final Color secondaryColor = const Color(0xFF6B4D2F); // Marrón medio
+  final Color secondaryColor = const Color(0xFF6B4D2F); // MarrÃ³n medio
   final Color backgroundColor = const Color(0xFFFDFBF7); // Fondo claro elegante
 
-  // Variables para estadísticas dinámicas
+  // Variables para estadÃ­sticas dinÃ¡micas
   DateTime _currentTime = DateTime.now();
   late final String _currentSectorNombre;
   late final String _currentSectorId;
@@ -107,7 +109,6 @@ class _HomeVendedorState extends State<HomeVendedor> {
       }
     });
   }
-
 
   @override
   void dispose() {
@@ -247,7 +248,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Accesos rápidos',
+            'Accesos rÃ¡pidos',
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -263,6 +264,23 @@ class _HomeVendedorState extends State<HomeVendedor> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             children: [
+              _buildQuickActionTile(
+                icon: Icons.swap_horiz,
+                title: 'Traspaso',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TraspasoStock(
+                        eventoId: widget.eventId,
+                        nombreEvento: _nombreEvento ?? widget.eventId,
+                        sectorIdDestinoInicial: _currentSectorId,
+                        nombreSectorDestinoInicial: _currentSectorNombre,
+                      ),
+                    ),
+                  );
+                },
+              ),
               _buildQuickActionTile(
                 icon: Icons.inventory_2_outlined,
                 title: 'Bandejeo',
@@ -337,10 +355,12 @@ class _HomeVendedorState extends State<HomeVendedor> {
     required VoidCallback onTap,
     bool danger = false,
   }) {
-    final Color tileColor =
-        danger ? Colors.red.withValues(alpha: 0.08) : backgroundColor;
-    final Color borderColor =
-        danger ? Colors.red.withValues(alpha: 0.25) : accentColor.withValues(alpha: 0.35);
+    final Color tileColor = danger
+        ? Colors.red.withValues(alpha: 0.08)
+        : backgroundColor;
+    final Color borderColor = danger
+        ? Colors.red.withValues(alpha: 0.25)
+        : accentColor.withValues(alpha: 0.35);
     final Color iconColor = danger ? Colors.red : accentColor;
 
     return Material(
@@ -404,14 +424,14 @@ class _HomeVendedorState extends State<HomeVendedor> {
           Expanded(
             child: ElevatedButton.icon(
               onPressed: _stockInicialAgregado
-                  ? _agregarStockFinal
+                  ? _verStockSoloLectura
                   : _agregarStockInicial,
               icon: Icon(
-                _stockInicialAgregado ? Icons.inventory_2 : Icons.add_box,
+                _stockInicialAgregado ? Icons.visibility : Icons.add_box,
                 size: 18,
               ),
               label: Text(
-                'Gestionar Stock',
+                _stockInicialAgregado ? 'Ver Stock' : 'Gestionar Stock',
                 style: GoogleFonts.poppins(fontSize: 12),
               ),
               style: ElevatedButton.styleFrom(
@@ -458,7 +478,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
         gradient: LinearGradient(
           colors: [
             accentColor, // Dorado
-            secondaryColor, // Marrón medio
+            secondaryColor, // MarrÃ³n medio
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -488,7 +508,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
               ),
             );
 
-            // Si el resultado de PanelVentas contiene información actualizada del sector
+            // Si el resultado de PanelVentas contiene informaciÃ³n actualizada del sector
             if (result != null && result['actualizado'] == true) {
               setState(() {
                 _currentSectorNombre = result['sectorNombre'] as String;
@@ -537,6 +557,47 @@ class _HomeVendedorState extends State<HomeVendedor> {
   }
 
   void _agregarStockInicial() async {
+    if (!_stockInicialAgregado) {
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(
+            'Ingresar stock inicial',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.bold,
+              color: primaryColor,
+            ),
+          ),
+          content: Text(
+            'Atención: esta es la ÚNICA vez que podrás ingresar stock manualmente para este sector.\n\nSi necesitas agregar stock después, debe ser mediante TRASPASO entre sectores.',
+            style: GoogleFonts.poppins(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                'Cancelar',
+                style: GoogleFonts.poppins(color: secondaryColor),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accentColor,
+                foregroundColor: primaryColor,
+              ),
+              child: Text(
+                'Entiendo',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmar != true) return;
+    }
+
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -544,6 +605,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
           eventoId: widget.eventId,
           nombreSector: _currentSectorNombre,
           sectorId: _currentSectorId,
+          soloLectura: false,
         ),
       ),
     );
@@ -552,10 +614,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Stock actualizado',
-            style: GoogleFonts.poppins(),
-          ),
+          content: Text('Stock actualizado', style: GoogleFonts.poppins()),
           backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
         ),
@@ -563,16 +622,24 @@ class _HomeVendedorState extends State<HomeVendedor> {
     }
   }
 
-  void _agregarStockFinal() async {
-    // Ya no hay distinción entre stock inicial y final
-    // Usamos la misma función
-    _agregarStockInicial();
+  void _verStockSoloLectura() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GestionStock(
+          eventoId: widget.eventId,
+          nombreSector: _currentSectorNombre,
+          sectorId: _currentSectorId,
+          soloLectura: true,
+        ),
+      ),
+    );
   }
 
   void _cerrarTurno() {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: Text(
             'Cerrar Turno',
@@ -582,12 +649,12 @@ class _HomeVendedorState extends State<HomeVendedor> {
             ),
           ),
           content: Text(
-            '¿Estás seguro de que quieres cerrar el turno? No se podra realizar ninguna venta despues de cerrar el turno',
+            '¿Estas seguro de que quieres cerrar el turno? Se mostrara el resumen de stock y ventas del sector.',
             style: GoogleFonts.poppins(),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: Text(
                 'Cancelar',
                 style: GoogleFonts.poppins(color: secondaryColor),
@@ -595,16 +662,16 @@ class _HomeVendedorState extends State<HomeVendedor> {
             ),
             ElevatedButton(
               onPressed: () {
-                Navigator.of(context).pop(); // Cierra el diálogo
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Turno cerrado exitosamente',
-                      style: GoogleFonts.poppins(),
+                Navigator.of(dialogContext).pop();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ResumenCierreTurno(
+                      eventoId: widget.eventId,
+                      sectorId: _currentSectorId,
+                      nombreSector: _currentSectorNombre,
+                      nombreEvento: _nombreEvento,
                     ),
-                    backgroundColor: Colors.green,
-                    behavior: SnackBarBehavior.floating,
                   ),
                 );
               },

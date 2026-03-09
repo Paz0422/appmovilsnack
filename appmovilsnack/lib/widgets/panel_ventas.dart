@@ -28,8 +28,7 @@ class _PanelVentasState extends State<PanelVentas> {
   String? _errorMessage;
 
   final TextEditingController _searchController = TextEditingController();
-  List<DocumentSnapshot> _productos = [];
-  List<DocumentSnapshot> _productosFiltrados = [];
+  // Los productos se leen en tiempo real desde Firestore (StreamBuilder).
 
   List<Map<String, dynamic>> _carritoItems = [];
   double _montoTotal = 0.0;
@@ -63,7 +62,6 @@ class _PanelVentasState extends State<PanelVentas> {
         });
       }
       await _cargarSectoresDelEvento();
-      await _cargarProductosPorSector();
     } on FirebaseException catch (e) {
       if (mounted) {
         setState(() {
@@ -107,53 +105,9 @@ class _PanelVentasState extends State<PanelVentas> {
     }
   }
 
-  Future<void> _cargarProductosPorSector() async {
-    if (_sectorActualId == null) return;
-    try {
-      final sectorDoc = await FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(widget.eventoId)
-          .collection('sectores')
-          .doc(_sectorActualId)
-          .get();
-
-      if (!sectorDoc.exists) {
-        setState(() {
-          _productos = [];
-          _productosFiltrados = [];
-        });
-        return;
-      }
-
-      final snapshot = await FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(widget.eventoId)
-          .collection('sectores')
-          .doc(_sectorActualId)
-          .collection('stock')
-          .get();
-
-      setState(() {
-        _productos = snapshot.docs;
-        _productosFiltrados = _productos;
-      });
-    } catch (e) {
-      rethrow;
-    }
-  }
-
   void _filtrarProductos() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      _productosFiltrados = _productos.where((producto) {
-        final data = producto.data() as Map<String, dynamic>?;
-        if (data == null || !data.containsKey('nombre')) {
-          return false;
-        }
-        final nombre = data['nombre'].toString().toLowerCase();
-        return nombre.contains(query);
-      }).toList();
-    });
+    // Con StreamBuilder, basta con repintar al escribir.
+    if (mounted) setState(() {});
   }
 
   void _agregarItemAlCarrito(String nombre, double precio, int stock) {
@@ -360,6 +314,7 @@ class _PanelVentasState extends State<PanelVentas> {
 
       // Si la transacción fue exitosa
       _limpiarCarrito();
+      // El stock se actualiza automáticamente (StreamBuilder).
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -470,7 +425,7 @@ class _PanelVentasState extends State<PanelVentas> {
                               _carritoItems.clear();
                               _montoTotal = 0.0;
                             });
-                            await _cargarProductosPorSector();
+                            // El stock se actualiza automáticamente (StreamBuilder).
                             setState(() {
                               _isLoading = false;
                             });
@@ -794,140 +749,216 @@ class _PanelVentasState extends State<PanelVentas> {
                     ),
                     const SizedBox(height: 16),
                   ],
-                  // Grid de productos
+                  // Grid de productos (stream en tiempo real para que el stock
+                  // se actualice al instante después de cada venta)
                   Expanded(
-                    child:
-                        _productosFiltrados.isEmpty &&
-                            _searchController.text.isNotEmpty
+                    child: _sectorActualId == null
                         ? Center(
                             child: Text(
-                              'No se encontraron productos.',
+                              'Selecciona un sector',
                               style: GoogleFonts.poppins(color: secondaryColor),
                             ),
                           )
-                        : GridView.builder(
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
+                        : StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('eventos')
+                                .doc(widget.eventoId)
+                                .collection('sectores')
+                                .doc(_sectorActualId)
+                                .collection('stock')
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return Center(
+                                  child: CircularProgressIndicator(
+                                    color: accentColor,
+                                  ),
+                                );
+                              }
+
+                              if (snapshot.hasError) {
+                                return Center(
+                                  child: Text(
+                                    'Error al cargar productos: ${snapshot.error}',
+                                    style: GoogleFonts.poppins(
+                                      color: Colors.red,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                );
+                              }
+
+                              final docs = snapshot.data?.docs ?? [];
+                              final query = _searchController.text
+                                  .toLowerCase()
+                                  .trim();
+
+                              final filtrados = query.isEmpty
+                                  ? docs
+                                  : docs.where((d) {
+                                      final data =
+                                          d.data() as Map<String, dynamic>?;
+                                      final nombre = data?['nombre']
+                                              ?.toString()
+                                              .toLowerCase() ??
+                                          '';
+                                      return nombre.contains(query);
+                                    }).toList();
+
+                              if (filtrados.isEmpty && query.isNotEmpty) {
+                                return Center(
+                                  child: Text(
+                                    'No se encontraron productos.',
+                                    style: GoogleFonts.poppins(
+                                      color: secondaryColor,
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              if (filtrados.isEmpty) {
+                                return Center(
+                                  child: Text(
+                                    'No hay productos en stock.',
+                                    style: GoogleFonts.poppins(
+                                      color: secondaryColor,
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              return GridView.builder(
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
                                   crossAxisCount: 3,
                                   childAspectRatio: 0.6,
                                   crossAxisSpacing: 10,
                                   mainAxisSpacing: 10,
                                 ),
-                            itemCount: _productosFiltrados.length,
-                            itemBuilder: (context, index) {
-                              final producto = _productosFiltrados[index];
-                              final data =
-                                  producto.data() as Map<String, dynamic>?;
+                                itemCount: filtrados.length,
+                                itemBuilder: (context, index) {
+                                  final producto = filtrados[index];
+                                  final data =
+                                      producto.data() as Map<String, dynamic>?;
 
-                              if (data == null) {
-                                return const SizedBox.shrink();
-                              }
+                                  if (data == null) {
+                                    return const SizedBox.shrink();
+                                  }
 
-                              final String nombreProducto =
-                                  data['nombre']?.toString() ?? 'Sin nombre';
-                              final num precioProducto =
-                                  data['precio'] as num? ?? 0;
-                              final int stockProducto =
-                                  data['cantidad'] as int? ?? 0;
+                                  final String nombreProducto =
+                                      data['nombre']?.toString() ??
+                                          'Sin nombre';
+                                  final num precioProducto =
+                                      data['precio'] as num? ?? 0;
+                                  final int stockProducto =
+                                      data['cantidad'] as int? ?? 0;
 
-                              return Card(
-                                elevation: stockProducto > 0 ? 4 : 2,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(15),
-                                ),
-                                color: stockProducto > 0
-                                    ? Colors.white
-                                    : Colors.grey.withOpacity(0.1),
-                                child: InkWell(
-                                  onTap: () {
-                                    if (stockProducto > 0) {
-                                      _agregarItemAlCarrito(
-                                        nombreProducto,
-                                        precioProducto.toDouble(),
-                                        stockProducto,
-                                      );
-                                    } else {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'No hay stock disponible para $nombreProducto',
-                                            style: GoogleFonts.poppins(),
-                                          ),
-                                          backgroundColor: Colors.red,
-                                          behavior: SnackBarBehavior.floating,
-                                        ),
-                                      );
-                                    }
-                                  },
-                                  borderRadius: BorderRadius.circular(15),
-                                  child: Stack(
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.all(8.0),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.fastfood,
-                                              size: 40,
-                                              color: stockProducto > 0
-                                                  ? secondaryColor
-                                                  : Colors.grey,
+                                  return Card(
+                                    elevation: stockProducto > 0 ? 4 : 2,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(15),
+                                    ),
+                                    color: stockProducto > 0
+                                        ? Colors.white
+                                        : Colors.grey.withOpacity(0.1),
+                                    child: InkWell(
+                                      onTap: () {
+                                        if (stockProducto > 0) {
+                                          _agregarItemAlCarrito(
+                                            nombreProducto,
+                                            precioProducto.toDouble(),
+                                            stockProducto,
+                                          );
+                                        } else {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'No hay stock disponible para $nombreProducto',
+                                                style: GoogleFonts.poppins(),
+                                              ),
+                                              backgroundColor: Colors.red,
+                                              behavior:
+                                                  SnackBarBehavior.floating,
                                             ),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              nombreProducto,
-                                              textAlign: TextAlign.center,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: GoogleFonts.poppins(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
+                                          );
+                                        }
+                                      },
+                                      borderRadius: BorderRadius.circular(15),
+                                      child: Stack(
+                                        children: [
+                                          Padding(
+                                            padding: const EdgeInsets.all(8.0),
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  Icons.fastfood,
+                                                  size: 40,
+                                                  color: stockProducto > 0
+                                                      ? secondaryColor
+                                                      : Colors.grey,
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  nombreProducto,
+                                                  textAlign: TextAlign.center,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 14,
+                                                    fontWeight:
+                                                        FontWeight.w600,
+                                                    color: primaryColor,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  precioProducto
+                                                      .toStringAsFixed(0),
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 16,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                    color: accentColor,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Positioned(
+                                            bottom: 8,
+                                            right: 8,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
                                                 color: primaryColor,
+                                                borderRadius:
+                                                    BorderRadius.circular(5),
+                                              ),
+                                              child: Text(
+                                                'Stock: $stockProducto',
+                                                style: GoogleFonts.poppins(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
                                             ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              precioProducto.toStringAsFixed(0),
-                                              style: GoogleFonts.poppins(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                                color: accentColor,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
-                                      Positioned(
-                                        bottom: 8,
-                                        right: 8,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: primaryColor,
-                                            borderRadius: BorderRadius.circular(
-                                              5,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            'Stock: $stockProducto',
-                                            style: GoogleFonts.poppins(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                    ),
+                                  );
+                                },
                               );
                             },
                           ),

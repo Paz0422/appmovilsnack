@@ -10,16 +10,19 @@ const Color _backgroundColor = Color(0xFFFDFBF7);
 
 /// Widget reutilizable para gestionar el stock de un sector
 /// Lee de la colección: /eventos/{idevento}/sectores/{idsector}/stock
+/// [soloLectura]: si true, no permite agregar ni editar productos (solo ver)
 class GestionStock extends StatelessWidget {
   final String eventoId;
   final String sectorId;
   final String nombreSector;
+  final bool soloLectura;
 
   const GestionStock({
     super.key,
     required this.eventoId,
     required this.sectorId,
     required this.nombreSector,
+    this.soloLectura = false,
   });
 
   @override
@@ -147,6 +150,7 @@ class GestionStock extends StatelessWidget {
                       cantidad: cantidad,
                       eventoId: eventoId,
                       sectorId: sectorId,
+                      soloLectura: soloLectura,
                     );
                   },
                 );
@@ -155,16 +159,18 @@ class GestionStock extends StatelessWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _mostrarModalAgregarProducto(context),
-        backgroundColor: _accentColor,
-        foregroundColor: _primaryColor,
-        icon: const Icon(Icons.add),
-        label: Text(
-          'Agregar Producto',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-        ),
-      ),
+      floatingActionButton: soloLectura
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _mostrarModalAgregarProducto(context),
+              backgroundColor: _accentColor,
+              foregroundColor: _primaryColor,
+              icon: const Icon(Icons.add),
+              label: Text(
+                'Agregar Producto',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              ),
+            ),
     );
   }
 
@@ -189,6 +195,7 @@ class _ProductoStockCard extends StatelessWidget {
   final int cantidad;
   final String eventoId;
   final String sectorId;
+  final bool soloLectura;
 
   const _ProductoStockCard({
     required this.productoId,
@@ -197,6 +204,7 @@ class _ProductoStockCard extends StatelessWidget {
     required this.cantidad,
     required this.eventoId,
     required this.sectorId,
+    this.soloLectura = false,
   });
 
   @override
@@ -262,21 +270,23 @@ class _ProductoStockCard extends StatelessWidget {
             ),
           ],
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit),
-              color: _accentColor,
-              onPressed: () => _editarCantidad(context),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              color: Colors.red,
-              onPressed: () => _eliminarProducto(context),
-            ),
-          ],
-        ),
+        trailing: soloLectura
+            ? null
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit),
+                    color: _accentColor,
+                    onPressed: () => _editarCantidad(context),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    color: Colors.red,
+                    onPressed: () => _eliminarProducto(context),
+                  ),
+                ],
+              ),
       ),
     );
   }
