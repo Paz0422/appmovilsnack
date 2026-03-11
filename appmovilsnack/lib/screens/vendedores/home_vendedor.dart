@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -80,17 +80,20 @@ class _HomeVendedorState extends State<HomeVendedor> {
 
   Future<void> _verificarStockInicial() async {
     try {
-      final snapshot = await FirebaseFirestore.instance
+      final sectorDoc = await FirebaseFirestore.instance
           .collection('eventos')
           .doc(widget.eventId)
           .collection('sectores')
           .doc(_currentSectorId)
-          .collection('stock')
           .get();
 
       if (mounted) {
         setState(() {
-          _stockInicialAgregado = snapshot.docs.isNotEmpty;
+          // Solo cuenta como "stock inicial ingresado" si se usó Gestionar Stock.
+          // Traspasos no marcan este flag; un sector que solo recibió traspaso
+          // puede seguir usando "Gestionar Stock" una vez.
+          _stockInicialAgregado =
+              sectorDoc.data()?['stockInicialIngresado'] == true;
         });
       }
     } catch (e) {
@@ -172,7 +175,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Evento:',
+                                'Sector:',
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w500,
@@ -180,7 +183,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                                 ),
                               ),
                               Text(
-                                _nombreEvento ?? widget.eventId,
+                                _currentSectorNombre,
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
@@ -248,7 +251,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Accesos rÃ¡pidos',
+            'Accesos rapidos',
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.w600,

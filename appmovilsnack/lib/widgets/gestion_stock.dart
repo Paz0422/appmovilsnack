@@ -657,6 +657,17 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
                       'cantidad': cantidad,
                     });
 
+                // Marcar que este sector ya usó "Gestionar Stock" (traspasos no ponen este flag).
+                await FirebaseFirestore.instance
+                    .collection('eventos')
+                    .doc(widget.eventoId)
+                    .collection('sectores')
+                    .doc(widget.sectorId)
+                    .set(
+                      {'stockInicialIngresado': true},
+                      SetOptions(merge: true),
+                    );
+
                 if (context.mounted) {
                   Navigator.of(context).pop(); // Cerrar diálogo de cantidad
                   Navigator.of(context).pop(); // Cerrar modal de búsqueda

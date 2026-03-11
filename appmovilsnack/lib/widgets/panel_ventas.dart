@@ -28,7 +28,8 @@ class _PanelVentasState extends State<PanelVentas> {
   String? _errorMessage;
 
   final TextEditingController _searchController = TextEditingController();
-  // Los productos se leen en tiempo real desde Firestore (StreamBuilder).
+  // Stream fijo para no recrearlo en cada setState y evitar parpadeo al añadir al carrito.
+  Stream<QuerySnapshot>? _stockStream;
 
   List<Map<String, dynamic>> _carritoItems = [];
   double _montoTotal = 0.0;
@@ -43,6 +44,15 @@ class _PanelVentasState extends State<PanelVentas> {
     super.initState();
     _sectorActualNombre = widget.nombreSector;
     _sectorActualId = widget.sectorId;
+    if (_sectorActualId != null) {
+      _stockStream = FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(widget.eventoId)
+          .collection('sectores')
+          .doc(_sectorActualId)
+          .collection('stock')
+          .snapshots();
+    }
     _cargarDatosIniciales();
     _searchController.addListener(_filtrarProductos);
   }
@@ -188,6 +198,97 @@ class _PanelVentasState extends State<PanelVentas> {
             _quitarItemDelCarrito(nombre);
             return;
           }
+          break;
+        }
+      }
+      _recalcularTotal();
+    });
+  }
+
+  Future<void> _editarCantidadPorTeclado(String nombre) async {
+    final idx = _carritoItems.indexWhere((e) => e['nombre'] == nombre);
+    if (idx == -1) return;
+    final item = _carritoItems[idx];
+    final stockMax = item['stock'] as int? ?? 0;
+    final cantidadActual = item['cantidad'] as int? ?? 1;
+    final controller = TextEditingController(text: cantidadActual.toString());
+
+    final nuevaCantidad = await showDialog<int?>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          item['nombre'] as String,
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Stock disponible: $stockMax',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: secondaryColor,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Cantidad',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onSubmitted: (_) => Navigator.of(dialogContext).pop(
+                int.tryParse(controller.text.trim()),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(null),
+            child: Text('Cancelar', style: GoogleFonts.poppins()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(
+              int.tryParse(controller.text.trim()),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: accentColor,
+              foregroundColor: primaryColor,
+            ),
+            child: Text('Aceptar', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (nuevaCantidad == null || !mounted) return;
+    if (nuevaCantidad <= 0) {
+      _quitarItemDelCarrito(nombre);
+      return;
+    }
+    if (nuevaCantidad > stockMax) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Máximo disponible: $stockMax',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    setState(() {
+      for (var i in _carritoItems) {
+        if (i['nombre'] == nombre) {
+          i['cantidad'] = nuevaCantidad;
           break;
         }
       }
@@ -419,15 +520,18 @@ class _PanelVentasState extends State<PanelVentas> {
                           );
                           if (nuevoSector['id'] != _sectorActualId) {
                             setState(() {
-                              _isLoading = true;
                               _sectorActualNombre = nuevoSectorNombre;
                               _sectorActualId = nuevoSector['id'];
                               _carritoItems.clear();
                               _montoTotal = 0.0;
-                            });
-                            // El stock se actualiza automáticamente (StreamBuilder).
-                            setState(() {
-                              _isLoading = false;
+                              // Actualizar el stream al nuevo sector para que el grid muestre su stock.
+                              _stockStream = FirebaseFirestore.instance
+                                  .collection('eventos')
+                                  .doc(widget.eventoId)
+                                  .collection('sectores')
+                                  .doc(_sectorActualId)
+                                  .collection('stock')
+                                  .snapshots();
                             });
                           }
                         }
@@ -626,17 +730,32 @@ class _PanelVentasState extends State<PanelVentas> {
                                                   item['nombre'],
                                                 ),
                                           ),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            child: Text(
-                                              '${item['cantidad']}',
-                                              style: GoogleFonts.poppins(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14,
-                                                color: primaryColor,
+                                          GestureDetector(
+                                            onTap: () =>
+                                                _editarCantidadPorTeclado(
+                                                  item['nombre'] as String,
+                                                ),
+                                            child: Tooltip(
+                                              message: 'Toca para editar cantidad',
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 10,
+                                                  vertical: 6,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  border: Border.all(
+                                                    color: accentColor.withOpacity(0.5),
+                                                  ),
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                                child: Text(
+                                                  '${item['cantidad']}',
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 14,
+                                                    color: primaryColor,
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -759,23 +878,24 @@ class _PanelVentasState extends State<PanelVentas> {
                               style: GoogleFonts.poppins(color: secondaryColor),
                             ),
                           )
-                        : StreamBuilder<QuerySnapshot>(
-                            stream: FirebaseFirestore.instance
-                                .collection('eventos')
-                                .doc(widget.eventoId)
-                                .collection('sectores')
-                                .doc(_sectorActualId)
-                                .collection('stock')
-                                .snapshots(),
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState ==
-                                  ConnectionState.waiting) {
-                                return Center(
-                                  child: CircularProgressIndicator(
-                                    color: accentColor,
-                                  ),
-                                );
-                              }
+                        : _stockStream == null
+                            ? Center(
+                                child: Text(
+                                  'Selecciona un sector',
+                                  style: GoogleFonts.poppins(color: secondaryColor),
+                                ),
+                              )
+                            : StreamBuilder<QuerySnapshot>(
+                                stream: _stockStream,
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState ==
+                                      ConnectionState.waiting) {
+                                    return Center(
+                                      child: CircularProgressIndicator(
+                                        color: accentColor,
+                                      ),
+                                    );
+                                  }
 
                               if (snapshot.hasError) {
                                 return Center(

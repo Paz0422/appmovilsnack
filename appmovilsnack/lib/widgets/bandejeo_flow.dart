@@ -122,6 +122,23 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
                 onPressed: _anteriorPaso,
               )
             : null,
+        actions: [
+          if (_currentPage > 0)
+            IconButton(
+              icon: const Icon(Icons.swap_horiz),
+              tooltip: 'Cambiar bandejero / Entrar con otra cuenta',
+              onPressed: () {
+                setState(() {
+                  _bandejeroId = null;
+                  _bandejeroNombre = null;
+                  _productosBandeja = [];
+                  _rondaId = null;
+                  _currentPage = 0;
+                });
+                _pageController.jumpToPage(0);
+              },
+            ),
+        ],
       ),
       body: PageView(
         controller: _pageController,
@@ -604,7 +621,7 @@ class _PasoSeleccionBandejero extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Primero selecciona o agrega un bandejero',
+                'Selecciona con qué persona trabajar',
                 style: GoogleFonts.poppins(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -613,8 +630,11 @@ class _PasoSeleccionBandejero extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'Cada bandejero llevará su cuenta por separado.',
-                style: GoogleFonts.poppins(color: _secondaryColor),
+                'Cada bandejero tiene su cuenta por separado. Puedes agregar personas abajo y, en cualquier paso, usar "Cambiar bandejero" para salir y entrar con otra cuenta.',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: _secondaryColor,
+                ),
               ),
             ],
           ),

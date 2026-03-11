@@ -192,7 +192,11 @@ class _TraspasoStockState extends State<TraspasoStock> {
             .collection('stock')
             .doc(productoId);
 
+        // 1. --- TODAS LAS LECTURAS PRIMERO ---
         final origenSnap = await tx.get(origenRef);
+        final destinoSnap = await tx.get(destinoRef);
+
+        // 2. --- VALIDACIONES ---
         if (!origenSnap.exists) {
           throw Exception('El producto ya no existe en el sector origen.');
         }
@@ -203,9 +207,11 @@ class _TraspasoStockState extends State<TraspasoStock> {
           throw Exception('Stock insuficiente en el sector origen.');
         }
 
+        // 3. --- TODAS LAS ESCRITURAS AL FINAL ---
+        // Descontamos del origen
         tx.update(origenRef, {'cantidad': origenCantidad - cantidad});
 
-        final destinoSnap = await tx.get(destinoRef);
+        // Sumamos al destino o lo creamos si no existe
         if (destinoSnap.exists) {
           final destData = destinoSnap.data() as Map<String, dynamic>;
           final destCantidad = destData['cantidad'] as int? ?? 0;
