@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "300612690116",
+    "project_id": "snack-estadio",
+    "storage_bucket": "snack-estadio.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:300612690116:android:a82efb4029300ba3172991",
+        "android_client_info": {
+          "package_name": "com.example.front_appsnack"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKC8J8g7Eg-RhG4QPNAaU7Sobm9h7rPJM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
