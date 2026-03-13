@@ -1,3 +1,5 @@
 {
-    "cmake.sourceDirectory": "C:/Users/pazay/front_appsnack/linux"
+    "cmake.sourceDirectory": "C:/Users/pazay/front_appsnack/linux",
+    "terminal.integrated.scrollback": 10000,
+    "terminal.integrated.defaultProfile.windows": "PowerShell"
 }

@@ -214,6 +214,31 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                   elevation: 5,
                 ),
                 onPressed: () async {
+                  // No permitir entrar a sectores con turno cerrado
+                  final sectorDoc = await FirebaseFirestore.instance
+                      .collection('eventos')
+                      .doc(_eventoSeleccionadoId!)
+                      .collection('sectores')
+                      .doc(_sectorSeleccionadoId!)
+                      .get();
+                  final sectorData = sectorDoc.data();
+                  if (sectorDoc.exists &&
+                      sectorData != null &&
+                      sectorData['turnoCerrado'] == true) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Este sector tiene el turno cerrado. Un administrador debe reabrirlo desde Gestión de eventos.',
+                          style: GoogleFonts.poppins(),
+                        ),
+                        backgroundColor: Colors.orange,
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 4),
+                      ),
+                    );
+                    return;
+                  }
                   final bool puedeCerrarTurno;
                   if (widget.fromAdmin) {
                     puedeCerrarTurno = true; // El admin también puede cerrar turno
@@ -296,26 +321,52 @@ class SectoresList extends StatelessWidget {
           children: sectores.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
             final nombre = data['nombre'] ?? 'Sector';
+            final turnoCerrado = data['turnoCerrado'] == true;
             final isSelected = sectorSeleccionadoId == doc.id;
 
             return ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 30),
-              title: Text(
-                nombre,
-                style: GoogleFonts.lato(
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  color: isSelected ? accentColor : primaryColor,
-                ),
-              ),
-              trailing: isSelected
-                  ? const Icon(Icons.check_circle, color: accentColor)
-                  : const Icon(
-                      Icons.circle_outlined,
-                      color: Colors.grey,
-                      size: 20,
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      nombre,
+                      style: GoogleFonts.lato(
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: turnoCerrado
+                            ? Colors.grey
+                            : (isSelected ? accentColor : primaryColor),
+                      ),
                     ),
+                  ),
+                  if (turnoCerrado)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8.0),
+                      child: Text(
+                        'Turno cerrado',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.grey,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              trailing: turnoCerrado
+                  ? const Icon(Icons.lock_outline, color: Colors.grey, size: 20)
+                  : (isSelected
+                      ? const Icon(Icons.check_circle, color: accentColor)
+                      : const Icon(
+                          Icons.circle_outlined,
+                          color: Colors.grey,
+                          size: 20,
+                        )),
               tileColor: isSelected ? accentColor.withOpacity(0.05) : null,
-              onTap: () => onSectorTap(doc.id, nombre),
+              onTap: turnoCerrado
+                  ? null
+                  : () => onSectorTap(doc.id, nombre),
+              enabled: !turnoCerrado,
             );
           }).toList(),
         );

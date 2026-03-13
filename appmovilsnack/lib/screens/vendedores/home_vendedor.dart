@@ -55,6 +55,51 @@ class _HomeVendedorState extends State<HomeVendedor> {
     _startTimer();
     _verificarStockInicial();
     _cargarNombreEvento();
+    _verificarSectorNoCerrado();
+  }
+
+  /// Si el sector tiene turno cerrado, volver atrás y mostrar mensaje.
+  Future<void> _verificarSectorNoCerrado() async {
+    try {
+      final sectorDoc = await FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(widget.eventId)
+          .collection('sectores')
+          .doc(widget.sectorId)
+          .get();
+      if (!mounted) return;
+      final sectorData = sectorDoc.data();
+      if (sectorDoc.exists &&
+          sectorData != null &&
+          sectorData['turnoCerrado'] == true) {
+        if (!mounted) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              title: Text(
+                'Sector con turno cerrado',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              ),
+              content: Text(
+                'Este sector tiene el turno cerrado. Un administrador debe reabrirlo desde Gestión de eventos para poder operar aquí.',
+                style: GoogleFonts.poppins(),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: Text('Entendido', style: GoogleFonts.poppins()),
+                ),
+              ],
+            ),
+          );
+          if (!mounted) return;
+          Navigator.of(context).pop();
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _cargarNombreEvento() async {
@@ -67,7 +112,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
       if (doc.exists && mounted) {
         final data = doc.data();
         setState(() {
-          _nombreEvento = data?['nombre'] as String? ?? widget.eventId;
+          _nombreEvento = data?['nombre']?.toString() ?? widget.eventId;
         });
       } else if (mounted) {
         setState(() {
@@ -812,6 +857,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                       sectorId: _currentSectorId,
                       nombreSector: _currentSectorNombre,
                       nombreEvento: _nombreEvento,
+                      fromAdmin: widget.fromAdmin,
                     ),
                   ),
                 );

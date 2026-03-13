@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
 
 class VentasPorCategoria extends StatefulWidget {
@@ -23,6 +24,16 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
   final Color primaryColor = const Color(0xFF2B2B2B);
   final Color accentColor = const Color(0xFFDABF41);
   final Color secondaryColor = const Color(0xFF6B4D2F);
+
+  /// Colores para cada porción del gráfico circular (por índice)
+  static const List<Color> _coloresGrafico = [
+    Color(0xFFDABF41), // dorado - Bebestibles
+    Color(0xFF6B4D2F), // marrón - Snacks
+    Color(0xFF8B4513), // saddle brown - Masas
+    Color(0xFFCD853F), // peru - Galletas
+    Color(0xFFA0522D), // sienna - Otros
+    Color(0xFFBC8F8F), // rosy brown - extra
+  ];
 
   @override
   void initState() {
@@ -99,6 +110,134 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
     }
   }
 
+  Widget _buildGraficoCircular() {
+    // Orden fijo: categorías de la lista + Otros al final (mismo orden que la lista de abajo)
+    final ordenCategorias = <String>[
+      ..._categorias.map((e) => e['nombre'] ?? '').where((s) => s.isNotEmpty),
+    ];
+    if (!ordenCategorias.contains(categoriaDefault)) ordenCategorias.add(categoriaDefault);
+
+    final listaConMonto = <MapEntry<String, double>>[];
+    for (var i = 0; i < ordenCategorias.length; i++) {
+      final cat = ordenCategorias[i];
+      final monto = _montoPorCategoria[cat] ?? 0;
+      if (monto > 0) listaConMonto.add(MapEntry(cat, monto));
+    }
+
+    if (listaConMonto.isEmpty || _montoTotal <= 0) {
+      return Container(
+        height: 220,
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.pie_chart_outline, size: 64, color: secondaryColor.withOpacity(0.5)),
+            const SizedBox(height: 8),
+            Text(
+              'Sin ventas por categoría aún',
+              style: GoogleFonts.poppins(color: secondaryColor, fontSize: 14),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Color por índice en orden fijo (para que coincida con la leyenda)
+    int colorIndex = 0;
+    final secciones = <PieChartSectionData>[];
+    final leyenda = <MapEntry<String, Color>>[];
+    for (final cat in ordenCategorias) {
+      final monto = _montoPorCategoria[cat] ?? 0;
+      if (monto <= 0) continue;
+      final color = _coloresGrafico[colorIndex % _coloresGrafico.length];
+      final pct = (monto / _montoTotal * 100).toStringAsFixed(1);
+      secciones.add(
+        PieChartSectionData(
+          value: monto,
+          title: '$pct%',
+          color: color,
+          radius: 72,
+          titleStyle: GoogleFonts.poppins(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+          titlePositionPercentageOffset: 0.55,
+        ),
+      );
+      leyenda.add(MapEntry(cat, color));
+      colorIndex++;
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 220,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              PieChart(
+                PieChartData(
+                  sectionsSpace: 2,
+                  centerSpaceRadius: 42,
+                  sections: secciones,
+                ),
+              ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Total',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: secondaryColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    '\$${_montoTotal.toStringAsFixed(0)}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: primaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 16,
+          runSpacing: 8,
+          children: leyenda.map((e) {
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: e.value,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: primaryColor.withOpacity(0.3), width: 1),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  e.key,
+                  style: GoogleFonts.poppins(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w500),
+                ),
+              ],
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -167,9 +306,20 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                       Text(
-                        'Por categoría',
+                        'Distribución por categoría',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildGraficoCircular(),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Detalle por categoría',
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,

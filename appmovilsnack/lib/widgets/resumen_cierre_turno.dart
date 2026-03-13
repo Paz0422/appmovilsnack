@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:front_appsnack/widgets/estadio_selection.dart';
 
 /// Pantalla informativa que muestra el resumen de stock y ventas del sector
 /// al cerrar el turno. Permite exportar el contenido como texto.
@@ -11,6 +11,8 @@ class ResumenCierreTurno extends StatefulWidget {
   final String sectorId;
   final String nombreSector;
   final String? nombreEvento;
+  /// Si es true (entró como admin), se muestra botón para volver al panel sin cerrar sesión.
+  final bool fromAdmin;
 
   const ResumenCierreTurno({
     super.key,
@@ -18,6 +20,7 @@ class ResumenCierreTurno extends StatefulWidget {
     required this.sectorId,
     required this.nombreSector,
     this.nombreEvento,
+    this.fromAdmin = false,
   });
 
   @override
@@ -164,12 +167,64 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
     }
   }
 
-  void _confirmarCierre() {
-    Navigator.of(context).popUntil((route) => route.isFirst);
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const EstadioSelection()),
-    );
+  Future<void> _confirmarCierre() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      String? vendedorNombre;
+      if (user != null) {
+        try {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('usuarios')
+              .doc(user.uid)
+              .get();
+          vendedorNombre = userDoc.data()?['username']?.toString();
+        } catch (_) {}
+        vendedorNombre ??= user.displayName ?? user.email;
+      }
+
+      final sectorRef = FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(widget.eventoId)
+          .collection('sectores')
+          .doc(widget.sectorId);
+
+      final sectorSnap = await sectorRef.get();
+      if (sectorSnap.exists && sectorSnap.data() != null) {
+        final data = sectorSnap.data()!;
+        List<dynamic> vendedores = List.from(data['vendedoresasignados'] ?? []);
+        if (vendedorNombre != null && vendedorNombre.isNotEmpty) {
+          vendedores.removeWhere((v) {
+            final n = v is Map ? v['nombre']?.toString() : null;
+            return n == vendedorNombre;
+          });
+        }
+        await sectorRef.update({
+          'vendedoresasignados': vendedores,
+          'turnoCerrado': true,
+          'turnoCerradoAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (e) {
+      debugPrint('Error en cierre de turno: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error al cerrar turno: $e',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -177,6 +232,13 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
+        leading: widget.fromAdmin
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Volver al panel de vendedor',
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
         title: Text(
           'Resumen Cierre de Turno',
           style: GoogleFonts.poppins(
@@ -188,6 +250,14 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         backgroundColor: primaryColor,
         foregroundColor: accentColor,
         actions: [
+          if (widget.fromAdmin)
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings_outlined),
+              tooltip: 'Volver al panel de administración',
+              onPressed: () {
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.share),
             onPressed: _isLoading ? null : _exportarTexto,

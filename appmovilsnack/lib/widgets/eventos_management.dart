@@ -967,6 +967,37 @@ class _GestionSectoresState extends State<_GestionSectores> {
     );
   }
 
+  Future<void> _reabrirSector(DocumentSnapshot sector) async {
+    try {
+      await sector.reference.update({
+        'turnoCerrado': false,
+        'turnoCerradoAt': FieldValue.delete(),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Sector reabierto. Ya puede ser seleccionado por vendedores.',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al reabrir: $e', style: GoogleFonts.poppins()),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _eliminarSector(DocumentSnapshot sector) async {
     final nombre =
         (sector.data() as Map<String, dynamic>)['nombre'] ?? 'este sector';
@@ -1193,6 +1224,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
 
                     final String nombreSector =
                         data['nombre']?.toString() ?? 'Sin nombre';
+                    final bool turnoCerrado = data['turnoCerrado'] == true;
 
                     final query = _searchController.text.toLowerCase();
                     if (query.isNotEmpty &&
@@ -1219,22 +1251,53 @@ class _GestionSectoresState extends State<_GestionSectores> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
-                            Icons.location_on,
-                            color: secondaryColor,
+                            turnoCerrado ? Icons.lock_outline : Icons.location_on,
+                            color: turnoCerrado ? Colors.grey : secondaryColor,
                             size: 28,
                           ),
                         ),
-                        title: Text(
-                          nombreSector,
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                            color: primaryColor,
-                          ),
+                        title: Row(
+                          children: [
+                            Text(
+                              nombreSector,
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                                color: primaryColor,
+                              ),
+                            ),
+                            if (turnoCerrado) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Turno cerrado',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    color: Colors.orange[800],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            if (turnoCerrado)
+                              TextButton.icon(
+                                icon: const Icon(Icons.lock_open, size: 18),
+                                label: Text(
+                                  'Reabrir',
+                                  style: GoogleFonts.poppins(fontSize: 12),
+                                ),
+                                onPressed: () => _reabrirSector(sector),
+                              ),
                             IconButton(
                               icon: Icon(Icons.edit, color: accentColor),
                               onPressed: () =>

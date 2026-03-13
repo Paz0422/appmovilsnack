@@ -51,86 +51,102 @@ class _TransactionReportsState extends State<TransactionReports> {
     });
 
     try {
-      // Si no hay evento seleccionado, solo considerar eventos activos (igual que el dashboard)
+      final firestore = FirebaseFirestore.instance;
+      const int limitTransacciones = 500;
+
+      // 1) Cargar en paralelo: eventos activos (si aplica), transacciones y todos los eventos
+      final bool filtrarSoloActivos = _eventoSeleccionadoId == null;
+      final futureTransacciones = _eventoSeleccionadoId != null
+          ? firestore
+              .collection('transacciones')
+              .where('eventoId', isEqualTo: _eventoSeleccionadoId)
+              .orderBy('fecha', descending: true)
+              .get()
+          : firestore
+              .collection('transacciones')
+              .orderBy('fecha', descending: true)
+              .limit(limitTransacciones)
+              .get();
+
+      final futureEventos = firestore.collection('eventos').get();
+
+      QuerySnapshot transaccionesSnapshot;
+      QuerySnapshot eventosSnapshot;
       Set<String>? eventosActivosIds;
-      if (_eventoSeleccionadoId == null) {
-        final snapActivos = await FirebaseFirestore.instance
+
+      if (filtrarSoloActivos) {
+        final futureActivos = firestore
             .collection('eventos')
             .where('activo', isEqualTo: true)
             .get();
-        eventosActivosIds = snapActivos.docs.map((d) => d.id).toSet();
-      }
-
-      // Obtener transacciones
-      QuerySnapshot transaccionesSnapshot;
-      if (_eventoSeleccionadoId != null) {
-        transaccionesSnapshot = await FirebaseFirestore.instance
-            .collection('transacciones')
-            .where('eventoId', isEqualTo: _eventoSeleccionadoId)
-            .orderBy('fecha', descending: true)
-            .get();
+        final results = await Future.wait([
+          futureActivos,
+          futureTransacciones,
+          futureEventos,
+        ]);
+        eventosActivosIds = (results[0] as QuerySnapshot).docs.map((d) => d.id).toSet();
+        transaccionesSnapshot = results[1] as QuerySnapshot;
+        eventosSnapshot = results[2] as QuerySnapshot;
       } else {
-        transaccionesSnapshot = await FirebaseFirestore.instance
-            .collection('transacciones')
-            .orderBy('fecha', descending: true)
-            .get();
+        final results = await Future.wait([futureTransacciones, futureEventos]);
+        transaccionesSnapshot = results[0] as QuerySnapshot;
+        eventosSnapshot = results[1] as QuerySnapshot;
       }
-
-      // Obtener información de eventos y sectores de forma eficiente
-      final eventosSnapshot = await FirebaseFirestore.instance
-          .collection('eventos')
-          .get();
 
       final Map<String, String> eventosMap = {};
-      final Map<String, Map<String, String>> sectoresMap = {}; // eventoId -> {sectorId: nombre}
+      for (var doc in eventosSnapshot.docs) {
+        eventosMap[doc.id] = (doc.data() as Map<String, dynamic>?)?['nombre']?.toString() ?? 'Sin evento';
+      }
 
-      for (var eventoDoc in eventosSnapshot.docs) {
-        final eventoId = eventoDoc.id;
-        final eventoData = eventoDoc.data();
-        eventosMap[eventoId] = eventoData['nombre']?.toString() ?? 'Sin nombre';
-        
-        // Precargar todos los sectores de cada evento
-        sectoresMap[eventoId] = {};
-        try {
-          final sectoresSnapshot = await FirebaseFirestore.instance
+      // 2) Filtrar transacciones y obtener solo los eventoIds que necesitamos para sectores
+      final List<QueryDocumentSnapshot> docsFiltrados = [];
+      final Set<String> eventoIdsParaSectores = {};
+      for (var transDoc in transaccionesSnapshot.docs) {
+        final transData = (transDoc.data() as Map<String, dynamic>?) ?? {};
+        final eventoId = transData['eventoId']?.toString() ?? '';
+        if (eventosActivosIds != null && (eventoId.isEmpty || !eventosActivosIds.contains(eventoId))) {
+          continue;
+        }
+        docsFiltrados.add(transDoc);
+        if (eventoId.isNotEmpty) eventoIdsParaSectores.add(eventoId);
+      }
+
+      // 3) Cargar sectores solo de esos eventos (en paralelo)
+      final Map<String, Map<String, String>> sectoresMap = {};
+      if (eventoIdsParaSectores.isNotEmpty) {
+        final listaEventoIds = eventoIdsParaSectores.toList();
+        final sectorSnapshots = await Future.wait(
+          listaEventoIds.map((eventoId) => firestore
               .collection('eventos')
               .doc(eventoId)
               .collection('sectores')
-              .get();
-          
-          for (var sectorDoc in sectoresSnapshot.docs) {
-            final sectorData = sectorDoc.data();
-            sectoresMap[eventoId]![sectorDoc.id] = 
-                sectorData['nombre']?.toString() ?? 'Sin sector';
+              .get()),
+        );
+        for (var i = 0; i < listaEventoIds.length; i++) {
+          final eventoId = listaEventoIds[i];
+          sectoresMap[eventoId] = {};
+          for (var sectorDoc in sectorSnapshots[i].docs) {
+            sectoresMap[eventoId]![sectorDoc.id] =
+                (sectorDoc.data() as Map<String, dynamic>?)?['nombre']?.toString() ?? 'Sin sector';
           }
-        } catch (e) {
-          // Si hay error, continuar sin los sectores de ese evento
         }
       }
 
       final List<Map<String, dynamic>> transaccionesData = [];
 
-      for (var transDoc in transaccionesSnapshot.docs) {
-        final transData = transDoc.data() as Map<String, dynamic>;
+      for (var transDoc in docsFiltrados) {
+        final transData = (transDoc.data() as Map<String, dynamic>?) ?? {};
         final eventoId = transData['eventoId']?.toString() ?? '';
-        // Sin evento seleccionado: solo incluir transacciones de eventos activos (igual que dashboard)
-        if (eventosActivosIds != null && (eventoId.isEmpty || !eventosActivosIds.contains(eventoId))) {
-          continue;
-        }
         final sectorId = transData['sectorId']?.toString() ?? '';
-        
-        // Obtener nombre del sector desde el mapa precargado
         String sectorNombre = 'Sin sector';
-        if (eventoId.isNotEmpty && 
-            sectorId.isNotEmpty && 
+        if (eventoId.isNotEmpty &&
+            sectorId.isNotEmpty &&
             sectoresMap.containsKey(eventoId) &&
             sectoresMap[eventoId]!.containsKey(sectorId)) {
           sectorNombre = sectoresMap[eventoId]![sectorId]!;
         }
-
         final fecha = transData['fecha'];
         DateTime fechaDateTime;
-        
         if (fecha is Timestamp) {
           fechaDateTime = fecha.toDate();
         } else if (fecha is DateTime) {
@@ -138,7 +154,6 @@ class _TransactionReportsState extends State<TransactionReports> {
         } else {
           fechaDateTime = DateTime.now();
         }
-
         transaccionesData.add({
           'id': transDoc.id,
           'eventoId': eventoId,
@@ -153,7 +168,7 @@ class _TransactionReportsState extends State<TransactionReports> {
         });
       }
 
-      // Resolver username desde colección usuarios (en lugar de mostrar correo)
+      // Resolver usernames en paralelo
       final uids = transaccionesData
           .map((t) => t['vendedorUid']?.toString())
           .whereType<String>()
@@ -162,7 +177,7 @@ class _TransactionReportsState extends State<TransactionReports> {
       final Map<String, String> uidToUsername = {};
       if (uids.isNotEmpty) {
         final snaps = await Future.wait(
-          uids.map((uid) => FirebaseFirestore.instance.collection('usuarios').doc(uid).get()),
+          uids.map((uid) => firestore.collection('usuarios').doc(uid).get()),
         );
         for (var i = 0; i < uids.length; i++) {
           final un = snaps[i].data()?['username']?.toString();
@@ -176,14 +191,15 @@ class _TransactionReportsState extends State<TransactionReports> {
         }
       }
 
-      // Ordenar según la selección
       _ordenarTransacciones(transaccionesData);
 
-      setState(() {
-        _transaccionesData = transaccionesData;
-        _transaccionesFiltrados = transaccionesData;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _transaccionesData = transaccionesData;
+          _transaccionesFiltrados = transaccionesData;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -276,11 +292,15 @@ class _TransactionReportsState extends State<TransactionReports> {
               if (index == 0) {
                 return ListTile(
                   title: Text(
-                    'Todos los eventos',
+                    'Todos (solo partidos activos)',
                     style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
                   ),
+                  subtitle: Text(
+                    'Ver transacciones solo de partidos en curso',
+                    style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey),
+                  ),
                   onTap: () {
-                    Navigator.pop(context, {'id': '', 'nombre': 'Todos'});
+                    Navigator.pop(context, {'id': '', 'nombre': 'Todos (solo partidos activos)'});
                   },
                 );
               }
@@ -288,9 +308,19 @@ class _TransactionReportsState extends State<TransactionReports> {
               final eventoDoc = eventosSnapshot.docs[index - 1];
               final eventoData = eventoDoc.data();
               final eventoNombre = eventoData['nombre']?.toString() ?? 'Sin nombre';
+              final bool activo = eventoData['activo'] == true;
+              final String estado = activo ? 'Activo' : 'Finalizado';
 
               return ListTile(
                 title: Text(eventoNombre, style: GoogleFonts.poppins()),
+                subtitle: Text(
+                  estado,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: activo ? Colors.green : Colors.grey,
+                    fontWeight: activo ? FontWeight.w500 : FontWeight.normal,
+                  ),
+                ),
                 onTap: () {
                   Navigator.pop(context, {
                     'id': eventoDoc.id,
@@ -458,7 +488,7 @@ class _TransactionReportsState extends State<TransactionReports> {
                                   onPressed: _seleccionarEvento,
                                   icon: const Icon(Icons.event, size: 18),
                                   label: Text(
-                                    _eventoSeleccionadoNombre ?? 'Todos (solo eventos activos)',
+                                    _eventoSeleccionadoNombre ?? 'Todos (solo partidos activos)',
                                     style: GoogleFonts.poppins(fontSize: 12),
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -574,7 +604,7 @@ class _TransactionReportsState extends State<TransactionReports> {
 
                     // Lista de transacciones
                     Expanded(
-                      child: _transaccionesFiltrados.isEmpty
+                      child:                     _transaccionesFiltrados.isEmpty
                           ? Center(
                               child: Padding(
                                 padding: const EdgeInsets.all(24.0),
@@ -588,12 +618,26 @@ class _TransactionReportsState extends State<TransactionReports> {
                                     ),
                                     const SizedBox(height: 16),
                                     Text(
-                                      'No hay transacciones disponibles',
+                                      _eventoSeleccionadoId != null
+                                          ? 'No hay transacciones para este partido'
+                                          : 'No hay transacciones disponibles',
                                       style: GoogleFonts.poppins(
                                         color: secondaryColor,
                                         fontSize: 16,
                                       ),
+                                      textAlign: TextAlign.center,
                                     ),
+                                    if (_eventoSeleccionadoId != null) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Puede que no haya ventas registradas para este partido.',
+                                        style: GoogleFonts.poppins(
+                                          color: Colors.grey,
+                                          fontSize: 13,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
