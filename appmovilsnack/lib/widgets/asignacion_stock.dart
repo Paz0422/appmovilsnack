@@ -775,6 +775,7 @@ class _StockProductoCardState extends State<_StockProductoCard> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: stockController,
+                  autofocus: true,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: 'Cantidad de Stock',

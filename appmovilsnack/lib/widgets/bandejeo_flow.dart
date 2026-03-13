@@ -558,6 +558,7 @@ class _PasoSeleccionBandejero extends StatelessWidget {
           title: Text('Agregar bandejero', style: GoogleFonts.poppins()),
           content: TextField(
             controller: controller,
+            autofocus: true,
             decoration: const InputDecoration(hintText: 'Nombre del bandejero'),
           ),
           actions: [
@@ -601,6 +602,7 @@ class _PasoSeleccionBandejero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sin orderBy para no requerir índice compuesto; ordenamos por nombre en memoria
     final bandejerosStream = FirebaseFirestore.instance
         .collection('eventos')
         .doc(eventoId)
@@ -608,7 +610,6 @@ class _PasoSeleccionBandejero extends StatelessWidget {
         .doc(sectorId)
         .collection('bandejeros')
         .where('activo', isEqualTo: true)
-        .orderBy('nombre')
         .snapshots();
 
     return Column(
@@ -621,7 +622,7 @@ class _PasoSeleccionBandejero extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Selecciona con qué persona trabajar',
+                'Selecciona un bandejero',
                 style: GoogleFonts.poppins(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -629,13 +630,6 @@ class _PasoSeleccionBandejero extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
-                'Cada bandejero tiene su cuenta por separado. Puedes agregar personas abajo y, en cualquier paso, usar "Cambiar bandejero" para salir y entrar con otra cuenta.',
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  color: _secondaryColor,
-                ),
-              ),
             ],
           ),
         ),
@@ -661,7 +655,13 @@ class _PasoSeleccionBandejero extends StatelessWidget {
                 );
               }
 
-              final docs = snapshot.data?.docs ?? const [];
+              final rawDocs = snapshot.data?.docs ?? const [];
+              final docs = List<QueryDocumentSnapshot>.from(rawDocs)
+                ..sort((a, b) {
+                  final na = (a.data() as Map<String, dynamic>)['nombre']?.toString() ?? '';
+                  final nb = (b.data() as Map<String, dynamic>)['nombre']?.toString() ?? '';
+                  return na.toLowerCase().compareTo(nb.toLowerCase());
+                });
               if (docs.isEmpty) {
                 return Center(
                   child: Padding(

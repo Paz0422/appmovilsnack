@@ -231,6 +231,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 32),
                         TextField(
                               controller: _usernameController,
+                              autofocus: true,
                               style: _inputStyle,
                               decoration: _buildInputDecoration(
                                 'Nombre de Usuario',

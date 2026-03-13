@@ -345,8 +345,6 @@ class _EventosManagementState extends State<EventosManagement> {
                       return;
                     }
 
-                    Navigator.of(context).pop();
-
                     try {
                       final eventoData = <String, dynamic>{
                         'nombre': nombre,
@@ -402,6 +400,7 @@ class _EventosManagementState extends State<EventosManagement> {
                       }
 
                       await _cargarEventos();
+                      if (mounted) Navigator.of(context).pop();
                     } catch (e) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(

@@ -112,6 +112,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
             const SizedBox(height: 12),
             TextField(
               controller: controller,
+              autofocus: true,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: 'Cantidad a traspasar',

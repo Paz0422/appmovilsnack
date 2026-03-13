@@ -4,7 +4,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:front_appsnack/widgets/inventory_management.dart';
-import 'package:front_appsnack/widgets/asignacion_stock.dart';
 import 'package:front_appsnack/widgets/asignacion_personal.dart';
 import 'package:front_appsnack/widgets/eventos_management.dart';
 
@@ -50,21 +49,6 @@ class GestionScreen extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (context) => const InventoryManagement(),
-                  ),
-                );
-              },
-            ),
-            _ModuloCard(
-              title: 'Stock',
-              icon: Icons.assignment_outlined,
-              color: accentColor,
-              primaryColor: primaryColor,
-              backgroundColor: backgroundColor,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AsignacionStock(),
                   ),
                 );
               },

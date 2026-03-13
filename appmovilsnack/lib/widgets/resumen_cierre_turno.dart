@@ -114,8 +114,12 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
     buffer.writeln();
     buffer.writeln('Evento: $_nombreEvento');
     buffer.writeln('Sector: ${widget.nombreSector}');
-    buffer.writeln('Fecha: ${DateTime.now().day.toString().padLeft(2, '0')}/${DateTime.now().month.toString().padLeft(2, '0')}/${DateTime.now().year}');
-    buffer.writeln('Hora: ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}');
+    buffer.writeln(
+      'Fecha: ${DateTime.now().day.toString().padLeft(2, '0')}/${DateTime.now().month.toString().padLeft(2, '0')}/${DateTime.now().year}',
+    );
+    buffer.writeln(
+      'Hora: ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+    );
     buffer.writeln();
     buffer.writeln('───────────────────────────────────────');
     buffer.writeln('VENTAS DEL SECTOR');
@@ -129,7 +133,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
     buffer.writeln('STOCK ACTUAL');
     buffer.writeln('───────────────────────────────────────');
     for (var item in _stock) {
-      buffer.writeln('• ${item['nombre']}: ${item['cantidad']} unidades (\$${(item['precio'] as double).toStringAsFixed(0)} c/u)');
+      buffer.writeln(
+        '• ${item['nombre']}: ${item['cantidad']} unidades (\$${(item['precio'] as double).toStringAsFixed(0)} c/u)',
+      );
     }
     buffer.writeln();
     buffer.writeln('═══════════════════════════════════════');
@@ -162,9 +168,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
     Navigator.of(context).popUntil((route) => route.isFirst);
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (context) => const EstadioSelection(),
-      ),
+      MaterialPageRoute(builder: (context) => const EstadioSelection()),
     );
   }
 
@@ -192,9 +196,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         ],
       ),
       body: _isLoading
-          ? Center(
-              child: CircularProgressIndicator(color: accentColor),
-            )
+          ? Center(child: CircularProgressIndicator(color: accentColor))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -244,10 +246,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           const SizedBox(height: 4),
           Text(
             'Sector: ${widget.nombreSector}',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: secondaryColor,
-            ),
+            style: GoogleFonts.poppins(fontSize: 14, color: secondaryColor),
           ),
           const SizedBox(height: 8),
           Text(
@@ -330,10 +329,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           const SizedBox(height: 4),
           Text(
             '$_cantidadVentas venta${_cantidadVentas == 1 ? '' : 's'} realizada${_cantidadVentas == 1 ? '' : 's'}',
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: Colors.white70,
-            ),
+            style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
           ),
         ],
       ),
@@ -370,38 +366,37 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           if (_stock.isEmpty)
             Text(
               'No hay productos en stock',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: secondaryColor,
-              ),
+              style: GoogleFonts.poppins(fontSize: 14, color: secondaryColor),
             )
           else
-            ..._stock.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item['nombre'] as String,
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: primaryColor,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '${item['cantidad']} unidades',
+            ..._stock.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item['nombre'] as String,
                         style: GoogleFonts.poppins(
                           fontSize: 14,
-                          color: secondaryColor,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w500,
+                          color: primaryColor,
                         ),
                       ),
-                    ],
-                  ),
-                )),
+                    ),
+                    Text(
+                      '${item['cantidad']} unidades',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: secondaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );

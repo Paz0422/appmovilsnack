@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/utils/categorias_producto.dart';
 
 // Paleta de colores basada en el logo "Fusión"
 const Color _primaryColor = Color(0xFF2B2B2B);
@@ -8,14 +9,25 @@ const Color _accentColor = Color(0xFFDABF41);
 const Color _secondaryColor = Color(0xFF6B4D2F);
 const Color _backgroundColor = Color(0xFFFDFBF7);
 
+/// Item de stock en memoria (hasta que se pulse Guardar)
+Map<String, dynamic> _stockItem(String productoId, String nombre, double precio, int cantidad, [String categoria = 'Otros']) => {
+  'productoId': productoId,
+  'nombre': nombre,
+  'precio': precio,
+  'cantidad': cantidad,
+  'categoria': categoria,
+};
+
 /// Widget reutilizable para gestionar el stock de un sector
-/// Lee de la colección: /eventos/{idevento}/sectores/{idsector}/stock
+/// Los cambios se guardan en Firestore solo al pulsar "Guardar".
 /// [soloLectura]: si true, no permite agregar ni editar productos (solo ver)
-class GestionStock extends StatelessWidget {
+class GestionStock extends StatefulWidget {
   final String eventoId;
   final String sectorId;
   final String nombreSector;
   final bool soloLectura;
+  /// Si se proporciona, se llama tras guardar con éxito (ej. para ir al panel de ventas).
+  final VoidCallback? onGuardado;
 
   const GestionStock({
     super.key,
@@ -23,11 +35,194 @@ class GestionStock extends StatelessWidget {
     required this.sectorId,
     required this.nombreSector,
     this.soloLectura = false,
+    this.onGuardado,
   });
 
   @override
+  State<GestionStock> createState() => _GestionStockState();
+}
+
+class _GestionStockState extends State<GestionStock> {
+  List<Map<String, dynamic>> _items = [];
+  bool _dirty = false;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarStock();
+  }
+
+  Future<void> _cargarStock() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(widget.eventoId)
+          .collection('sectores')
+          .doc(widget.sectorId)
+          .collection('stock')
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _items = snap.docs.map((d) {
+          final data = d.data();
+          final cat = data['categoria']?.toString() ?? categoriaDefault;
+          return _stockItem(
+            d.id,
+            data['nombre']?.toString() ?? 'Sin nombre',
+            (data['precio'] as num?)?.toDouble() ?? 0.0,
+            data['cantidad'] as int? ?? 0,
+            categoriasProducto.contains(cat) ? cat : categoriaDefault,
+          );
+        }).toList();
+        _items.sort((a, b) {
+          final oa = ordenCategoria(a['categoria'] as String);
+          final ob = ordenCategoria(b['categoria'] as String);
+          if (oa != ob) return oa.compareTo(ob);
+          return (a['nombre'] as String).compareTo(b['nombre'] as String);
+        });
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _guardar() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Guardar stock', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        content: Text(
+          '¿Desea guardar los cambios del stock?',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancelar', style: GoogleFonts.poppins(color: _secondaryColor)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Guardar', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+
+    try {
+      final col = FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(widget.eventoId)
+          .collection('sectores')
+          .doc(widget.sectorId)
+          .collection('stock');
+      final batch = FirebaseFirestore.instance.batch();
+      for (final item in _items) {
+        final ref = col.doc(item['productoId'] as String);
+        batch.set(ref, {
+          'productoId': item['productoId'],
+          'nombre': item['nombre'],
+          'precio': item['precio'],
+          'cantidad': item['cantidad'],
+          'categoria': item['categoria'] ?? categoriaDefault,
+        });
+      }
+      final existing = await col.get();
+      for (final doc in existing.docs) {
+        if (!_items.any((i) => i['productoId'] == doc.id)) {
+          batch.delete(doc.reference);
+        }
+      }
+      await batch.commit();
+      await FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(widget.eventoId)
+          .collection('sectores')
+          .doc(widget.sectorId)
+          .set({'stockInicialIngresado': true}, SetOptions(merge: true));
+      if (!mounted) return;
+      setState(() => _dirty = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Stock guardado', style: GoogleFonts.poppins()),
+          backgroundColor: Colors.green,
+        ),
+      );
+      widget.onGuardado?.call();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar: $e', style: GoogleFonts.poppins()), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _agregarItemLocal(String productoId, String nombre, double precio, int cantidad, [String categoria = 'Otros']) {
+    setState(() {
+      _items.add(_stockItem(productoId, nombre, precio, cantidad, categoriasProducto.contains(categoria) ? categoria : categoriaDefault));
+      _items.sort((a, b) {
+        final oa = ordenCategoria(a['categoria'] as String);
+        final ob = ordenCategoria(b['categoria'] as String);
+        if (oa != ob) return oa.compareTo(ob);
+        return (a['nombre'] as String).compareTo(b['nombre'] as String);
+      });
+      _dirty = true;
+    });
+  }
+
+  void _actualizarCantidadLocal(String productoId, int cantidad) {
+    setState(() {
+      final i = _items.indexWhere((e) => e['productoId'] == productoId);
+      if (i >= 0) {
+        _items[i]['cantidad'] = cantidad;
+        _dirty = true;
+      }
+    });
+  }
+
+  void _eliminarItemLocal(String productoId) {
+    setState(() {
+      _items.removeWhere((e) => e['productoId'] == productoId);
+      _dirty = true;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: !_dirty,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final salir = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('Sin guardar', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+            content: Text(
+              'Si sale ahora no se guardará el stock. ¿Salir sin guardar?',
+              style: GoogleFonts.poppins(),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text('Cancelar', style: GoogleFonts.poppins(color: _secondaryColor)),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text('Salir sin guardar', style: GoogleFonts.poppins(color: Colors.red)),
+              ),
+            ],
+          ),
+        );
+        if (salir == true && context.mounted) Navigator.of(context).pop();
+      },
+      child: Scaffold(
       backgroundColor: _backgroundColor,
       appBar: AppBar(
         title: Text(
@@ -39,6 +234,23 @@ class GestionStock extends StatelessWidget {
         ),
         backgroundColor: _primaryColor,
         foregroundColor: _accentColor,
+        actions: widget.soloLectura
+            ? null
+            : [
+                if (_dirty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: TextButton.icon(
+                      onPressed: _guardar,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        backgroundColor: Colors.green,
+                      ),
+                      icon: const Icon(Icons.save, size: 20),
+                      label: Text('Guardar', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+              ],
       ),
       body: Column(
         children: [
@@ -51,7 +263,7 @@ class GestionStock extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Sector: $nombreSector',
+                  'Sector: ${widget.nombreSector}',
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -60,7 +272,7 @@ class GestionStock extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Stock en tiempo real',
+                  'Agregue con "+" y pulse Guardar',
                   style: GoogleFonts.poppins(
                     fontSize: 12,
                     color: _secondaryColor,
@@ -69,97 +281,78 @@ class GestionStock extends StatelessWidget {
               ],
             ),
           ),
-          // Lista de stock en tiempo real
+          // Lista de stock (estado local hasta Guardar)
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('eventos')
-                  .doc(eventoId)
-                  .collection('sectores')
-                  .doc(sectorId)
-                  .collection('stock')
-                  .orderBy('nombre')
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(
-                    child: CircularProgressIndicator(color: _accentColor),
-                  );
-                }
-
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Text(
-                        'Error al cargar stock: ${snapshot.error}',
-                        style: GoogleFonts.poppins(color: Colors.red),
-                        textAlign: TextAlign.center,
+            child: _loading
+                ? Center(child: CircularProgressIndicator(color: _accentColor))
+                : _items.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.inventory_2_outlined,
+                              size: 64,
+                              color: _secondaryColor.withOpacity(0.5),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No hay productos en stock',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                color: _secondaryColor,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Apriete "+" para agregar productos',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: _secondaryColor.withOpacity(0.8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                            child: Text(
+                              'Agregue con "+" y pulse Guardar',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: _secondaryColor.withOpacity(0.8),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _items.length,
+                              itemBuilder: (context, index) {
+                                final item = _items[index];
+                                return _ProductoStockCard(
+                                  productoId: item['productoId'] as String,
+                                  nombre: item['nombre'] as String,
+                                  precio: (item['precio'] as num).toDouble(),
+                                  cantidad: item['cantidad'] as int,
+                                  soloLectura: widget.soloLectura,
+                                  onEditarCantidad: (nuevaCantidad) =>
+                                      _actualizarCantidadLocal(item['productoId'] as String, nuevaCantidad),
+                                  onEliminar: () =>
+                                      _eliminarItemLocal(item['productoId'] as String),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  );
-                }
-
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inventory_2_outlined,
-                          size: 64,
-                          color: _secondaryColor.withOpacity(0.5),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No hay productos en stock',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            color: _secondaryColor,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Toca el botón + para agregar productos',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            color: _secondaryColor.withOpacity(0.7),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                final productos = snapshot.data!.docs;
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: productos.length,
-                  itemBuilder: (context, index) {
-                    final productoDoc = productos[index];
-                    final data = productoDoc.data() as Map<String, dynamic>;
-                    final nombre = data['nombre'] as String? ?? 'Sin nombre';
-                    final precio = (data['precio'] as num?)?.toDouble() ?? 0.0;
-                    final cantidad = data['cantidad'] as int? ?? 0;
-
-                    return _ProductoStockCard(
-                      productoId: productoDoc.id,
-                      nombre: nombre,
-                      precio: precio,
-                      cantidad: cantidad,
-                      eventoId: eventoId,
-                      sectorId: sectorId,
-                      soloLectura: soloLectura,
-                    );
-                  },
-                );
-              },
-            ),
           ),
-        ],
-      ),
-      floatingActionButton: soloLectura
+      ],
+    ),
+      floatingActionButton: widget.soloLectura
           ? null
           : FloatingActionButton.extended(
               onPressed: () => _mostrarModalAgregarProducto(context),
@@ -171,17 +364,21 @@ class GestionStock extends StatelessWidget {
                 style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
               ),
             ),
+    ),
     );
   }
 
   void _mostrarModalAgregarProducto(BuildContext context) {
+    final idsEnStock = _items.map((e) => e['productoId'] as String).toSet();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _ModalBuscarProducto(
-        eventoId: eventoId,
-        sectorId: sectorId,
+        eventoId: widget.eventoId,
+        sectorId: widget.sectorId,
+        productIdsEnStock: idsEnStock,
+        onAgregarLocal: _agregarItemLocal,
       ),
     );
   }
@@ -193,18 +390,18 @@ class _ProductoStockCard extends StatelessWidget {
   final String nombre;
   final double precio;
   final int cantidad;
-  final String eventoId;
-  final String sectorId;
   final bool soloLectura;
+  final void Function(int nuevaCantidad)? onEditarCantidad;
+  final VoidCallback? onEliminar;
 
   const _ProductoStockCard({
     required this.productoId,
     required this.nombre,
     required this.precio,
     required this.cantidad,
-    required this.eventoId,
-    required this.sectorId,
     this.soloLectura = false,
+    this.onEditarCantidad,
+    this.onEliminar,
   });
 
   @override
@@ -212,14 +409,9 @@ class _ProductoStockCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 8,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Container(
           width: 50,
           height: 50,
@@ -227,11 +419,7 @@ class _ProductoStockCard extends StatelessWidget {
             color: _accentColor.withOpacity(0.2),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            Icons.fastfood,
-            color: _secondaryColor,
-            size: 28,
-          ),
+          child: Icon(Icons.fastfood, color: _secondaryColor, size: 28),
         ),
         title: Text(
           nombre,
@@ -247,16 +435,15 @@ class _ProductoStockCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'Precio: \$${precio.toStringAsFixed(0)}',
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: _secondaryColor,
-              ),
+              style: GoogleFonts.poppins(fontSize: 12, color: _secondaryColor),
             ),
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: cantidad > 0 ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                color: cantidad > 0
+                    ? Colors.green.withOpacity(0.1)
+                    : Colors.red.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
@@ -306,14 +493,12 @@ class _ProductoStockCard extends StatelessWidget {
           children: [
             Text(
               nombre,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: _secondaryColor,
-              ),
+              style: GoogleFonts.poppins(fontSize: 14, color: _secondaryColor),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: cantidadController,
+              autofocus: true,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: 'Cantidad',
@@ -334,7 +519,7 @@ class _ProductoStockCard extends StatelessWidget {
             ),
           ),
           ElevatedButton(
-            onPressed: () async {
+            onPressed: () {
               final nuevaCantidad = int.tryParse(cantidadController.text);
               if (nuevaCantidad == null || nuevaCantidad < 0) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -348,43 +533,17 @@ class _ProductoStockCard extends StatelessWidget {
                 );
                 return;
               }
-
-              try {
-                await FirebaseFirestore.instance
-                    .collection('eventos')
-                    .doc(eventoId)
-                    .collection('sectores')
-                    .doc(sectorId)
-                    .collection('stock')
-                    .doc(productoId)
-                    .update({'cantidad': nuevaCantidad});
-
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Cantidad actualizada',
-                        style: GoogleFonts.poppins(),
-                      ),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Error al actualizar: $e',
-                        style: GoogleFonts.poppins(),
-                      ),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
+              Navigator.of(context).pop();
+              onEditarCantidad?.call(nuevaCantidad);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Cantidad actualizada. No olvide Guardar.',
+                    style: GoogleFonts.poppins(),
+                  ),
+                  backgroundColor: Colors.green,
+                ),
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: _accentColor,
@@ -421,43 +580,18 @@ class _ProductoStockCard extends StatelessWidget {
             ),
           ),
           ElevatedButton(
-            onPressed: () async {
-              try {
-                await FirebaseFirestore.instance
-                    .collection('eventos')
-                    .doc(eventoId)
-                    .collection('sectores')
-                    .doc(sectorId)
-                    .collection('stock')
-                    .doc(productoId)
-                    .delete();
-
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Producto eliminado',
-                        style: GoogleFonts.poppins(),
-                      ),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Error al eliminar: $e',
-                        style: GoogleFonts.poppins(),
-                      ),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
+            onPressed: () {
+              Navigator.of(context).pop();
+              onEliminar?.call();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Producto eliminado de la lista. No olvide Guardar.',
+                    style: GoogleFonts.poppins(),
+                  ),
+                  backgroundColor: Colors.green,
+                ),
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -478,10 +612,14 @@ class _ProductoStockCard extends StatelessWidget {
 class _ModalBuscarProducto extends StatefulWidget {
   final String eventoId;
   final String sectorId;
+  final Set<String> productIdsEnStock;
+  final void Function(String productoId, String nombre, double precio, int cantidad, [String categoria]) onAgregarLocal;
 
   const _ModalBuscarProducto({
     required this.eventoId,
     required this.sectorId,
+    required this.productIdsEnStock,
+    required this.onAgregarLocal,
   });
 
   @override
@@ -509,28 +647,12 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
 
   Future<void> _cargarProductos() async {
     try {
-      // Cargar productos globales
       final productosSnapshot = await FirebaseFirestore.instance
           .collection('productos')
           .get();
 
-      // Cargar productos que ya están en stock para evitar duplicados
-      final stockSnapshot = await FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(widget.eventoId)
-          .collection('sectores')
-          .doc(widget.sectorId)
-          .collection('stock')
-          .get();
-
-      final productosEnStock = stockSnapshot.docs
-          .map((doc) => doc.data()['productoId'] as String?)
-          .where((id) => id != null)
-          .toSet();
-
-      // Filtrar productos que no están en stock
       final productosDisponibles = productosSnapshot.docs
-          .where((doc) => !productosEnStock.contains(doc.id))
+          .where((doc) => !widget.productIdsEnStock.contains(doc.id))
           .toList();
 
       setState(() {
@@ -574,6 +696,7 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
     final data = productoDoc.data() as Map<String, dynamic>;
     final nombre = data['nombre'] as String? ?? 'Sin nombre';
     final precio = (data['precio'] as num?)?.toDouble() ?? 0.0;
+    final categoria = data['categoria']?.toString() ?? categoriaDefault;
 
     final cantidadController = TextEditingController();
 
@@ -598,14 +721,12 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
             const SizedBox(height: 8),
             Text(
               'Precio: \$${precio.toStringAsFixed(0)}',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: _secondaryColor,
-              ),
+              style: GoogleFonts.poppins(fontSize: 14, color: _secondaryColor),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: cantidadController,
+              autofocus: true,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: 'Cantidad inicial',
@@ -627,7 +748,7 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
             ),
           ),
           ElevatedButton(
-            onPressed: () async {
+            onPressed: () {
               final cantidad = int.tryParse(cantidadController.text);
               if (cantidad == null || cantidad < 0) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -641,59 +762,27 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
                 );
                 return;
               }
-
-              try {
-                await FirebaseFirestore.instance
-                    .collection('eventos')
-                    .doc(widget.eventoId)
-                    .collection('sectores')
-                    .doc(widget.sectorId)
-                    .collection('stock')
-                    .doc(productoDoc.id)
-                    .set({
-                      'productoId': productoDoc.id,
-                      'nombre': nombre,
-                      'precio': precio,
-                      'cantidad': cantidad,
-                    });
-
-                // Marcar que este sector ya usó "Gestionar Stock" (traspasos no ponen este flag).
-                await FirebaseFirestore.instance
-                    .collection('eventos')
-                    .doc(widget.eventoId)
-                    .collection('sectores')
-                    .doc(widget.sectorId)
-                    .set(
-                      {'stockInicialIngresado': true},
-                      SetOptions(merge: true),
-                    );
-
-                if (context.mounted) {
-                  Navigator.of(context).pop(); // Cerrar diálogo de cantidad
-                  Navigator.of(context).pop(); // Cerrar modal de búsqueda
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Producto agregado al stock',
-                        style: GoogleFonts.poppins(),
-                      ),
-                      backgroundColor: Colors.green,
+              Navigator.of(context).pop();
+              widget.onAgregarLocal(productoDoc.id, nombre, precio, cantidad, categoria);
+              setState(() {
+                _productos = _productos.where((d) => d.id != productoDoc.id).toList();
+                _productosFiltrados = _productos.where((producto) {
+                  final data = producto.data() as Map<String, dynamic>?;
+                  if (data == null || !data.containsKey('nombre')) return false;
+                  final nombreP = data['nombre'].toString().toLowerCase();
+                  return nombreP.contains(_searchController.text.toLowerCase());
+                }).toList();
+              });
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Producto agregado. No olvide Guardar. Puede seguir agregando más.',
+                      style: GoogleFonts.poppins(),
                     ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Error al agregar: $e',
-                        style: GoogleFonts.poppins(),
-                      ),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
+                    backgroundColor: Colors.green,
+                  ),
+                );
               }
             },
             style: ElevatedButton.styleFrom(
@@ -757,47 +846,45 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
             child: _isLoading
                 ? Center(child: CircularProgressIndicator(color: _accentColor))
                 : _productosFiltrados.isEmpty
-                    ? Center(
-                        child: Text(
-                          _searchController.text.isEmpty
-                              ? 'No hay productos disponibles'
-                              : 'No se encontraron productos',
+                ? Center(
+                    child: Text(
+                      _searchController.text.isEmpty
+                          ? 'No hay productos disponibles'
+                          : 'No se encontraron productos',
+                      style: GoogleFonts.poppins(color: _secondaryColor),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _productosFiltrados.length,
+                    itemBuilder: (context, index) {
+                      final producto = _productosFiltrados[index];
+                      final data = producto.data() as Map<String, dynamic>;
+                      final nombre = data['nombre'] as String? ?? 'Sin nombre';
+                      final precio =
+                          (data['precio'] as num?)?.toDouble() ?? 0.0;
+
+                      return ListTile(
+                        leading: Icon(Icons.fastfood, color: _secondaryColor),
+                        title: Text(
+                          nombre,
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Precio: \$${precio.toStringAsFixed(0)}',
                           style: GoogleFonts.poppins(color: _secondaryColor),
                         ),
-                      )
-                    : ListView.builder(
-                        itemCount: _productosFiltrados.length,
-                        itemBuilder: (context, index) {
-                          final producto = _productosFiltrados[index];
-                          final data = producto.data() as Map<String, dynamic>;
-                          final nombre = data['nombre'] as String? ?? 'Sin nombre';
-                          final precio = (data['precio'] as num?)?.toDouble() ?? 0.0;
-
-                          return ListTile(
-                            leading: Icon(Icons.fastfood, color: _secondaryColor),
-                            title: Text(
-                              nombre,
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: Text(
-                              'Precio: \$${precio.toStringAsFixed(0)}',
-                              style: GoogleFonts.poppins(
-                                color: _secondaryColor,
-                              ),
-                            ),
-                            trailing: IconButton(
-                              icon: Icon(Icons.add_circle, color: _accentColor),
-                              onPressed: () => _agregarProductoAlStock(producto),
-                            ),
-                          );
-                        },
-                      ),
+                        trailing: IconButton(
+                          icon: Icon(Icons.add_circle, color: _accentColor),
+                          onPressed: () => _agregarProductoAlStock(producto),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 }
-

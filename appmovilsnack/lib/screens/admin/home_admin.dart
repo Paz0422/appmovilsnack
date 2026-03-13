@@ -1,14 +1,19 @@
 // lib/home_admin.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:front_appsnack/auth/login_screen.dart';
 import 'package:front_appsnack/widgets/dashboard_card.dart';
-import 'package:front_appsnack/widgets/revenue_chart.dart'
-    show RevenueChart, ChartRange;
 import 'package:front_appsnack/widgets/gestion_screen.dart';
 import 'package:front_appsnack/widgets/stock_reports.dart';
 import 'package:front_appsnack/widgets/transaction_reports.dart';
+import 'package:front_appsnack/widgets/ventas_por_categoria.dart';
+import 'package:front_appsnack/widgets/dashboard_ventas_vendedores.dart';
+import 'package:front_appsnack/widgets/reporte_mermas.dart';
+import 'package:front_appsnack/widgets/gestion_categorias.dart';
+import 'package:front_appsnack/widgets/gestion_roles_usuarios.dart';
+import 'package:front_appsnack/widgets/estadio_selection.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class HomeAdmin extends StatefulWidget {
@@ -19,31 +24,76 @@ class HomeAdmin extends StatefulWidget {
 }
 
 class _HomeAdminState extends State<HomeAdmin> {
-  Future<int> _getMontoTotal() async {
+  /// IDs de eventos con activo == true
+  Future<Set<String>> _getEventosActivosIds() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('eventos')
+        .where('activo', isEqualTo: true)
+        .get();
+    return snap.docs.map((d) => d.id).toSet();
+  }
+
+  /// Total vendido solo de transacciones de eventos activos
+  Future<int> _getMontoTotalActivos() async {
     try {
+      final activosIds = await _getEventosActivosIds();
+      if (activosIds.isEmpty) return 0;
       final salesSnapshot = await FirebaseFirestore.instance
           .collection('transacciones')
           .get();
       int total = 0;
       for (var doc in salesSnapshot.docs) {
-        final data = doc.data();
-        final montoTotal = data['montoTotal'];
-
-        // Manejar diferentes tipos de datos de Firestore
-        if (montoTotal == null) {
-          continue;
-        } else if (montoTotal is num) {
-          total += montoTotal.toInt();
-        } else if (montoTotal is int) {
-          total += montoTotal;
-        } else if (montoTotal is double) {
-          total += montoTotal.toInt();
-        }
+        final eventoId = doc.data()['eventoId']?.toString();
+        if (eventoId == null || !activosIds.contains(eventoId)) continue;
+        final montoTotal = doc.data()['montoTotal'];
+        if (montoTotal == null) continue;
+        if (montoTotal is num) total += montoTotal.toInt();
       }
       return total;
     } catch (e) {
-      // Re-lanzar el error para que FutureBuilder pueda manejarlo
       rethrow;
+    }
+  }
+
+  /// Estadísticas de ventas solo para eventos activos
+  Future<Map<String, dynamic>> _getEstadisticasActivos() async {
+    try {
+      final activosIds = await _getEventosActivosIds();
+      if (activosIds.isEmpty) {
+        return {
+          'totalVendido': 0,
+          'cantidadTransacciones': 0,
+          'promedioTicket': 0.0,
+          'cantidadEventosActivos': 0,
+        };
+      }
+      final transSnapshot = await FirebaseFirestore.instance
+          .collection('transacciones')
+          .get();
+      int totalVendido = 0;
+      int count = 0;
+      for (var doc in transSnapshot.docs) {
+        final eventoId = doc.data()['eventoId']?.toString();
+        if (eventoId == null || !activosIds.contains(eventoId)) continue;
+        final m = doc.data()['montoTotal'];
+        if (m != null && m is num) {
+          totalVendido += m.toInt();
+          count++;
+        }
+      }
+      return {
+        'totalVendido': totalVendido,
+        'cantidadTransacciones': count,
+        'promedioTicket': count > 0 ? totalVendido / count : 0.0,
+        'cantidadEventosActivos': activosIds.length,
+      };
+    } catch (e) {
+      return {
+        'totalVendido': 0,
+        'cantidadTransacciones': 0,
+        'promedioTicket': 0.0,
+        'cantidadEventosActivos': 0,
+      };
     }
   }
 
@@ -76,15 +126,14 @@ class _HomeAdminState extends State<HomeAdmin> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _HeaderStrip(
-              titleLeft: 'Resumen Global',
-              titleRight: _relojAhora(),
-              subtitleRight: _fechaCorta(),
+              titleLeft: 'Análisis eventos activos',
+              rightChild: _LiveReloj(darkText: true),
               darkText: true,
             ),
             const SizedBox(height: 12),
 
             const Text(
-              'Total Vendido',
+              'Total vendido (eventos activos)',
               style: TextStyle(
                 color: Colors.black,
                 fontSize: 18,
@@ -93,11 +142,10 @@ class _HomeAdminState extends State<HomeAdmin> {
             ),
             const SizedBox(height: 8),
 
-            // ✅ Opción A: forzar ancho completo
             SizedBox(
               width: double.infinity,
               child: FutureBuilder<int>(
-                future: _getMontoTotal(),
+                future: _getMontoTotalActivos(),
                 builder: (context, snapshot) {
                   String value;
                   IconData icon = Icons.emoji_events;
@@ -114,11 +162,10 @@ class _HomeAdminState extends State<HomeAdmin> {
                     value = '\$${_fmtMiles(total)}';
                   }
 
-                  // Usa tu DashboardCard (vertical, protagónico)
                   return DashboardCard(
                     title: 'Suma de transacciones',
                     value: value,
-                    subtitle: 'Actualizado ahora',
+                    subtitle: 'Solo eventos activos',
                     icon: icon,
                     color: color,
                     darkText: true,
@@ -132,44 +179,8 @@ class _HomeAdminState extends State<HomeAdmin> {
 
             const SizedBox(height: 24),
 
-            // Revenue Charts - Semanal y Mensual
             const Text(
-              'Análisis de Transacciones',
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Gráfico Semanal
-            const RevenueChart(range: ChartRange.weekly),
-
-            const SizedBox(height: 16),
-
-            // Gráfico Mensual
-            const RevenueChart(range: ChartRange.monthly),
-
-            const SizedBox(height: 24),
-
-            // Ingresos por Evento - Widget scrolleable vertical
-            const Text(
-              'Ingresos por Evento',
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            SizedBox(height: 300, child: _EventosIngresosWidget()),
-
-            const SizedBox(height: 24),
-
-            const Text(
-              'Estadísticas Rápidas',
+              'Estadísticas de ventas (eventos activos)',
               style: TextStyle(
                 color: Colors.black,
                 fontSize: 18,
@@ -178,9 +189,17 @@ class _HomeAdminState extends State<HomeAdmin> {
             ),
             const SizedBox(height: 8),
 
-            LayoutBuilder(
-              builder: (context, c) {
-                final isNarrow = c.maxWidth < 360;
+            FutureBuilder<Map<String, dynamic>>(
+              future: _getEstadisticasActivos(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final stats = snapshot.data ?? {};
+                final isNarrow = MediaQuery.of(context).size.width < 360;
                 final cross = isNarrow ? 1 : 2;
 
                 return GridView.count(
@@ -189,34 +208,11 @@ class _HomeAdminState extends State<HomeAdmin> {
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
-                  childAspectRatio: 3.0, // alto suficiente
-
+                  childAspectRatio: 3.0,
                   children: [
                     DashboardCard(
-                      title: 'Productos',
-                      value: '456',
-                      icon: Icons.inventory_2_outlined,
-                      color: Colors.black54,
-                      darkText: true,
-                      backgroundColor: Colors.white,
-                      borderColor: Colors.grey[300],
-                      elevation: 0,
-                      compact: true, // layout horizontal
-                    ),
-                    DashboardCard(
-                      title: 'Usuarios',
-                      value: '1,234',
-                      icon: Icons.people_alt_outlined,
-                      color: Colors.black54,
-                      darkText: true,
-                      backgroundColor: Colors.white,
-                      borderColor: Colors.grey[300],
-                      elevation: 0,
-                      compact: true,
-                    ),
-                    DashboardCard(
-                      title: 'Órdenes Pendientes',
-                      value: '23',
+                      title: 'Transacciones',
+                      value: '${_fmtMiles((stats['cantidadTransacciones'] as int?) ?? 0)}',
                       icon: Icons.receipt_long_outlined,
                       color: Colors.black54,
                       darkText: true,
@@ -226,9 +222,31 @@ class _HomeAdminState extends State<HomeAdmin> {
                       compact: true,
                     ),
                     DashboardCard(
-                      title: 'Promedio Ticket',
-                      value: '\$0',
+                      title: 'Promedio ticket',
+                      value: '\$${_fmtMiles(((stats['promedioTicket'] as num?) ?? 0).round())}',
                       icon: Icons.trending_up,
+                      color: Colors.black54,
+                      darkText: true,
+                      backgroundColor: Colors.white,
+                      borderColor: Colors.grey[300],
+                      elevation: 0,
+                      compact: true,
+                    ),
+                    DashboardCard(
+                      title: 'Eventos activos',
+                      value: '${stats['cantidadEventosActivos'] ?? 0}',
+                      icon: Icons.event_available,
+                      color: Colors.black54,
+                      darkText: true,
+                      backgroundColor: Colors.white,
+                      borderColor: Colors.grey[300],
+                      elevation: 0,
+                      compact: true,
+                    ),
+                    DashboardCard(
+                      title: 'Total vendido',
+                      value: '\$${_fmtMiles((stats['totalVendido'] as int?) ?? 0)}',
+                      icon: Icons.payments_outlined,
                       color: Colors.black54,
                       darkText: true,
                       backgroundColor: Colors.white,
@@ -240,22 +258,54 @@ class _HomeAdminState extends State<HomeAdmin> {
                 );
               },
             ),
+
+            const SizedBox(height: 24),
+
+            const Text(
+              'Análisis entre partidos',
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Ventas por evento (solo activos)',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            _EventosIngresosWidget(),
+
+            const SizedBox(height: 24),
+
+            const Text(
+              'Análisis entre sectores',
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Ventas por sector en cada partido (eventos activos)',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            _AnalisisSectoresWidget(),
           ],
         ),
       ),
     );
-  }
-
-  String _relojAhora() {
-    final now = DateTime.now();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(now.hour)}:${two(now.minute)}:${two(now.second)}';
-  }
-
-  String _fechaCorta() {
-    final now = DateTime.now();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(now.day)}/${two(now.month)}/${now.year}';
   }
 
   String _fmtMiles(int n) {
@@ -307,27 +357,23 @@ class _HomeAdminState extends State<HomeAdmin> {
                 ],
               ),
             ),
+            _drawerSectionLabel('Ventas'),
             _buildDrawerItem(
-              icon: Icons.bar_chart_outlined,
-              title: 'Mis Estadísticas',
-              onTap: () {
-                Navigator.pop(context);
-                _showComingSoon(context, 'Mis Estadísticas');
-              },
-            ),
-            _buildDrawerItem(
-              icon: Icons.settings_outlined,
-              title: 'Gestión',
+              icon: Icons.point_of_sale_outlined,
+              title: 'Realizar ventas',
+              subtitle: 'Elegir sector y operar como vendedor',
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const GestionScreen(),
+                    builder: (context) => const EstadioSelection(fromAdmin: true),
                   ),
                 );
               },
             ),
+            const Divider(color: Colors.white24, height: 1),
+            _drawerSectionLabel('Reportes'),
             _buildDrawerItem(
               icon: Icons.assessment_outlined,
               title: 'Reportes de Stock',
@@ -353,11 +399,87 @@ class _HomeAdminState extends State<HomeAdmin> {
               },
             ),
             _buildDrawerItem(
-              icon: Icons.shopping_basket_outlined,
-              title: 'Bandejeo',
+              icon: Icons.pie_chart_outline,
+              title: 'Ventas por categoría',
               onTap: () {
                 Navigator.pop(context);
-                _showComingSoon(context, 'Bandejeo');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const VentasPorCategoria(),
+                  ),
+                );
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.people_outline,
+              title: 'Ventas por vendedor',
+              subtitle: 'Total vendido por cada vendedor',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const DashboardVentasVendedores(),
+                  ),
+                );
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.remove_circle_outline,
+              title: 'Reporte de mermas',
+              subtitle: 'Ver mermas y motivo',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ReporteMermas(),
+                  ),
+                );
+              },
+            ),
+            const Divider(color: Colors.white24, height: 1),
+            _drawerSectionLabel('Configuración'),
+            _buildDrawerItem(
+              icon: Icons.category_outlined,
+              title: 'Categorías de productos',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const GestionCategorias(),
+                  ),
+                );
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.settings_outlined,
+              title: 'Productos, personal y eventos',
+              subtitle: 'Inventario, empleados, eventos y sectores',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const GestionScreen(),
+                  ),
+                );
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.badge_outlined,
+              title: 'Roles de usuarios',
+              subtitle: 'Vendedor o encargado por usuario',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const GestionRolesUsuarios(),
+                  ),
+                );
               },
             ),
             const Divider(color: Colors.white24, height: 1),
@@ -378,9 +500,23 @@ class _HomeAdminState extends State<HomeAdmin> {
                 }
               },
             ),
-            // Espacio adicional al final para evitar overflow
             const SizedBox(height: 20),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerSectionLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 16, 6),
+      child: Text(
+        label.toUpperCase(),
+        style: GoogleFonts.poppins(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: accentColor,
+          letterSpacing: 1.2,
         ),
       ),
     );
@@ -389,6 +525,7 @@ class _HomeAdminState extends State<HomeAdmin> {
   Widget _buildDrawerItem({
     required IconData icon,
     required String title,
+    String? subtitle,
     required VoidCallback onTap,
   }) {
     return ListTile(
@@ -401,43 +538,37 @@ class _HomeAdminState extends State<HomeAdmin> {
           color: Colors.white,
         ),
       ),
+      subtitle: subtitle != null
+          ? Text(
+              subtitle,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.white60,
+              ),
+            )
+          : null,
       onTap: onTap,
       hoverColor: accentColor.withValues(alpha: 0.1),
     );
   }
 
-  void _showComingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '$feature - Próximamente disponible',
-          style: GoogleFonts.poppins(),
-        ),
-        backgroundColor: primaryColor,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
 }
 
 // ===== Componentes UI existentes =====
 
 class _HeaderStrip extends StatelessWidget {
   final String titleLeft;
-  final String titleRight;
-  final String? subtitleRight;
+  final Widget? rightChild;
   final bool darkText;
   const _HeaderStrip({
     required this.titleLeft,
-    required this.titleRight,
-    this.subtitleRight,
+    this.rightChild,
     this.darkText = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final color = darkText ? Colors.black : Colors.white;
-    final sub = darkText ? Colors.black54 : Colors.white70;
     return Row(
       children: [
         Expanded(
@@ -450,18 +581,478 @@ class _HeaderStrip extends StatelessWidget {
             ),
           ),
         ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              titleRight,
-              style: TextStyle(color: color, fontWeight: FontWeight.w700),
-            ),
-            if (subtitleRight != null)
-              Text(subtitleRight!, style: TextStyle(color: sub, fontSize: 12)),
-          ],
-        ),
+        if (rightChild != null) rightChild!,
       ],
+    );
+  }
+}
+
+/// Reloj y fecha en vivo; solo este widget se redibuja cada segundo.
+class _LiveReloj extends StatefulWidget {
+  final bool darkText;
+  const _LiveReloj({this.darkText = false});
+
+  @override
+  State<_LiveReloj> createState() => _LiveRelojState();
+}
+
+class _LiveRelojState extends State<_LiveReloj> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final hora = '${two(now.hour)}:${two(now.minute)}:${two(now.second)}';
+    final fecha = '${two(now.day)}/${two(now.month)}/${now.year}';
+    final color = widget.darkText ? Colors.black : Colors.white;
+    final sub = widget.darkText ? Colors.black54 : Colors.white70;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(hora, style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+        Text(fecha, style: TextStyle(color: sub, fontSize: 12)),
+      ],
+    );
+  }
+}
+
+/// Triángulo pequeño que apunta hacia abajo (para la burbuja del gráfico).
+class _TrianglePointerPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    final border = Paint()
+      ..color = Colors.grey.shade300
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final path = Path()
+      ..moveTo(size.width * 0.5, size.height)
+      ..lineTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..close();
+    canvas.drawPath(path, paint);
+    canvas.drawPath(path, border);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Gráfico de barras con diseño limpio (sin fl_chart).
+/// Al tocar una barra se muestra un texto arriba apuntando a la barra.
+class _SimpleBarChart extends StatefulWidget {
+  final List<String> labels;
+  final List<double> values;
+  final List<Color> colors;
+  final double? maxY;
+  final double chartHeight;
+  final String Function(double) formatValue;
+
+  const _SimpleBarChart({
+    super.key,
+    required this.labels,
+    required this.values,
+    required this.colors,
+    this.maxY,
+    this.chartHeight = 220,
+    required this.formatValue,
+  });
+
+  @override
+  State<_SimpleBarChart> createState() => _SimpleBarChartState();
+}
+
+class _SimpleBarChartState extends State<_SimpleBarChart> {
+  int? _selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final labels = widget.labels;
+    final values = widget.values;
+    final colors = widget.colors;
+    final formatValue = widget.formatValue;
+    if (values.isEmpty) return const SizedBox(height: 140);
+    final maxVal = widget.maxY ?? (values.reduce((a, b) => a > b ? a : b));
+    final safeMax = maxVal <= 0 ? 1.0 : maxVal * 1.12;
+    const leftAxisWidth = 46.0;
+    const hintHeight = 28.0;
+    final barAreaHeight = widget.chartHeight - hintHeight - 12;
+
+    return SizedBox(
+      height: widget.chartHeight,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: leftAxisWidth,
+            height: barAreaHeight,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [3, 2, 1, 0].map((i) {
+                final frac = i / 3;
+                final val = safeMax * frac;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6, top: 2, bottom: 2),
+                  child: Text(
+                    formatValue(val),
+                    style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: barAreaHeight,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Stack(
+                        children: [
+                          ...List.generate(4, (i) {
+                            final top = (i + 1) * (barAreaHeight / 4);
+                            return Positioned(
+                              left: 0,
+                              right: 0,
+                              top: top - 1,
+                              child: Container(
+                                height: 1,
+                                color: Colors.grey.withOpacity(0.15),
+                              ),
+                            );
+                          }),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: List.generate(values.length, (i) {
+                                final v = values[i];
+                                final h = safeMax > 0
+                                    ? (v / safeMax) * (barAreaHeight - 16)
+                                    : 0.0;
+                                final barH = h.clamp(6.0, double.infinity);
+                                final c = colors[i % colors.length];
+                                final label = labels.length > i ? labels[i] : '';
+                                const barWidth = 18.0;
+                                const barSpacing = 10.0;
+                                final isSelected = _selectedIndex == i;
+                                return Padding(
+                                  padding: EdgeInsets.only(right: i < values.length - 1 ? barSpacing : 0),
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedIndex = _selectedIndex == i ? null : i;
+                                      });
+                                    },
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      alignment: Alignment.bottomCenter,
+                                      children: [
+                                        SizedBox(
+                                          width: barWidth,
+                                          height: barH,
+                                          child: Container(
+                                            width: barWidth,
+                                            height: barH,
+                                            decoration: BoxDecoration(
+                                              color: c,
+                                              border: Border.all(
+                                                color: Color.lerp(c, Colors.black, 0.2) ?? c,
+                                                width: 1,
+                                              ),
+                                              borderRadius: const BorderRadius.only(
+                                                topLeft: Radius.circular(6),
+                                                topRight: Radius.circular(6),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        if (isSelected)
+                                          Positioned(
+                                            left: 0,
+                                            right: 0,
+                                            bottom: barH + 8,
+                                            child: Center(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                                    constraints: const BoxConstraints(maxWidth: 130),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white,
+                                                      borderRadius: BorderRadius.circular(8),
+                                                      border: Border.all(color: Colors.grey.shade300),
+                                                      boxShadow: [
+                                                        BoxShadow(
+                                                          color: Colors.black.withOpacity(0.1),
+                                                          blurRadius: 6,
+                                                          offset: const Offset(0, 1),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    child: Column(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                                      children: [
+                                                        Text(
+                                                          label,
+                                                          style: GoogleFonts.poppins(
+                                                            fontSize: 11,
+                                                            fontWeight: FontWeight.w600,
+                                                            color: Colors.grey[800],
+                                                          ),
+                                                          maxLines: 2,
+                                                          overflow: TextOverflow.ellipsis,
+                                                          textAlign: TextAlign.center,
+                                                        ),
+                                                        const SizedBox(height: 2),
+                                                        Text(
+                                                          formatValue(v),
+                                                          style: GoogleFonts.poppins(
+                                                            fontSize: 12,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: Colors.grey[900],
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  CustomPaint(
+                                                    size: const Size(14, 7),
+                                                    painter: _TrianglePointerPainter(),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 6,
+                  children: List.generate(values.length, (i) {
+                    final name = labels.length > i ? labels[i] : '';
+                    final short = name.length > 14 ? '${name.substring(0, 14)}...' : name;
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: colors[i % colors.length],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          short,
+                          style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[700]),
+                        ),
+                      ],
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Análisis de ventas por sector (eventos activos)
+class _AnalisisSectoresWidget extends StatelessWidget {
+  const _AnalisisSectoresWidget();
+
+  Future<List<Map<String, dynamic>>> _cargarVentasPorSector() async {
+    try {
+      final eventosSnapshot = await FirebaseFirestore.instance
+          .collection('eventos')
+          .where('activo', isEqualTo: true)
+          .get();
+
+      final Map<String, String> nombresEventos = {};
+      final Map<String, Map<String, String>> sectoresPorEvento = {};
+      for (var eventoDoc in eventosSnapshot.docs) {
+        final eventoId = eventoDoc.id;
+        nombresEventos[eventoId] =
+            eventoDoc.data()['nombre']?.toString() ?? 'Sin nombre';
+        sectoresPorEvento[eventoId] = {};
+      }
+
+      for (var eventoDoc in eventosSnapshot.docs) {
+        final eventoId = eventoDoc.id;
+        final sectoresSnapshot = await FirebaseFirestore.instance
+            .collection('eventos')
+            .doc(eventoId)
+            .collection('sectores')
+            .get();
+        for (var sectorDoc in sectoresSnapshot.docs) {
+          sectoresPorEvento[eventoId]![sectorDoc.id] =
+              sectorDoc.data()['nombre']?.toString() ?? 'Sector';
+        }
+      }
+
+      final transSnapshot = await FirebaseFirestore.instance
+          .collection('transacciones')
+          .get();
+
+      final Map<String, Map<String, double>> totalPorSector = {};
+      for (final eventoId in sectoresPorEvento.keys) {
+        totalPorSector[eventoId] = {};
+        for (final sectorId in sectoresPorEvento[eventoId]!.keys) {
+          totalPorSector[eventoId]![sectorId] = 0.0;
+        }
+      }
+
+      for (var doc in transSnapshot.docs) {
+        final d = doc.data();
+        final eventoId = d['eventoId']?.toString();
+        final sectorId = d['sectorId']?.toString();
+        if (eventoId == null ||
+            sectorId == null ||
+            totalPorSector[eventoId] == null ||
+            !totalPorSector[eventoId]!.containsKey(sectorId)) continue;
+        final m = d['montoTotal'];
+        if (m != null && m is num) {
+          totalPorSector[eventoId]![sectorId] =
+              (totalPorSector[eventoId]![sectorId] ?? 0) + m.toDouble();
+        }
+      }
+
+      final List<Map<String, dynamic>> lista = [];
+      totalPorSector.forEach((eventoId, sectores) {
+        sectores.forEach((sectorId, total) {
+          if (total > 0) {
+            lista.add({
+              'eventoId': eventoId,
+              'sectorId': sectorId,
+              'nombreEvento': nombresEventos[eventoId] ?? 'Sin nombre',
+              'nombreSector': sectoresPorEvento[eventoId]![sectorId] ?? 'Sector',
+              'total': total,
+            });
+          }
+        });
+      });
+
+      lista.sort(
+          (a, b) => (b['total'] as double).compareTo(a['total'] as double));
+      return lista;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  String _formatearMontoSector(double monto) {
+    return '\$${monto.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _cargarVentasPorSector(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(
+            child: Text(
+              snapshot.hasError
+                  ? 'Error al cargar datos'
+                  : 'No hay ventas por sector en eventos activos',
+              style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 14),
+            ),
+          );
+        }
+
+        final items = snapshot.data!;
+        final topItems = items.take(12).toList();
+        final maxTotal = topItems.isEmpty ? 1.0 : (topItems.map((e) => e['total'] as double).reduce((a, b) => a > b ? a : b));
+        const sectorBarColors = [
+          Color(0xFF6B4D2F),
+          Color(0xFFDABF41),
+          Color(0xFF2B2B2B),
+          Colors.green,
+          Colors.teal,
+          Colors.blueGrey,
+          Colors.orange,
+          Colors.deepPurple,
+          Colors.indigo,
+          Colors.brown,
+          Colors.cyan,
+          Colors.pink,
+        ];
+
+        return Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SimpleBarChart(
+                  key: const ValueKey('chart_sectores'),
+                  chartHeight: 260,
+                  labels: topItems.map((e) => e['nombreSector'] as String? ?? '').toList(),
+                  values: topItems.map((e) => e['total'] as double).toList(),
+                  colors: sectorBarColors,
+                  maxY: maxTotal * 1.15,
+                  formatValue: _formatearMontoSector,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -472,21 +1063,19 @@ class _EventosIngresosWidget extends StatelessWidget {
 
   Future<List<Map<String, dynamic>>> _cargarIngresosPorEvento() async {
     try {
-      // Obtener todos los eventos
+      // Solo eventos activos
       final eventosSnapshot = await FirebaseFirestore.instance
           .collection('eventos')
+          .where('activo', isEqualTo: true)
           .get();
 
-      // Obtener todas las transacciones
       final transaccionesSnapshot = await FirebaseFirestore.instance
           .collection('transacciones')
           .get();
 
-      // Crear mapa de ingresos por evento
       final Map<String, double> ingresosPorEvento = {};
       final Map<String, String> nombresEventos = {};
 
-      // Inicializar mapas con eventos
       for (var eventoDoc in eventosSnapshot.docs) {
         final eventoId = eventoDoc.id;
         final eventoData = eventoDoc.data();
@@ -558,91 +1147,68 @@ class _EventosIngresosWidget extends StatelessWidget {
             child: Text(
               snapshot.hasError
                   ? 'Error al cargar datos'
-                  : 'No hay eventos disponibles',
+                  : 'No hay eventos activos',
               style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 14),
             ),
           );
         }
 
         final eventos = snapshot.data!;
+        final maxIngreso = eventos.isEmpty
+            ? 1.0
+            : (eventos.map((e) => e['ingresos'] as double).reduce((a, b) => a > b ? a : b));
+        const barColors = [
+          Color(0xFFDABF41),
+          Color(0xFF6B4D2F),
+          Color(0xFF2B2B2B),
+          Colors.green,
+          Colors.teal,
+          Colors.blueGrey,
+          Colors.orange,
+          Colors.deepPurple,
+        ];
 
-        return ListView.builder(
-          scrollDirection: Axis.vertical,
-          padding: const EdgeInsets.symmetric(horizontal: 0),
-          itemCount: eventos.length,
-          itemBuilder: (context, index) {
-            final evento = eventos[index];
-            final nombre = evento['nombre'] as String;
-            final ingresos = evento['ingresos'] as double;
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: Card(
-                elevation: 3,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+        return Card(
+          elevation: 3,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SimpleBarChart(
+                  key: const ValueKey('chart_eventos'),
+                  chartHeight: 220,
+                  labels: eventos.map((e) => e['nombre'] as String? ?? '').toList(),
+                  values: eventos.map((e) => e['ingresos'] as double).toList(),
+                  colors: barColors,
+                  maxY: maxIngreso * 1.15,
+                  formatValue: _formatearMonto,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDABF41).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 6,
+                  children: eventos.asMap().entries.map((e) {
+                    final i = e.key;
+                    final nombre = e.value['nombre'] as String;
+                    final ing = e.value['ingresos'] as double;
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(width: 12, height: 12, decoration: BoxDecoration(color: barColors[i % barColors.length], borderRadius: BorderRadius.circular(2))),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${nombre.length > 15 ? '${nombre.substring(0, 15)}...' : nombre}: ${_formatearMonto(ing)}',
+                          style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[700]),
                         ),
-                        child: const Icon(
-                          Icons.event,
-                          color: Color(0xFFDABF41),
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              nombre,
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF2B2B2B),
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Ingresos totales',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            _formatearMonto(ingresos),
-                            style: GoogleFonts.poppins(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green[700],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                      ],
+                    );
+                  }).toList(),
                 ),
-              ),
-            );
-          },
+              ],
+            ),
+          ),
         );
       },
     );

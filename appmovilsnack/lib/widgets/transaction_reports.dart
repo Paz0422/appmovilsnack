@@ -51,9 +51,18 @@ class _TransactionReportsState extends State<TransactionReports> {
     });
 
     try {
-      // Obtener todas las transacciones
+      // Si no hay evento seleccionado, solo considerar eventos activos (igual que el dashboard)
+      Set<String>? eventosActivosIds;
+      if (_eventoSeleccionadoId == null) {
+        final snapActivos = await FirebaseFirestore.instance
+            .collection('eventos')
+            .where('activo', isEqualTo: true)
+            .get();
+        eventosActivosIds = snapActivos.docs.map((d) => d.id).toSet();
+      }
+
+      // Obtener transacciones
       QuerySnapshot transaccionesSnapshot;
-      
       if (_eventoSeleccionadoId != null) {
         transaccionesSnapshot = await FirebaseFirestore.instance
             .collection('transacciones')
@@ -104,6 +113,10 @@ class _TransactionReportsState extends State<TransactionReports> {
       for (var transDoc in transaccionesSnapshot.docs) {
         final transData = transDoc.data() as Map<String, dynamic>;
         final eventoId = transData['eventoId']?.toString() ?? '';
+        // Sin evento seleccionado: solo incluir transacciones de eventos activos (igual que dashboard)
+        if (eventosActivosIds != null && (eventoId.isEmpty || !eventosActivosIds.contains(eventoId))) {
+          continue;
+        }
         final sectorId = transData['sectorId']?.toString() ?? '';
         
         // Obtener nombre del sector desde el mapa precargado
@@ -132,11 +145,35 @@ class _TransactionReportsState extends State<TransactionReports> {
           'eventoNombre': eventosMap[eventoId] ?? 'Sin evento',
           'sectorId': sectorId,
           'sectorNombre': sectorNombre,
+          'vendedorUid': transData['vendedorUid']?.toString(),
           'vendedorNombre': transData['vendedorNombre']?.toString() ?? 'Sin vendedor',
           'montoTotal': (transData['montoTotal'] as num?)?.toDouble() ?? 0.0,
           'metodoPago': transData['metodoPago']?.toString() ?? 'No especificado',
           'fecha': fechaDateTime,
         });
+      }
+
+      // Resolver username desde colección usuarios (en lugar de mostrar correo)
+      final uids = transaccionesData
+          .map((t) => t['vendedorUid']?.toString())
+          .whereType<String>()
+          .toSet()
+          .toList();
+      final Map<String, String> uidToUsername = {};
+      if (uids.isNotEmpty) {
+        final snaps = await Future.wait(
+          uids.map((uid) => FirebaseFirestore.instance.collection('usuarios').doc(uid).get()),
+        );
+        for (var i = 0; i < uids.length; i++) {
+          final un = snaps[i].data()?['username']?.toString();
+          if (un != null && un.isNotEmpty) uidToUsername[uids[i]] = un;
+        }
+      }
+      for (var t in transaccionesData) {
+        final uid = t['vendedorUid']?.toString();
+        if (uid != null && uidToUsername.containsKey(uid)) {
+          t['vendedorNombre'] = uidToUsername[uid];
+        }
       }
 
       // Ordenar según la selección
@@ -421,7 +458,7 @@ class _TransactionReportsState extends State<TransactionReports> {
                                   onPressed: _seleccionarEvento,
                                   icon: const Icon(Icons.event, size: 18),
                                   label: Text(
-                                    _eventoSeleccionadoNombre ?? 'Todos los eventos',
+                                    _eventoSeleccionadoNombre ?? 'Todos (solo eventos activos)',
                                     style: GoogleFonts.poppins(fontSize: 12),
                                     overflow: TextOverflow.ellipsis,
                                   ),

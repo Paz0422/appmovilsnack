@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:front_appsnack/utils/categorias_producto.dart';
 
 class PanelVentas extends StatefulWidget {
   final String eventoId;
@@ -34,6 +37,14 @@ class _PanelVentasState extends State<PanelVentas> {
   List<Map<String, dynamic>> _carritoItems = [];
   double _montoTotal = 0.0;
 
+  /// Categoría por productoId (desde colección productos) para stock que no tenga categoría
+  Map<String, String> _categoriasPorProductoId = {};
+  /// Nombres de categorías (desde Firestore) para orden de secciones
+  List<String> _nombresCategorias = [];
+  /// Historial: username desde colección usuarios por vendedorUid
+  Map<String, String> _usernameCache = {};
+  Set<String> _lastFetchedUids = {};
+
   final Color primaryColor = const Color(0xFF2B2B2B);
   final Color accentColor = const Color(0xFFDABF41);
   final Color secondaryColor = const Color(0xFF6B4D2F);
@@ -54,7 +65,29 @@ class _PanelVentasState extends State<PanelVentas> {
           .snapshots();
     }
     _cargarDatosIniciales();
+    _cargarCategoriasProductos();
+    _cargarListaCategorias();
     _searchController.addListener(_filtrarProductos);
+  }
+
+  Future<void> _cargarListaCategorias() async {
+    try {
+      final list = await cargarNombresCategorias();
+      if (mounted) setState(() => _nombresCategorias = list);
+    } catch (_) {}
+  }
+
+  Future<void> _cargarCategoriasProductos() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection('productos').get();
+      if (!mounted) return;
+      final map = <String, String>{};
+      for (final d in snap.docs) {
+        final cat = d.data()['categoria']?.toString();
+        if (cat != null && cat.isNotEmpty) map[d.id] = cat;
+      }
+      setState(() => _categoriasPorProductoId = map);
+    } catch (_) {}
   }
 
   @override
@@ -120,7 +153,7 @@ class _PanelVentasState extends State<PanelVentas> {
     if (mounted) setState(() {});
   }
 
-  void _agregarItemAlCarrito(String nombre, double precio, int stock) {
+  void _agregarItemAlCarrito(String nombre, double precio, int stock, [String categoria = categoriaDefault]) {
     setState(() {
       bool itemEncontrado = false;
       for (var item in _carritoItems) {
@@ -149,6 +182,7 @@ class _PanelVentasState extends State<PanelVentas> {
           'precio': precio,
           'cantidad': 1,
           'stock': stock,
+          'categoria': categoriasProducto.contains(categoria) ? categoria : categoriaDefault,
         });
       }
       _recalcularTotal();
@@ -303,57 +337,44 @@ class _PanelVentasState extends State<PanelVentas> {
     }
   }
 
-  // NUEVA FUNCIÓN: Actualizar el total del vendedor en el sector
-  Future<void> _actualizarTotalVendedor(Transaction transaction) async {
-    if (widget.vendedorNombre == null) return; // Si no hay vendedor, salir
+  /// Solo lee el sector y devuelve el mapa para update. Las transacciones exigen: primero todas las lecturas, después todas las escrituras.
+  Future<Map<String, dynamic>?> _leerSectorYPrepararUpdateVendedor(Transaction transaction) async {
+    if (widget.vendedorNombre == null) return null;
 
     final sectorRef = FirebaseFirestore.instance
         .collection('eventos')
         .doc(widget.eventoId)
         .collection('sectores')
         .doc(_sectorActualId);
-
-    // Obtener los datos actuales del sector
     final sectorSnapshot = await transaction.get(sectorRef);
+    if (!sectorSnapshot.exists) return null;
 
-    if (sectorSnapshot.exists) {
-      final sectorData = sectorSnapshot.data() as Map<String, dynamic>;
-      List<dynamic> vendedoresAsignados = List.from(
-        sectorData['vendedoresasignados'] ?? [],
-      );
-
-      // Buscar si el vendedor ya existe en el array
-      bool vendedorEncontrado = false;
-      for (int i = 0; i < vendedoresAsignados.length; i++) {
-        if (vendedoresAsignados[i]['nombre'] == widget.vendedorNombre) {
-          // Si existe, sumar al total
-          double totalActual = (vendedoresAsignados[i]['totalVendido'] ?? 0)
-              .toDouble();
-          vendedoresAsignados[i]['totalVendido'] = totalActual + _montoTotal;
-          vendedorEncontrado = true;
-          break;
-        }
+    final sectorData = sectorSnapshot.data() as Map<String, dynamic>;
+    List<dynamic> vendedoresAsignados = List.from(
+      sectorData['vendedoresasignados'] ?? [],
+    );
+    bool vendedorEncontrado = false;
+    for (int i = 0; i < vendedoresAsignados.length; i++) {
+      if (vendedoresAsignados[i]['nombre'] == widget.vendedorNombre) {
+        double totalActual = (vendedoresAsignados[i]['totalVendido'] ?? 0).toDouble();
+        vendedoresAsignados[i]['totalVendido'] = totalActual + _montoTotal;
+        vendedorEncontrado = true;
+        break;
       }
-
-      // Si no existe, agregarlo al array
-      if (!vendedorEncontrado) {
-        vendedoresAsignados.add({
-          'nombre': widget.vendedorNombre,
-          'totalVendido': _montoTotal,
-        });
-      }
-
-      // Actualizar el documento del sector
-      transaction.update(sectorRef, {
-        'vendedoresasignados': vendedoresAsignados,
-        'totalVendido': FieldValue.increment(
-          _montoTotal,
-        ), // También actualizar el total general del sector
+    }
+    if (!vendedorEncontrado) {
+      vendedoresAsignados.add({
+        'nombre': widget.vendedorNombre,
+        'totalVendido': _montoTotal,
       });
     }
+    return {
+      'vendedoresasignados': vendedoresAsignados,
+      'totalVendido': FieldValue.increment(_montoTotal),
+    };
   }
 
-  Future<void> _realizarVenta(String metodoPago) async {
+  Future<void> _realizarVenta(String metodoPago, {double? montoEfectivo, double? montoTarjeta}) async {
     if (_carritoItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -366,51 +387,77 @@ class _PanelVentasState extends State<PanelVentas> {
     }
 
     try {
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        // 1. Crear la venta
-        final ventaRef = FirebaseFirestore.instance
-            .collection('transacciones')
-            .doc();
-        transaction.set(ventaRef, {
-          'eventoId': widget.eventoId,
-          'sectorId': _sectorActualId,
-          'vendedorNombre': widget.vendedorNombre, // NUEVO: Agregar el vendedor
-          'fecha': FieldValue.serverTimestamp(),
-          'montoTotal': _montoTotal,
-          'metodoPago': metodoPago,
-        });
+      // Referencias de stock por producto (Transaction.get solo acepta DocumentReference en Flutter)
+      final stockRefs = <String, DocumentReference<Map<String, dynamic>>>{};
+      for (var item in _carritoItems) {
+        final nombre = item['nombre'] as String;
+        if (stockRefs.containsKey(nombre)) continue;
+        final q = await FirebaseFirestore.instance
+            .collection('eventos')
+            .doc(widget.eventoId)
+            .collection('sectores')
+            .doc(_sectorActualId)
+            .collection('stock')
+            .where('nombre', isEqualTo: nombre)
+            .limit(1)
+            .get();
+        if (q.docs.isNotEmpty) stockRefs[nombre] = q.docs.first.reference;
+      }
 
-        // 2. Actualizar el stock de cada producto
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final sectorRef = FirebaseFirestore.instance
+            .collection('eventos')
+            .doc(widget.eventoId)
+            .collection('sectores')
+            .doc(_sectorActualId);
+        final ventaRef = FirebaseFirestore.instance.collection('transacciones').doc();
+
+        // ——— FASE 1: Todas las LECTURAS (Firestore lo exige) ———
+        final stockActualPorRef = <DocumentReference<Map<String, dynamic>>, int>{};
         for (var item in _carritoItems) {
           final productoNombre = item['nombre'] as String;
           final cantidadVendida = item['cantidad'] as int;
-
-          final productoQuery = await FirebaseFirestore.instance
-              .collection('eventos')
-              .doc(widget.eventoId)
-              .collection('sectores')
-              .doc(_sectorActualId)
-              .collection('stock')
-              .where('nombre', isEqualTo: productoNombre)
-              .get();
-
-          if (productoQuery.docs.isNotEmpty) {
-            final productoDoc = productoQuery.docs.first;
-            final productoRef = productoDoc.reference;
-            final currentStock = productoDoc.data()['cantidad'] as int? ?? 0;
-
-            if (currentStock >= cantidadVendida) {
-              transaction.update(productoRef, {
-                'cantidad': currentStock - cantidadVendida,
-              });
-            } else {
-              throw Exception('Stock insuficiente para $productoNombre');
-            }
+          final productoRef = stockRefs[productoNombre];
+          if (productoRef == null) continue;
+          final productoDoc = await transaction.get(productoRef);
+          if (!productoDoc.exists) continue;
+          final currentStock = productoDoc.data()?['cantidad'] as int? ?? 0;
+          if (currentStock < cantidadVendida) {
+            throw Exception('Stock insuficiente para $productoNombre');
           }
+          stockActualPorRef[productoRef] = currentStock - cantidadVendida;
         }
+        final sectorUpdate = await _leerSectorYPrepararUpdateVendedor(transaction);
 
-        // 3. NUEVA FUNCIONALIDAD: Actualizar el total del vendedor en el sector
-        await _actualizarTotalVendedor(transaction);
+        // ——— FASE 2: Todas las ESCRITURAS ———
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        final itemsGuardar = _carritoItems.map<Map<String, dynamic>>((item) => {
+          'nombre': item['nombre'],
+          'precio': item['precio'],
+          'cantidad': item['cantidad'],
+          'categoria': item['categoria'] ?? categoriaDefault,
+        }).toList();
+        final data = <String, dynamic>{
+          'eventoId': widget.eventoId,
+          'sectorId': _sectorActualId,
+          'vendedorNombre': widget.vendedorNombre,
+          'fecha': FieldValue.serverTimestamp(),
+          'montoTotal': _montoTotal,
+          'metodoPago': metodoPago,
+          'items': itemsGuardar,
+        };
+        if (uid != null) data['vendedorUid'] = uid;
+        if (metodoPago == 'Mixto' && montoEfectivo != null && montoTarjeta != null) {
+          data['montoEfectivo'] = montoEfectivo;
+          data['montoTarjeta'] = montoTarjeta;
+        }
+        transaction.set(ventaRef, data);
+        for (var e in stockActualPorRef.entries) {
+          transaction.update(e.key, {'cantidad': e.value});
+        }
+        if (sectorUpdate != null) {
+          transaction.update(sectorRef, sectorUpdate);
+        }
       });
 
       // Si la transacción fue exitosa
@@ -455,15 +502,359 @@ class _PanelVentasState extends State<PanelVentas> {
     });
   }
 
-  void _escanearCodigoBarras() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Función de escaneo de código de barras - Próximamente',
-          style: GoogleFonts.poppins(),
+  Future<void> _mostrarPagoMixto() async {
+    if (_carritoItems.isEmpty) return;
+    final efectivoController = TextEditingController();
+    final total = _montoTotal;
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final ef = double.tryParse(efectivoController.text.replaceAll(',', '.')) ?? 0;
+            final tarjeta = (total - ef).clamp(0.0, double.infinity);
+            return AlertDialog(
+              title: Text(
+                'Pago mixto',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: primaryColor),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total: \$${total.toStringAsFixed(0)}',
+                      style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: accentColor),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: efectivoController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Monto en efectivo',
+                        hintText: '0',
+                        prefixText: '\$ ',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: accentColor, width: 2),
+                        ),
+                      ),
+                      style: GoogleFonts.poppins(),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Resto en tarjeta: \$${tarjeta.toStringAsFixed(0)}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: secondaryColor,
+                      ),
+                    ),
+                    if (ef > total)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          'El efectivo no puede ser mayor al total.',
+                          style: GoogleFonts.poppins(fontSize: 12, color: Colors.red),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: Text('Cancelar', style: GoogleFonts.poppins(color: secondaryColor)),
+                ),
+                ElevatedButton(
+                  onPressed: (ef >= 0 && ef <= total)
+                      ? () {
+                          Navigator.of(ctx).pop(true);
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accentColor,
+                    foregroundColor: primaryColor,
+                  ),
+                  child: Text('Cobrar', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmar != true || !mounted) {
+      _disposeEfectivoControllerAfterDialog(efectivoController);
+      return;
+    }
+    final ef = double.tryParse(efectivoController.text.replaceAll(',', '.')) ?? 0;
+    _disposeEfectivoControllerAfterDialog(efectivoController);
+    final efClamp = ef.clamp(0.0, total);
+    final tarjeta = total - efClamp;
+    await _realizarVenta('Mixto', montoEfectivo: efClamp, montoTarjeta: tarjeta);
+  }
+
+  /// Evita "used after disposed": el diálogo puede seguir en el árbol un frame más.
+  void _disposeEfectivoControllerAfterDialog(TextEditingController c) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      c.dispose();
+    });
+  }
+
+  /// Obtiene usernames de la colección usuarios para los uids de las transacciones.
+  Future<Map<String, String>> _fetchUsernamesForUids(List<String> uids) async {
+    if (uids.isEmpty) return {};
+    final snaps = await Future.wait(
+      uids.map((uid) => FirebaseFirestore.instance.collection('usuarios').doc(uid).get()),
+    );
+    final map = <String, String>{};
+    for (var i = 0; i < uids.length; i++) {
+      final un = snaps[i].data()?['username']?.toString();
+      if (un != null && un.isNotEmpty) map[uids[i]] = un;
+    }
+    return map;
+  }
+
+  String _usuarioEnHistorial(Map<String, dynamic> d) {
+    final uid = d['vendedorUid']?.toString();
+    if (uid != null && _usernameCache.containsKey(uid)) return _usernameCache[uid]!;
+    final nom = d['vendedorNombre']?.toString();
+    return (nom != null && nom.isNotEmpty) ? nom.trim() : 'Sin usuario';
+  }
+
+  void _mostrarHistorialVentas() {
+    if (_sectorActualId == null) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: secondaryColor.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Historial de ventas',
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: primaryColor,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('transacciones')
+                      .where('eventoId', isEqualTo: widget.eventoId)
+                      .where('sectorId', isEqualTo: _sectorActualId)
+                      .orderBy('fecha', descending: true)
+                      .limit(100)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Center(child: CircularProgressIndicator(color: accentColor));
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'Error: ${snapshot.error}',
+                          style: GoogleFonts.poppins(color: Colors.red),
+                        ),
+                      );
+                    }
+                    final docs = snapshot.data?.docs ?? [];
+                    if (docs.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'No hay ventas en este sector',
+                          style: GoogleFonts.poppins(color: secondaryColor),
+                        ),
+                      );
+                    }
+                    final uids = docs
+                        .map((doc) => (doc.data() as Map<String, dynamic>)['vendedorUid']?.toString())
+                        .whereType<String>()
+                        .toSet();
+                    if (!setEquals(uids, _lastFetchedUids)) {
+                      _lastFetchedUids = uids;
+                      _fetchUsernamesForUids(uids.toList()).then((map) {
+                        if (mounted) setState(() => _usernameCache = map);
+                      });
+                    }
+                    return ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        final doc = docs[index];
+                        final d = doc.data() as Map<String, dynamic>;
+                        final monto = (d['montoTotal'] as num?)?.toDouble() ?? 0.0;
+                        final usuario = _usuarioEnHistorial(d);
+                        final fecha = d['fecha'] as dynamic;
+                        String fechaStr = '';
+                        if (fecha != null && fecha is Timestamp) {
+                          final dt = fecha.toDate();
+                          fechaStr = '${dt.day}/${dt.month} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+                        }
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          elevation: 1,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            leading: CircleAvatar(
+                              backgroundColor: accentColor.withOpacity(0.2),
+                              child: Icon(Icons.receipt_long, color: accentColor),
+                            ),
+                            title: Text(
+                              '\$${monto.toStringAsFixed(0)}',
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: primaryColor,
+                              ),
+                            ),
+                            subtitle: Text(
+                              usuario,
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: secondaryColor,
+                              ),
+                            ),
+                            trailing: fechaStr.isNotEmpty
+                                ? Text(
+                                    fechaStr,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      color: secondaryColor,
+                                    ),
+                                  )
+                                : null,
+                            onTap: () => _mostrarDetalleTransaccion(d),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
-        backgroundColor: accentColor,
-        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _mostrarDetalleTransaccion(Map<String, dynamic> d) async {
+    final uid = d['vendedorUid']?.toString();
+    if (uid != null && !_usernameCache.containsKey(uid)) {
+      try {
+        final snap = await FirebaseFirestore.instance.collection('usuarios').doc(uid).get();
+        final un = snap.data()?['username']?.toString();
+        if (un != null && un.isNotEmpty && mounted) {
+          setState(() => _usernameCache[uid] = un);
+        }
+      } catch (_) {}
+    }
+    final monto = (d['montoTotal'] as num?)?.toDouble() ?? 0.0;
+    final metodoPago = d['metodoPago']?.toString() ?? '—';
+    final usuario = _usuarioEnHistorial(d);
+    final items = d['items'] as List<dynamic>?;
+    final fecha = d['fecha'] as dynamic;
+    String fechaStr = '';
+    if (fecha != null && fecha is Timestamp) {
+      final dt = fecha.toDate();
+      fechaStr = '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+    }
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Detalle de la venta',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: primaryColor),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Usuario: $usuario', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              if (fechaStr.isNotEmpty) Text('Fecha: $fechaStr', style: GoogleFonts.poppins(fontSize: 13, color: secondaryColor)),
+              const SizedBox(height: 8),
+              Text(
+                'Método de pago: $metodoPago',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: metodoPago == 'Efectivo' ? Colors.green : (metodoPago == 'Tarjeta' ? accentColor : primaryColor),
+                ),
+              ),
+              if (metodoPago == 'Mixto') ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Efectivo: \$${((d['montoEfectivo'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)} · Tarjeta: \$${((d['montoTarjeta'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
+                  style: GoogleFonts.poppins(fontSize: 13, color: secondaryColor),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Text('Total: \$${monto.toStringAsFixed(0)}', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold, color: accentColor)),
+              const SizedBox(height: 12),
+              Text('Productos', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: primaryColor)),
+              const SizedBox(height: 6),
+              if (items != null && items.isNotEmpty)
+                ...items.map<Widget>((e) {
+                  final map = e as Map<String, dynamic>;
+                  final nombre = map['nombre']?.toString() ?? '—';
+                  final cant = map['cantidad'] as num? ?? 0;
+                  final precio = (map['precio'] as num?)?.toDouble() ?? 0.0;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      '• $nombre x$cant — \$${(precio * cant).toStringAsFixed(0)}',
+                      style: GoogleFonts.poppins(fontSize: 13, color: secondaryColor),
+                    ),
+                  );
+                })
+              else
+                Text('Sin detalle de productos', style: GoogleFonts.poppins(fontSize: 13, color: secondaryColor)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Cerrar', style: GoogleFonts.poppins(color: secondaryColor)),
+          ),
+        ],
       ),
     );
   }
@@ -550,25 +941,10 @@ class _PanelVentasState extends State<PanelVentas> {
         ),
         centerTitle: true,
         actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-            child: ElevatedButton.icon(
-              onPressed: _escanearCodigoBarras,
-              icon: const Icon(Icons.qr_code_scanner, size: 18),
-              label: Text('Escanear', style: GoogleFonts.poppins(fontSize: 12)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                foregroundColor: accentColor,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'Historial de ventas',
+            onPressed: _sectorActualId == null ? null : _mostrarHistorialVentas,
           ),
         ],
       ),
@@ -810,9 +1186,7 @@ class _PanelVentasState extends State<PanelVentas> {
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: secondaryColor,
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8),
                                     ),
@@ -824,24 +1198,20 @@ class _PanelVentasState extends State<PanelVentas> {
                                       const SizedBox(width: 6),
                                       Text(
                                         'Efectivo',
-                                        style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13),
                                       ),
                                     ],
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 10),
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: ElevatedButton(
                                   onPressed: () => _realizarVenta('Tarjeta'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: accentColor,
                                     foregroundColor: primaryColor,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8),
                                     ),
@@ -853,9 +1223,32 @@ class _PanelVentasState extends State<PanelVentas> {
                                       const SizedBox(width: 6),
                                       Text(
                                         'Tarjeta',
-                                        style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: _mostrarPagoMixto,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryColor,
+                                    foregroundColor: accentColor,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.account_balance_wallet_outlined, size: 18),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Mixto',
+                                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 13),
                                       ),
                                     ],
                                   ),
@@ -948,135 +1341,157 @@ class _PanelVentasState extends State<PanelVentas> {
                                 );
                               }
 
-                              return GridView.builder(
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 3,
-                                  childAspectRatio: 0.6,
-                                  crossAxisSpacing: 10,
-                                  mainAxisSpacing: 10,
-                                ),
-                                itemCount: filtrados.length,
-                                itemBuilder: (context, index) {
-                                  final producto = filtrados[index];
-                                  final data =
-                                      producto.data() as Map<String, dynamic>?;
+                              // Agrupar por categoría; si el stock no tiene categoría, usar la del producto
+                              final Map<String, List<DocumentSnapshot>> porCategoria = {};
+                              for (final d in filtrados) {
+                                final data = d.data() as Map<String, dynamic>?;
+                                final catStock = data?['categoria']?.toString();
+                                final cat = catStock ?? _categoriasPorProductoId[d.id] ?? categoriaDefault;
+                                final key = (_nombresCategorias.contains(cat) || categoriasProducto.contains(cat)) ? cat : categoriaDefault;
+                                porCategoria.putIfAbsent(key, () => []).add(d);
+                              }
+                              final listaOrden = _nombresCategorias.isNotEmpty ? _nombresCategorias : categoriasProducto;
+                              final categoriasOrdenadas = List<String>.from(listaOrden)
+                                ..retainWhere((c) => (porCategoria[c]?.length ?? 0) > 0);
+                              for (final k in porCategoria.keys) {
+                                if (!categoriasOrdenadas.contains(k)) categoriasOrdenadas.add(k);
+                              }
+                              categoriasOrdenadas.sort((a, b) => ordenCategoria(a, listaOrden).compareTo(ordenCategoria(b, listaOrden)));
 
-                                  if (data == null) {
-                                    return const SizedBox.shrink();
-                                  }
+                              const double cardWidth = 150;
+                              const double rowHeight = 200;
 
-                                  final String nombreProducto =
-                                      data['nombre']?.toString() ??
-                                          'Sin nombre';
-                                  final num precioProducto =
-                                      data['precio'] as num? ?? 0;
-                                  final int stockProducto =
-                                      data['cantidad'] as int? ?? 0;
-
-                                  return Card(
-                                    elevation: stockProducto > 0 ? 4 : 2,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(15),
-                                    ),
-                                    color: stockProducto > 0
-                                        ? Colors.white
-                                        : Colors.grey.withOpacity(0.1),
-                                    child: InkWell(
-                                      onTap: () {
-                                        if (stockProducto > 0) {
-                                          _agregarItemAlCarrito(
-                                            nombreProducto,
-                                            precioProducto.toDouble(),
-                                            stockProducto,
-                                          );
-                                        } else {
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                'No hay stock disponible para $nombreProducto',
-                                                style: GoogleFonts.poppins(),
-                                              ),
-                                              backgroundColor: Colors.red,
-                                              behavior:
-                                                  SnackBarBehavior.floating,
-                                            ),
-                                          );
-                                        }
-                                      },
-                                      borderRadius: BorderRadius.circular(15),
-                                      child: Stack(
-                                        children: [
-                                          Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: Column(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                Icon(
-                                                  Icons.fastfood,
-                                                  size: 40,
-                                                  color: stockProducto > 0
-                                                      ? secondaryColor
-                                                      : Colors.grey,
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Text(
-                                                  nombreProducto,
-                                                  textAlign: TextAlign.center,
-                                                  maxLines: 2,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 14,
-                                                    fontWeight:
-                                                        FontWeight.w600,
-                                                    color: primaryColor,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  precioProducto
-                                                      .toStringAsFixed(0),
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 16,
-                                                    fontWeight:
-                                                        FontWeight.bold,
-                                                    color: accentColor,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          Positioned(
-                                            bottom: 8,
-                                            right: 8,
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 4,
-                                              ),
-                                              decoration: BoxDecoration(
+                              return ListView.builder(
+                                itemCount: categoriasOrdenadas.length,
+                                itemBuilder: (context, idxCat) {
+                                  final cat = categoriasOrdenadas[idxCat];
+                                  final productos = porCategoria[cat] ?? [];
+                                  if (productos.isEmpty) return const SizedBox.shrink();
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 4, top: 12, bottom: 8),
+                                        child: Row(
+                                          children: [
+                                            Icon(iconoCategoria(cat), size: 22, color: secondaryColor),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              cat,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
                                                 color: primaryColor,
-                                                borderRadius:
-                                                    BorderRadius.circular(5),
-                                              ),
-                                              child: Text(
-                                                'Stock: $stockProducto',
-                                                style: GoogleFonts.poppins(
-                                                  color: Colors.white,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
+                                      SizedBox(
+                                        height: rowHeight,
+                                        child: ListView.builder(
+                                          scrollDirection: Axis.horizontal,
+                                          padding: const EdgeInsets.only(left: 4, right: 12),
+                                          itemCount: productos.length,
+                                          itemBuilder: (context, index) {
+                                            final producto = productos[index];
+                                            final data = producto.data() as Map<String, dynamic>?;
+                                            if (data == null) return const SizedBox.shrink();
+                                            final String nombreProducto = data['nombre']?.toString() ?? 'Sin nombre';
+                                            final num precioProducto = data['precio'] as num? ?? 0;
+                                            final int stockProducto = data['cantidad'] as int? ?? 0;
+                                            final categoriaProducto = data['categoria']?.toString() ?? _categoriasPorProductoId[producto.id] ?? categoriaDefault;
+                                            final iconData = iconoCategoria(categoriaProducto);
+                                            return Padding(
+                                              padding: const EdgeInsets.only(right: 10),
+                                              child: SizedBox(
+                                                width: cardWidth,
+                                                child: Card(
+                                                  elevation: stockProducto > 0 ? 4 : 2,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(15),
+                                                  ),
+                                                  color: stockProducto > 0
+                                                      ? Colors.white
+                                                      : Colors.grey.withOpacity(0.1),
+                                                  child: InkWell(
+                                                    onTap: () {
+                                                      if (stockProducto > 0) {
+                                                        _agregarItemAlCarrito(
+                                                          nombreProducto,
+                                                          precioProducto.toDouble(),
+                                                          stockProducto,
+                                                          categoriaProducto,
+                                                        );
+                                                      } else {
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          SnackBar(
+                                                            content: Text(
+                                                              'No hay stock disponible para $nombreProducto',
+                                                              style: GoogleFonts.poppins(),
+                                                            ),
+                                                            backgroundColor: Colors.red,
+                                                            behavior: SnackBarBehavior.floating,
+                                                          ),
+                                                        );
+                                                      }
+                                                    },
+                                                    borderRadius: BorderRadius.circular(15),
+                                                    child: Padding(
+                                                      padding: const EdgeInsets.all(10.0),
+                                                      child: Column(
+                                                        mainAxisAlignment: MainAxisAlignment.center,
+                                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                                        children: [
+                                                          Icon(
+                                                            iconData,
+                                                            size: 36,
+                                                            color: stockProducto > 0
+                                                                ? secondaryColor
+                                                                : Colors.grey,
+                                                          ),
+                                                          const SizedBox(height: 8),
+                                                          Text(
+                                                            nombreProducto,
+                                                            textAlign: TextAlign.center,
+                                                            maxLines: 3,
+                                                            overflow: TextOverflow.ellipsis,
+                                                            style: GoogleFonts.poppins(
+                                                              fontSize: 14,
+                                                              fontWeight: FontWeight.w600,
+                                                              color: primaryColor,
+                                                            ),
+                                                          ),
+                                                          const SizedBox(height: 6),
+                                                          Text(
+                                                            '\$${precioProducto.toStringAsFixed(0)}',
+                                                            style: GoogleFonts.poppins(
+                                                              fontSize: 15,
+                                                              fontWeight: FontWeight.bold,
+                                                              color: accentColor,
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            'Stock: $stockProducto',
+                                                            style: GoogleFonts.poppins(
+                                                              fontSize: 10,
+                                                              color: stockProducto > 0
+                                                                  ? secondaryColor
+                                                                  : Colors.grey,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
                                   );
                                 },
                               );

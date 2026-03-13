@@ -632,6 +632,7 @@ class _ProductoMermaCard extends StatelessWidget {
                 // Campo de cantidad
                 TextField(
                   controller: cantidadController,
+                  autofocus: true,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: 'Cantidad perdida',

@@ -15,12 +15,18 @@ class HomeVendedor extends StatefulWidget {
   final String eventId;
   final String sectorId;
   final String nombreSector;
+  /// Si es true, se muestra botón para volver al panel de administración.
+  final bool fromAdmin;
+  /// Solo el encargado puede cerrar turno. Si es false, no se muestra el botón.
+  final bool puedeCerrarTurno;
 
   const HomeVendedor({
     super.key,
     required this.eventId,
     required this.sectorId,
     required this.nombreSector,
+    this.fromAdmin = false,
+    this.puedeCerrarTurno = false,
   });
 
   @override
@@ -124,6 +130,13 @@ class _HomeVendedorState extends State<HomeVendedor> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
+        leading: widget.fromAdmin
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Volver al panel de administración',
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -139,6 +152,15 @@ class _HomeVendedorState extends State<HomeVendedor> {
             ),
           ],
         ),
+        actions: widget.fromAdmin
+            ? [
+                IconButton(
+                  tooltip: 'Volver al panel de administración',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.admin_panel_settings_outlined),
+                ),
+              ]
+            : null,
         backgroundColor: primaryColor,
         foregroundColor: accentColor,
         automaticallyImplyLeading: false,
@@ -222,6 +244,10 @@ class _HomeVendedorState extends State<HomeVendedor> {
                 _buildMainSaleCard(),
                 const SizedBox(height: 20),
                 _buildActionButtons(),
+                if (widget.puedeCerrarTurno) ...[
+                  const SizedBox(height: 16),
+                  _buildTotalVentasPunto(),
+                ],
                 const SizedBox(height: 30),
                 _buildQuickAccessPanel(),
               ],
@@ -230,6 +256,77 @@ class _HomeVendedorState extends State<HomeVendedor> {
         ],
       ),
     );
+  }
+
+  /// Total vendido en el punto (solo visible para encargado y admin).
+  Widget _buildTotalVentasPunto() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(widget.eventId)
+          .collection('sectores')
+          .doc(_currentSectorId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+        final data = snapshot.data!.data() as Map<String, dynamic>?;
+        final total = (data?['totalVendido'] as num?)?.toDouble() ?? 0.0;
+        final fmt = _fmtMiles(total.toInt());
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.green.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.green.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.point_of_sale, color: Colors.green[700], size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total vendido en el punto',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: primaryColor,
+                      ),
+                    ),
+                    Text(
+                      _currentSectorNombre,
+                      style: GoogleFonts.poppins(fontSize: 11, color: secondaryColor),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '\$$fmt',
+                style: GoogleFonts.poppins(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green[800],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _fmtMiles(int n) {
+    final s = n.toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      buf.write(s[i]);
+      final posFromEnd = s.length - i - 1;
+      if (posFromEnd > 0 && posFromEnd % 3 == 0) buf.write('.');
+    }
+    return buf.toString();
   }
 
   Widget _buildQuickAccessPanel() {
@@ -323,7 +420,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const EstadioSelection(),
+                      builder: (context) => EstadioSelection(fromAdmin: widget.fromAdmin),
                     ),
                   );
                 },
@@ -449,25 +546,27 @@ class _HomeVendedorState extends State<HomeVendedor> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: _cerrarTurno,
-              icon: const Icon(Icons.logout, size: 18),
-              label: Text(
-                'Cerrar Turno',
-                style: GoogleFonts.poppins(fontSize: 12),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+          if (widget.puedeCerrarTurno) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _cerrarTurno,
+                icon: const Icon(Icons.logout, size: 18),
+                label: Text(
+                  'Cerrar Turno',
+                  style: GoogleFonts.poppins(fontSize: 12),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -500,6 +599,18 @@ class _HomeVendedorState extends State<HomeVendedor> {
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
           onTap: () async {
+            final user = FirebaseAuth.instance.currentUser;
+            String vendedorNombre = user?.displayName ?? user?.email ?? user?.uid ?? 'Usuario';
+            if (user?.uid != null) {
+              try {
+                final snap = await FirebaseFirestore.instance
+                    .collection('usuarios')
+                    .doc(user!.uid)
+                    .get();
+                final un = snap.data()?['username']?.toString();
+                if (un != null && un.isNotEmpty) vendedorNombre = un;
+              } catch (_) {}
+            }
             final result = await Navigator.push(
               context,
               MaterialPageRoute(
@@ -507,6 +618,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                   eventoId: widget.eventId,
                   nombreSector: _currentSectorNombre,
                   sectorId: _currentSectorId,
+                  vendedorNombre: vendedorNombre,
                 ),
               ),
             );
@@ -609,6 +721,32 @@ class _HomeVendedorState extends State<HomeVendedor> {
           nombreSector: _currentSectorNombre,
           sectorId: _currentSectorId,
           soloLectura: false,
+          onGuardado: () async {
+            final nav = Navigator.of(context);
+            final user = FirebaseAuth.instance.currentUser;
+            String vendedorNombre = user?.displayName ?? user?.email ?? user?.uid ?? 'Usuario';
+            if (user?.uid != null) {
+              try {
+                final snap = await FirebaseFirestore.instance
+                    .collection('usuarios')
+                    .doc(user!.uid)
+                    .get();
+                final un = snap.data()?['username']?.toString();
+                if (un != null && un.isNotEmpty) vendedorNombre = un;
+              } catch (_) {}
+            }
+            nav.pop(); // Cerrar GestionStock
+            nav.push(
+              MaterialPageRoute(
+                builder: (context) => PanelVentas(
+                  eventoId: widget.eventId,
+                  nombreSector: _currentSectorNombre,
+                  sectorId: _currentSectorId,
+                  vendedorNombre: vendedorNombre,
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

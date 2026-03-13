@@ -211,6 +211,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 30),
                 TextField(
                   controller: _usernameController,
+                  autofocus: true,
                   style: GoogleFonts.lato(fontStyle: FontStyle.italic),
                   decoration:
                       _buildInputDecoration(

@@ -130,6 +130,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 const SizedBox(height: 30),
                 TextField(
                   controller: _emailController,
+                  autofocus: true,
                   keyboardType: TextInputType.emailAddress,
                   style: GoogleFonts.lato(fontStyle: FontStyle.italic),
                   decoration: _buildInputDecoration(

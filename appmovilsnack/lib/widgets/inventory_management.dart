@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/utils/categorias_producto.dart';
 
 class InventoryManagement extends StatefulWidget {
   const InventoryManagement({super.key});
@@ -16,6 +17,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
   final TextEditingController _searchController = TextEditingController();
   List<DocumentSnapshot> _productos = [];
   List<DocumentSnapshot> _productosFiltrados = [];
+  List<Map<String, String>> _categorias = [];
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -28,7 +30,17 @@ class _InventoryManagementState extends State<InventoryManagement> {
   void initState() {
     super.initState();
     _cargarProductos();
+    _cargarCategorias();
     _searchController.addListener(_filtrarProductos);
+  }
+
+  Future<void> _cargarCategorias() async {
+    try {
+      final list = await cargarCategoriasFirestore();
+      if (mounted) setState(() => _categorias = list);
+    } catch (_) {
+      if (mounted) setState(() => _categorias = []);
+    }
   }
 
   @override
@@ -75,73 +87,119 @@ class _InventoryManagementState extends State<InventoryManagement> {
   }
 
   Future<void> _mostrarDialogoProducto({DocumentSnapshot? producto}) async {
+    final data = producto?.data() as Map<String, dynamic>?;
     final nombreController = TextEditingController(
-      text: producto?.data() != null
-          ? (producto!.data() as Map<String, dynamic>)['nombre'] ?? ''
-          : '',
+      text: data?['nombre']?.toString() ?? '',
     );
     final precioController = TextEditingController(
-      text: producto?.data() != null
-          ? ((producto!.data() as Map<String, dynamic>)['precio'] ?? 0)
-                .toString()
+      text: data != null
+          ? ((data['precio'] ?? 0)).toString()
           : '',
     );
+    final listCat = _categorias.isEmpty
+        ? categoriasProductoDefault.map((c) => {'nombre': c, 'icono': ''}).toList()
+        : _categorias;
+    final nombresCat = listCat.map((e) => e['nombre'] ?? '').where((s) => s.isNotEmpty).toList();
+    String categoriaSeleccionada = data?['categoria']?.toString() ?? categoriaDefault;
+    if (!nombresCat.contains(categoriaSeleccionada)) categoriaSeleccionada = (nombresCat.isNotEmpty ? nombresCat.first : categoriaDefault);
 
-    await showDialog(
+    final guardado = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: backgroundColor,
-          title: Text(
-            producto == null ? 'Agregar Producto' : 'Editar Producto',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.bold,
-              color: primaryColor,
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nombreController,
-                  decoration: InputDecoration(
-                    labelText: 'Nombre del Producto',
-                    labelStyle: GoogleFonts.poppins(color: secondaryColor),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: accentColor, width: 2),
-                    ),
-                  ),
-                  style: GoogleFonts.poppins(),
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: backgroundColor,
+              title: Text(
+                producto == null ? 'Agregar Producto' : 'Editar Producto',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  color: primaryColor,
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: precioController,
-                  keyboardType: TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: 'Precio',
-                    labelStyle: GoogleFonts.poppins(color: secondaryColor),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nombreController,
+                      decoration: InputDecoration(
+                        labelText: 'Nombre del Producto',
+                        labelStyle: GoogleFonts.poppins(color: secondaryColor),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: accentColor, width: 2),
+                        ),
+                      ),
+                      style: GoogleFonts.poppins(),
                     ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: accentColor, width: 2),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: precioController,
+                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Precio',
+                        labelStyle: GoogleFonts.poppins(color: secondaryColor),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: accentColor, width: 2),
+                        ),
+                        prefixText: '\$ ',
+                      ),
+                      style: GoogleFonts.poppins(),
                     ),
-                    prefixText: '\$ ',
-                  ),
-                  style: GoogleFonts.poppins(),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: nombresCat.contains(categoriaSeleccionada) ? categoriaSeleccionada : (nombresCat.isNotEmpty ? nombresCat.first : null),
+                      decoration: InputDecoration(
+                        labelText: 'Categoría',
+                        labelStyle: GoogleFonts.poppins(color: secondaryColor),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: accentColor, width: 2),
+                        ),
+                      ),
+                      items: listCat.map((e) {
+                        final c = e['nombre'] ?? '';
+                        if (c.isEmpty) return null;
+                        final icono = e['icono'] ?? '';
+                        return DropdownMenuItem<String>(
+                          value: c,
+                          child: Row(
+                            children: [
+                              Icon(
+                                icono.isNotEmpty ? iconoCategoriaConIcono(icono) : iconoCategoria(c),
+                                size: 20,
+                                color: secondaryColor,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(c, style: GoogleFonts.poppins()),
+                            ],
+                          ),
+                        );
+                      }).whereType<DropdownMenuItem<String>>().toList(),
+                      onChanged: (v) {
+                        if (v != null) {
+                          categoriaSeleccionada = v;
+                          setDialogState(() {});
+                        }
+                      },
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          actions: [
+              ),
+              actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: Text(
                 'Cancelar',
                 style: GoogleFonts.poppins(color: secondaryColor),
@@ -153,7 +211,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
                 final precioStr = precioController.text.trim();
 
                 if (nombre.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: Text(
                         'Por favor, ingresa un nombre para el producto.',
@@ -167,7 +225,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
 
                 final precio = double.tryParse(precioStr);
                 if (precio == null || precio <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: Text(
                         'Por favor, ingresa un precio válido mayor a 0.',
@@ -179,52 +237,26 @@ class _InventoryManagementState extends State<InventoryManagement> {
                   return;
                 }
 
-                Navigator.of(context).pop();
-
                 try {
                   final productoData = <String, dynamic>{
                     'nombre': nombre,
                     'precio': precio,
+                    'categoria': categoriaSeleccionada,
                   };
 
                   if (producto == null) {
-                    // Agregar nuevo producto
                     await FirebaseFirestore.instance
                         .collection('productos')
                         .add(productoData);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Producto agregado exitosamente',
-                            style: GoogleFonts.poppins(),
-                          ),
-                          backgroundColor: Colors.green,
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    }
                   } else {
-                    // Editar producto existente
                     await producto.reference.update(productoData);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Producto actualizado exitosamente',
-                            style: GoogleFonts.poppins(),
-                          ),
-                          backgroundColor: Colors.green,
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    }
                   }
 
-                  await _cargarProductos();
+                  if (!dialogContext.mounted) return;
+                  Navigator.of(dialogContext).pop(true);
                 } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                  if (dialogContext.mounted) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
                       SnackBar(
                         content: Text(
                           'Error al guardar el producto: $e',
@@ -247,9 +279,28 @@ class _InventoryManagementState extends State<InventoryManagement> {
               ),
             ),
           ],
+            );
+          },
         );
       },
     );
+
+    // Recargar lista y mostrar mensaje en esta pantalla (contexto estable)
+    if (guardado == true && mounted) {
+      await _cargarProductos();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            producto == null
+                ? 'Producto agregado exitosamente'
+                : 'Producto actualizado exitosamente',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _eliminarProducto(DocumentSnapshot producto) async {
@@ -475,6 +526,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
                                 data['nombre']?.toString() ?? 'Sin nombre';
                             final num precioProducto =
                                 data['precio'] as num? ?? 0;
+                            final String cat = data['categoria']?.toString() ?? categoriaDefault;
 
                             return Card(
                               margin: const EdgeInsets.only(bottom: 12),
@@ -495,7 +547,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Icon(
-                                    Icons.fastfood,
+                                    iconoCategoria(cat),
                                     color: accentColor,
                                     size: 28,
                                   ),

@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Usuarios: solo el propio usuario o admin
+    match /usuarios/{userId} {
+      allow read, write: if request.auth != null;
+    }
+    // Empleados (base de personal): usuarios autenticados (gestión desde admin)
+    match /empleados/{empleadoId} {
+      allow read, write: if request.auth != null;
+    }
+    // Productos
+    match /productos/{productoId} {
+      allow read, write: if request.auth != null;
+    }
+    // Categorías de productos (admin puede agregar; todos leen)
+    match /categorias/{categoriaId} {
+      allow read, write: if request.auth != null;
+    }
+    // Eventos (incluye trabajadoresAsignados)
+    match /eventos/{eventoId} {
+      allow read, write: if request.auth != null;
+      match /sectores/{sectorId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+    // Transacciones
+    match /transacciones/{transaccionId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

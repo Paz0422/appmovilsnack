@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:front_appsnack/screens/vendedores/home_vendedor.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -10,7 +11,10 @@ const Color secondaryColor = Color(0xFF6B4D2F);
 const Color backgroundColor = Color(0xFFFDFBF7);
 
 class EstadioSelection extends StatefulWidget {
-  const EstadioSelection({super.key});
+  /// Si es true, el usuario viene del panel admin y al entrar al vendedor se mostrará "Volver al panel admin".
+  final bool fromAdmin;
+
+  const EstadioSelection({super.key, this.fromAdmin = false});
 
   @override
   State<EstadioSelection> createState() => _EstadioSelectionState();
@@ -209,7 +213,24 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                   ),
                   elevation: 5,
                 ),
-                onPressed: () {
+                onPressed: () async {
+                  final bool puedeCerrarTurno;
+                  if (widget.fromAdmin) {
+                    puedeCerrarTurno = true; // El admin también puede cerrar turno
+                  } else {
+                    final user = FirebaseAuth.instance.currentUser;
+                    if (user == null) {
+                      puedeCerrarTurno = false;
+                    } else {
+                      final doc = await FirebaseFirestore.instance
+                          .collection('usuarios')
+                          .doc(user.uid)
+                          .get();
+                      final rol = doc.data()?['rol']?.toString() ?? 'vendedor';
+                      puedeCerrarTurno = rol == 'encargado';
+                    }
+                  }
+                  if (!mounted) return;
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(
@@ -217,6 +238,8 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                         eventId: _eventoSeleccionadoId!,
                         sectorId: _sectorSeleccionadoId!,
                         nombreSector: _sectorSeleccionado!,
+                        fromAdmin: widget.fromAdmin,
+                        puedeCerrarTurno: puedeCerrarTurno,
                       ),
                     ),
                   );
