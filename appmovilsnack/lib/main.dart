@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart'
 
 import 'firebase_options.dart';
 import 'auth/auth_gate.dart';
+import 'core/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,14 +66,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Snacks App',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color.fromARGB(255, 213, 180, 109),
-        ),
-        fontFamily: 'WinkyRough',
-        useMaterial3: true,
-      ),
+      title: 'Fusión Snacks',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
       home: const AuthGate(),
     );
   }

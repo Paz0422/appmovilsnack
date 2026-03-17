@@ -14,6 +14,7 @@ import 'package:front_appsnack/widgets/reporte_mermas.dart';
 import 'package:front_appsnack/widgets/gestion_categorias.dart';
 import 'package:front_appsnack/widgets/gestion_roles_usuarios.dart';
 import 'package:front_appsnack/widgets/estadio_selection.dart';
+import 'package:front_appsnack/widgets/cierres_partidos_activos.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class HomeAdmin extends StatefulWidget {
@@ -33,23 +34,35 @@ class _HomeAdminState extends State<HomeAdmin> {
     return snap.docs.map((d) => d.id).toSet();
   }
 
+  /// Consulta solo transacciones de eventos activos (whereIn por lotes de 10)
+  Future<Map<String, int>> _getTransaccionesActivosAggregate() async {
+    final activosIds = await _getEventosActivosIds();
+    if (activosIds.isEmpty) return {'total': 0, 'count': 0};
+    final ids = activosIds.toList();
+    int totalVendido = 0;
+    int count = 0;
+    for (var i = 0; i < ids.length; i += 10) {
+      final batch = ids.skip(i).take(10).toList();
+      final snap = await FirebaseFirestore.instance
+          .collection('transacciones')
+          .where('eventoId', whereIn: batch)
+          .get();
+      for (var doc in snap.docs) {
+        final m = doc.data()['montoTotal'];
+        if (m != null && m is num) {
+          totalVendido += m.toInt();
+          count++;
+        }
+      }
+    }
+    return {'total': totalVendido, 'count': count};
+  }
+
   /// Total vendido solo de transacciones de eventos activos
   Future<int> _getMontoTotalActivos() async {
     try {
-      final activosIds = await _getEventosActivosIds();
-      if (activosIds.isEmpty) return 0;
-      final salesSnapshot = await FirebaseFirestore.instance
-          .collection('transacciones')
-          .get();
-      int total = 0;
-      for (var doc in salesSnapshot.docs) {
-        final eventoId = doc.data()['eventoId']?.toString();
-        if (eventoId == null || !activosIds.contains(eventoId)) continue;
-        final montoTotal = doc.data()['montoTotal'];
-        if (montoTotal == null) continue;
-        if (montoTotal is num) total += montoTotal.toInt();
-      }
-      return total;
+      final agg = await _getTransaccionesActivosAggregate();
+      return agg['total'] ?? 0;
     } catch (e) {
       rethrow;
     }
@@ -67,20 +80,9 @@ class _HomeAdminState extends State<HomeAdmin> {
           'cantidadEventosActivos': 0,
         };
       }
-      final transSnapshot = await FirebaseFirestore.instance
-          .collection('transacciones')
-          .get();
-      int totalVendido = 0;
-      int count = 0;
-      for (var doc in transSnapshot.docs) {
-        final eventoId = doc.data()['eventoId']?.toString();
-        if (eventoId == null || !activosIds.contains(eventoId)) continue;
-        final m = doc.data()['montoTotal'];
-        if (m != null && m is num) {
-          totalVendido += m.toInt();
-          count++;
-        }
-      }
+      final agg = await _getTransaccionesActivosAggregate();
+      final totalVendido = agg['total'] ?? 0;
+      final count = agg['count'] ?? 0;
       return {
         'totalVendido': totalVendido,
         'cantidadTransacciones': count,
@@ -97,7 +99,6 @@ class _HomeAdminState extends State<HomeAdmin> {
     }
   }
 
-  // Paleta de colores para el drawer
   final Color primaryColor = const Color(0xFF2B2B2B);
   final Color accentColor = const Color(0xFFDABF41);
 
@@ -105,21 +106,16 @@ class _HomeAdminState extends State<HomeAdmin> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-
-      // 🔹 Drawer (menú hamburguesa)
       drawer: _buildDrawer(),
-
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        // Al tener drawer, el ícono de hamburguesa aparece solo
         title: const Text(
           'Panel de Administración',
           style: TextStyle(color: Colors.black),
         ),
         iconTheme: const IconThemeData(color: Colors.black),
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         child: Column(
@@ -131,7 +127,6 @@ class _HomeAdminState extends State<HomeAdmin> {
               darkText: true,
             ),
             const SizedBox(height: 12),
-
             const Text(
               'Total vendido (eventos activos)',
               style: TextStyle(
@@ -141,7 +136,6 @@ class _HomeAdminState extends State<HomeAdmin> {
               ),
             ),
             const SizedBox(height: 8),
-
             SizedBox(
               width: double.infinity,
               child: FutureBuilder<int>(
@@ -176,9 +170,7 @@ class _HomeAdminState extends State<HomeAdmin> {
                 },
               ),
             ),
-
             const SizedBox(height: 24),
-
             const Text(
               'Estadísticas de ventas (eventos activos)',
               style: TextStyle(
@@ -188,7 +180,6 @@ class _HomeAdminState extends State<HomeAdmin> {
               ),
             ),
             const SizedBox(height: 8),
-
             FutureBuilder<Map<String, dynamic>>(
               future: _getEstadisticasActivos(),
               builder: (context, snapshot) {
@@ -196,6 +187,17 @@ class _HomeAdminState extends State<HomeAdmin> {
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 16),
                     child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Center(
+                      child: Text(
+                        'Error al cargar estadísticas',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                      ),
+                    ),
                   );
                 }
                 final stats = snapshot.data ?? {};
@@ -258,9 +260,7 @@ class _HomeAdminState extends State<HomeAdmin> {
                 );
               },
             ),
-
             const SizedBox(height: 24),
-
             const Text(
               'Análisis entre partidos',
               style: TextStyle(
@@ -278,11 +278,8 @@ class _HomeAdminState extends State<HomeAdmin> {
               ),
             ),
             const SizedBox(height: 12),
-
             _EventosIngresosWidget(),
-
             const SizedBox(height: 24),
-
             const Text(
               'Análisis entre sectores',
               style: TextStyle(
@@ -300,7 +297,6 @@ class _HomeAdminState extends State<HomeAdmin> {
               ),
             ),
             const SizedBox(height: 12),
-
             _AnalisisSectoresWidget(),
           ],
         ),
@@ -435,6 +431,20 @@ class _HomeAdminState extends State<HomeAdmin> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => const ReporteMermas(),
+                  ),
+                );
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.lock_clock_outlined,
+              title: 'Cierres de partidos activos',
+              subtitle: 'Ver sectores cerrados por partido',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CierresPartidosActivos(),
                   ),
                 );
               },

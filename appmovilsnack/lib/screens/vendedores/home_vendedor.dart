@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:front_appsnack/widgets/panel_ventas.dart';
 import 'package:front_appsnack/widgets/gestion_stock.dart';
 import 'package:front_appsnack/widgets/registro_merma.dart';
@@ -34,13 +35,11 @@ class HomeVendedor extends StatefulWidget {
 }
 
 class _HomeVendedorState extends State<HomeVendedor> {
-  // Paleta de colores basada en el logo "FusiÃ³n"
-  final Color primaryColor = const Color(0xFF2B2B2B); // Negro/marrÃ³n oscuro
-  final Color accentColor = const Color(0xFFDABF41); // Dorado brillante
-  final Color secondaryColor = const Color(0xFF6B4D2F); // MarrÃ³n medio
-  final Color backgroundColor = const Color(0xFFFDFBF7); // Fondo claro elegante
+  final Color primaryColor = const Color(0xFF2B2B2B);
+  final Color accentColor = const Color(0xFFDABF41);
+  final Color secondaryColor = const Color(0xFF6B4D2F);
+  final Color backgroundColor = const Color(0xFFFDFBF7);
 
-  // Variables para estadÃ­sticas dinÃ¡micas
   DateTime _currentTime = DateTime.now();
   late final String _currentSectorNombre;
   late final String _currentSectorId;
@@ -61,14 +60,9 @@ class _HomeVendedorState extends State<HomeVendedor> {
   /// Si el sector tiene turno cerrado, volver atrás y mostrar mensaje.
   Future<void> _verificarSectorNoCerrado() async {
     try {
-      final sectorDoc = await FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(widget.eventId)
-          .collection('sectores')
-          .doc(widget.sectorId)
-          .get();
+      final sectorDoc = await FirestoreHelpers.getSector(widget.eventId, widget.sectorId);
       if (!mounted) return;
-      final sectorData = sectorDoc.data();
+      final sectorData = sectorDoc.data() as Map<String, dynamic>?;
       if (sectorDoc.exists &&
           sectorData != null &&
           sectorData['turnoCerrado'] == true) {
@@ -217,7 +211,6 @@ class _HomeVendedorState extends State<HomeVendedor> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Reloj en tiempo real
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16.0),
@@ -624,8 +617,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            accentColor, // Dorado
-            secondaryColor, // MarrÃ³n medio
+            accentColor,
+            secondaryColor,
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,

@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:front_appsnack/screens/vendedores/home_vendedor.dart';
+import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-// Paleta de colores "Fusión"
-const Color primaryColor = Color(0xFF2B2B2B);
-const Color accentColor = Color(0xFFDABF41);
-const Color secondaryColor = Color(0xFF6B4D2F);
-const Color backgroundColor = Color(0xFFFDFBF7);
+// Compatibilidad con referencias existentes
+const Color primaryColor = AppColors.primaryLight;
+const Color accentColor = AppColors.accent;
+const Color secondaryColor = AppColors.secondary;
+const Color backgroundColor = AppColors.surface;
 
 class EstadioSelection extends StatefulWidget {
   /// Si es true, el usuario viene del panel admin y al entrar al vendedor se mostrará "Volver al panel admin".
@@ -21,10 +23,7 @@ class EstadioSelection extends StatefulWidget {
 }
 
 class _EstadioSelectionState extends State<EstadioSelection> {
-  late final Stream<QuerySnapshot> _eventosStream = FirebaseFirestore.instance
-      .collection('eventos')
-      .where('activo', isEqualTo: true)
-      .snapshots();
+  late final Stream<QuerySnapshot> _eventosStream = FirestoreHelpers.streamEventosActivos();
 
   String? _eventoSeleccionadoId;
   String? _nombreEventoSeleccionado;
@@ -102,17 +101,9 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(
-                        0.85,
-                      ), // Un poco traslúcido para ver el fondo
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                      color: AppColors.surfaceCard,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      boxShadow: AppShadows.card,
                     ),
                     child: Theme(
                       data: Theme.of(
@@ -215,13 +206,11 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                 ),
                 onPressed: () async {
                   // No permitir entrar a sectores con turno cerrado
-                  final sectorDoc = await FirebaseFirestore.instance
-                      .collection('eventos')
-                      .doc(_eventoSeleccionadoId!)
-                      .collection('sectores')
-                      .doc(_sectorSeleccionadoId!)
-                      .get();
-                  final sectorData = sectorDoc.data();
+                  final sectorDoc = await FirestoreHelpers.getSector(
+                    _eventoSeleccionadoId!,
+                    _sectorSeleccionadoId!,
+                  );
+                  final sectorData = sectorDoc.data() as Map<String, dynamic>?;
                   if (sectorDoc.exists &&
                       sectorData != null &&
                       sectorData['turnoCerrado'] == true) {
@@ -298,11 +287,7 @@ class SectoresList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(eventoId)
-          .collection('sectores')
-          .snapshots(),
+      stream: FirestoreHelpers.streamSectores(eventoId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {

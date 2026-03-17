@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:front_appsnack/core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class TransactionReports extends StatefulWidget {
@@ -25,11 +26,6 @@ class _TransactionReportsState extends State<TransactionReports> {
   
   String _ordenarPor = 'fecha'; // 'fecha', 'monto', 'evento'
   bool _ordenDescendente = true;
-
-  final Color primaryColor = const Color(0xFF2B2B2B);
-  final Color accentColor = const Color(0xFFDABF41);
-  final Color secondaryColor = const Color(0xFF6B4D2F);
-  final Color backgroundColor = const Color(0xFFFDFBF7);
 
   @override
   void initState() {
@@ -275,12 +271,12 @@ class _TransactionReportsState extends State<TransactionReports> {
     final evento = await showDialog<Map<String, String>>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: backgroundColor,
+        backgroundColor: AppColors.surface,
         title: Text(
           'Seleccionar Evento',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.bold,
-            color: primaryColor,
+            color: AppColors.primaryLight,
           ),
         ),
         content: SizedBox(
@@ -418,17 +414,17 @@ class _TransactionReportsState extends State<TransactionReports> {
     final estadisticas = _calcularEstadisticas();
 
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: Text(
           'Reportes de Transacciones',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.bold,
-            color: accentColor,
+            color: AppColors.accent,
           ),
         ),
-        backgroundColor: primaryColor,
-        foregroundColor: accentColor,
+        backgroundColor: AppColors.primaryLight,
+        foregroundColor: AppColors.accent,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -438,7 +434,7 @@ class _TransactionReportsState extends State<TransactionReports> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: accentColor))
+          ? Center(child: CircularProgressIndicator(color: AppColors.accent))
           : _errorMessage != null
               ? Center(
                   child: Padding(
@@ -452,7 +448,7 @@ class _TransactionReportsState extends State<TransactionReports> {
                           _errorMessage!,
                           textAlign: TextAlign.center,
                           style: GoogleFonts.poppins(
-                            color: secondaryColor,
+                            color: AppColors.secondary,
                             fontSize: 16,
                           ),
                         ),
@@ -460,8 +456,8 @@ class _TransactionReportsState extends State<TransactionReports> {
                         ElevatedButton(
                           onPressed: _cargarReportesTransacciones,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: accentColor,
-                            foregroundColor: primaryColor,
+                            backgroundColor: AppColors.accent,
+                            foregroundColor: AppColors.primaryLight,
                           ),
                           child: Text(
                             'Reintentar',
@@ -493,8 +489,8 @@ class _TransactionReportsState extends State<TransactionReports> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: primaryColor.withOpacity(0.1),
-                                    foregroundColor: primaryColor,
+                                    backgroundColor: AppColors.primaryLight.withOpacity(0.1),
+                                    foregroundColor: AppColors.primaryLight,
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 12,
                                       vertical: 8,
@@ -507,7 +503,7 @@ class _TransactionReportsState extends State<TransactionReports> {
                                   icon: const Icon(Icons.clear),
                                   onPressed: _limpiarFiltros,
                                   tooltip: 'Limpiar filtros',
-                                  color: primaryColor,
+                                  color: AppColors.primaryLight,
                                 ),
                             ],
                           ),
@@ -543,7 +539,7 @@ class _TransactionReportsState extends State<TransactionReports> {
                                 'Ordenar por: ',
                                 style: GoogleFonts.poppins(
                                   fontSize: 12,
-                                  color: secondaryColor,
+                                  color: AppColors.secondary,
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -584,7 +580,7 @@ class _TransactionReportsState extends State<TransactionReports> {
                             icon: Icons.receipt_long,
                             label: 'Transacciones',
                             value: estadisticas['totalTransacciones'].toString(),
-                            color: primaryColor,
+                            color: AppColors.primaryLight,
                           ),
                           _StatCard(
                             icon: Icons.attach_money,
@@ -596,7 +592,7 @@ class _TransactionReportsState extends State<TransactionReports> {
                             icon: Icons.trending_up,
                             label: 'Promedio',
                             value: _formatearMonto(estadisticas['promedioPorTransaccion'] as double),
-                            color: accentColor,
+                            color: AppColors.accent,
                           ),
                         ],
                       ),
@@ -614,7 +610,7 @@ class _TransactionReportsState extends State<TransactionReports> {
                                     Icon(
                                       Icons.receipt_long_outlined,
                                       size: 64,
-                                      color: secondaryColor.withOpacity(0.5),
+                                      color: AppColors.secondary.withOpacity(0.5),
                                     ),
                                     const SizedBox(height: 16),
                                     Text(
@@ -622,7 +618,7 @@ class _TransactionReportsState extends State<TransactionReports> {
                                           ? 'No hay transacciones para este partido'
                                           : 'No hay transacciones disponibles',
                                       style: GoogleFonts.poppins(
-                                        color: secondaryColor,
+                                        color: AppColors.secondary,
                                         fontSize: 16,
                                       ),
                                       textAlign: TextAlign.center,
@@ -669,12 +665,12 @@ class _TransactionReportsState extends State<TransactionReports> {
                                       width: 50,
                                       height: 50,
                                       decoration: BoxDecoration(
-                                        color: accentColor.withOpacity(0.2),
+                                        color: AppColors.accent.withOpacity(0.2),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Icon(
                                         Icons.payment,
-                                        color: accentColor,
+                                        color: AppColors.accent,
                                         size: 28,
                                       ),
                                     ),
@@ -683,7 +679,7 @@ class _TransactionReportsState extends State<TransactionReports> {
                                       style: GoogleFonts.poppins(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 18,
-                                        color: primaryColor,
+                                        color: AppColors.primaryLight,
                                       ),
                                     ),
                                     subtitle: Column(
@@ -695,7 +691,7 @@ class _TransactionReportsState extends State<TransactionReports> {
                                           style: GoogleFonts.poppins(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w600,
-                                            color: primaryColor,
+                                            color: AppColors.primaryLight,
                                           ),
                                         ),
                                         const SizedBox(height: 2),
@@ -703,7 +699,7 @@ class _TransactionReportsState extends State<TransactionReports> {
                                           '$sectorNombre • $vendedorNombre',
                                           style: GoogleFonts.poppins(
                                             fontSize: 12,
-                                            color: secondaryColor,
+                                            color: AppColors.secondary,
                                           ),
                                         ),
                                         const SizedBox(height: 2),
@@ -718,7 +714,7 @@ class _TransactionReportsState extends State<TransactionReports> {
                                     ),
                                     trailing: Icon(
                                       Icons.chevron_right,
-                                      color: secondaryColor,
+                                      color: AppColors.secondary,
                                     ),
                                   ),
                                 );

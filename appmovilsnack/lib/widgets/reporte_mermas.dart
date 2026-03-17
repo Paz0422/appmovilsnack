@@ -2,11 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-final Color _primaryColor = const Color(0xFF2B2B2B);
-final Color _accentColor = const Color(0xFFDABF41);
-final Color _backgroundColor = const Color(0xFFFDFBF7);
 
 class ReporteMermas extends StatefulWidget {
   const ReporteMermas({super.key});
@@ -20,6 +18,8 @@ class _ReporteMermasState extends State<ReporteMermas> {
   bool _isLoading = true;
   String? _errorMessage;
   List<Map<String, dynamic>> _mermas = [];
+  String? _eventoSeleccionadoId;
+  String? _sectorSeleccionadoId;
 
   Future<void> _cargar() async {
     setState(() {
@@ -27,15 +27,9 @@ class _ReporteMermasState extends State<ReporteMermas> {
       _errorMessage = null;
     });
     try {
-      QuerySnapshot eventosSnapshot;
-      if (_soloActivos) {
-        eventosSnapshot = await FirebaseFirestore.instance
-            .collection('eventos')
-            .where('activo', isEqualTo: true)
-            .get();
-      } else {
-        eventosSnapshot = await FirebaseFirestore.instance.collection('eventos').get();
-      }
+      final QuerySnapshot eventosSnapshot = _soloActivos
+          ? await FirestoreHelpers.getEventosActivos()
+          : await FirestoreHelpers.getEventos();
 
       final List<Map<String, dynamic>> list = [];
 
@@ -43,15 +37,11 @@ class _ReporteMermasState extends State<ReporteMermas> {
         final eventoId = eventoDoc.id;
         final eventoNombre = (eventoDoc.data() as Map<String, dynamic>)['nombre']?.toString() ?? 'Sin nombre';
 
-        final sectoresSnapshot = await FirebaseFirestore.instance
-            .collection('eventos')
-            .doc(eventoId)
-            .collection('sectores')
-            .get();
+        final sectoresSnapshot = await FirestoreHelpers.getSectores(eventoId);
 
         for (var sectorDoc in sectoresSnapshot.docs) {
           final sectorId = sectorDoc.id;
-          final sectorNombre = sectorDoc.data()['nombre']?.toString() ?? 'Sin sector';
+          final sectorNombre = (sectorDoc.data() as Map<String, dynamic>?)?['nombre']?.toString() ?? 'Sin sector';
 
           final mermasSnapshot = await FirebaseFirestore.instance
               .collection('eventos')
@@ -88,6 +78,16 @@ class _ReporteMermasState extends State<ReporteMermas> {
         return fb.compareTo(fa);
       });
 
+      final Set<String> eventosIds = {};
+      for (var m in list) {
+        final eid = m['eventoId'] as String? ?? '';
+        if (eid.isNotEmpty) eventosIds.add(eid);
+      }
+      if (_eventoSeleccionadoId != null && !eventosIds.contains(_eventoSeleccionadoId)) {
+        _eventoSeleccionadoId = null;
+        _sectorSeleccionadoId = null;
+      }
+
       if (mounted) {
         setState(() {
           _mermas = list;
@@ -110,17 +110,78 @@ class _ReporteMermasState extends State<ReporteMermas> {
     _cargar();
   }
 
+  List<Map<String, dynamic>> get _mermasFiltradas {
+    return _mermas.where((m) {
+      if (_eventoSeleccionadoId != null && m['eventoId'] != _eventoSeleccionadoId) return false;
+      if (_sectorSeleccionadoId == null) return true;
+      if (_sectorSeleccionadoId!.contains('|')) {
+        final parts = _sectorSeleccionadoId!.split('|');
+        return m['eventoId'] == parts[0] && m['sectorId'] == parts[1];
+      }
+      return m['sectorId'] == _sectorSeleccionadoId;
+    }).toList();
+  }
+
+  List<Map<String, String>> get _eventosOpciones {
+    final Set<String> ids = {};
+    final List<Map<String, String>> op = [];
+    for (var m in _mermas) {
+      final eid = m['eventoId'] as String? ?? '';
+      final enom = m['eventoNombre'] as String? ?? 'Sin nombre';
+      if (eid.isNotEmpty && !ids.contains(eid)) {
+        ids.add(eid);
+        op.add({'id': eid, 'nombre': enom});
+      }
+    }
+    op.sort((a, b) => (a['nombre'] ?? '').compareTo(b['nombre'] ?? ''));
+    return op;
+  }
+
+  List<Map<String, String>> get _sectoresOpciones {
+    final List<Map<String, String>> op = [];
+    final String? eidSel = _eventoSeleccionadoId;
+    if (eidSel != null) {
+      final Set<String> sidSet = {};
+      for (var m in _mermas) {
+        if (m['eventoId'] != eidSel) continue;
+        final sid = m['sectorId'] as String? ?? '';
+        final snom = m['sectorNombre'] as String? ?? 'Sector';
+        if (sid.isNotEmpty && !sidSet.contains(sid)) {
+          sidSet.add(sid);
+          op.add({'id': sid, 'nombre': snom});
+        }
+      }
+      op.sort((a, b) => (a['nombre'] ?? '').compareTo(b['nombre'] ?? ''));
+    } else {
+      final Set<String> compSet = {};
+      for (var m in _mermas) {
+        final eid = m['eventoId'] as String? ?? '';
+        final enom = m['eventoNombre'] as String? ?? '';
+        final sid = m['sectorId'] as String? ?? '';
+        final snom = m['sectorNombre'] as String? ?? 'Sector';
+        if (eid.isEmpty || sid.isEmpty) continue;
+        final comp = '$eid|$sid';
+        if (!compSet.contains(comp)) {
+          compSet.add(comp);
+          op.add({'id': comp, 'nombre': '$snom ($enom)'});
+        }
+      }
+      op.sort((a, b) => (a['nombre'] ?? '').compareTo(b['nombre'] ?? ''));
+    }
+    return op;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _backgroundColor,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: Text(
           'Reporte de mermas',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: _accentColor, fontSize: 18),
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: AppColors.accent, fontSize: 18),
         ),
-        backgroundColor: _primaryColor,
-        foregroundColor: _accentColor,
+        backgroundColor: AppColors.primaryLight,
+        foregroundColor: AppColors.accent,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -135,7 +196,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
                     setState(() => _soloActivos = v);
                     _cargar();
                   },
-                  activeColor: _accentColor,
+                  activeColor: AppColors.accent,
                 ),
               ],
             ),
@@ -143,7 +204,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: _accentColor))
+          ? Center(child: CircularProgressIndicator(color: AppColors.accent))
           : _errorMessage != null
               ? Center(
                   child: Padding(
@@ -155,7 +216,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
                         const SizedBox(height: 16),
                         Text(
                           'Error al cargar',
-                          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _primaryColor),
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: AppColors.primaryLight),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -185,116 +246,265 @@ class _ReporteMermasState extends State<ReporteMermas> {
                     )
                   : RefreshIndicator(
                       onRefresh: _cargar,
-                      color: _accentColor,
-                      child: ListView.builder(
+                      color: AppColors.accent,
+                      child: ListView(
                         padding: const EdgeInsets.all(16),
-                        itemCount: _mermas.length,
-                        itemBuilder: (context, index) {
-                          final m = _mermas[index];
-                          final nombreProducto = m['nombreProducto'] as String? ?? 'Sin nombre';
-                          final cantidad = m['cantidadPerdida'] as int? ?? 0;
-                          final motivo = m['motivo'] as String? ?? 'Sin motivo';
-                          final eventoNombre = m['eventoNombre'] as String? ?? '';
-                          final sectorNombre = m['sectorNombre'] as String? ?? '';
-                          final fecha = m['fecha'] as Timestamp?;
-                          String fechaStr = '--/--/-- --:--';
-                          if (fecha != null) {
-                            final dt = fecha.toDate();
-                            fechaStr =
-                                '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-                          }
-
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: Colors.red.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Icon(Icons.remove_circle_outline, color: Colors.red[700], size: 26),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              nombreProducto,
-                                              style: GoogleFonts.poppins(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 16,
-                                                color: _primaryColor,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              '$eventoNombre · $sectorNombre',
-                                              style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.red.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          '-$cantidad',
-                                          style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red[700]),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: _primaryColor.withOpacity(0.05),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Motivo',
-                                          style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey[600]),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          motivo,
-                                          style: GoogleFonts.poppins(fontSize: 14, color: _primaryColor),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    fechaStr,
-                                    style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[500]),
-                                  ),
-                                ],
-                              ),
+                        children: [
+                          _buildFiltros(),
+                          const SizedBox(height: 16),
+                          _buildCardPerdidaTotal(),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Detalle de mermas',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: AppColors.primaryLight,
                             ),
-                          );
-                        },
+                          ),
+                          const SizedBox(height: 12),
+                          if (_mermasFiltradas.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 24),
+                              child: Center(
+                                child: Text(
+                                  'No hay mermas con los filtros seleccionados',
+                                  style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 14),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            )
+                          else
+                            ..._mermasFiltradas.map((m) => _buildCardMerma(m)),
+                        ],
                       ),
                     ),
+    );
+  }
+
+  Widget _buildFiltros() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppShadows.card,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Filtrar por',
+            style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: _eventosOpciones.any((e) => e['id'] == _eventoSeleccionadoId)
+                ? _eventoSeleccionadoId
+                : null,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: 'Partido',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+            items: [
+              DropdownMenuItem<String>(value: null, child: Text('Todos', style: GoogleFonts.poppins(fontSize: 13))),
+              ..._eventosOpciones.map((e) => DropdownMenuItem<String>(
+                    value: e['id'],
+                    child: Text(e['nombre'] ?? '', style: GoogleFonts.poppins(fontSize: 13), overflow: TextOverflow.ellipsis),
+                  )),
+            ],
+            onChanged: (v) {
+              setState(() {
+                _eventoSeleccionadoId = v;
+                _sectorSeleccionadoId = null;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _sectoresOpciones.any((s) => s['id'] == _sectorSeleccionadoId)
+                ? _sectorSeleccionadoId
+                : null,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: 'Sector',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+            items: [
+              DropdownMenuItem<String>(value: null, child: Text('Todos', style: GoogleFonts.poppins(fontSize: 13))),
+              ..._sectoresOpciones.map((s) => DropdownMenuItem<String>(
+                    value: s['id'],
+                    child: Text(s['nombre'] ?? '', style: GoogleFonts.poppins(fontSize: 13), overflow: TextOverflow.ellipsis),
+                  )),
+            ],
+            onChanged: (v) {
+              setState(() {
+                _sectorSeleccionadoId = v;
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardPerdidaTotal() {
+    int totalUnidades = 0;
+    double totalValor = 0.0;
+    for (var m in _mermasFiltradas) {
+      final cant = m['cantidadPerdida'] as int? ?? 0;
+      final precio = (m['precio'] as num?)?.toDouble();
+      totalUnidades += cant;
+      if (precio != null) totalValor += cant * precio;
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.red[700]!, Colors.red[900]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(color: Colors.red.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.trending_down, color: Colors.white70, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                'Pérdida total',
+                style: GoogleFonts.poppins(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '$totalUnidades unidades',
+            style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          if (totalValor > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              '\$${totalValor.toStringAsFixed(0)}',
+              style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardMerma(Map<String, dynamic> m) {
+    final nombreProducto = m['nombreProducto'] as String? ?? 'Sin nombre';
+    final cantidad = m['cantidadPerdida'] as int? ?? 0;
+    final motivo = m['motivo'] as String? ?? 'Sin motivo';
+    final eventoNombre = m['eventoNombre'] as String? ?? '';
+    final sectorNombre = m['sectorNombre'] as String? ?? '';
+    final fecha = m['fecha'] as Timestamp?;
+    String fechaStr = '--/--/-- --:--';
+    if (fecha != null) {
+      final dt = fecha.toDate();
+      fechaStr =
+          '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    }
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.remove_circle_outline, color: Colors.red[700], size: 26),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        nombreProducto,
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: AppColors.primaryLight,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$eventoNombre · $sectorNombre',
+                        style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '-$cantidad',
+                    style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red[700]),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Motivo',
+                    style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    motivo,
+                    style: GoogleFonts.poppins(fontSize: 14, color: AppColors.primaryLight),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              fechaStr,
+              style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

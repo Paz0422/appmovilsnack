@@ -1,6 +1,7 @@
 // Estadísticas de ventas por categoría (Bebestibles, Snacks, Masas, Galletas, Otros)
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:front_appsnack/core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
@@ -21,14 +22,10 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
   int _totalTransacciones = 0;
   double _montoTotal = 0;
 
-  final Color primaryColor = const Color(0xFF2B2B2B);
-  final Color accentColor = const Color(0xFFDABF41);
-  final Color secondaryColor = const Color(0xFF6B4D2F);
-
   /// Colores para cada porción del gráfico circular (por índice)
   static const List<Color> _coloresGrafico = [
-    Color(0xFFDABF41), // dorado - Bebestibles
-    Color(0xFF6B4D2F), // marrón - Snacks
+    AppColors.accent, // Bebestibles
+    AppColors.secondary, // Snacks
     Color(0xFF8B4513), // saddle brown - Masas
     Color(0xFFCD853F), // peru - Galletas
     Color(0xFFA0522D), // sienna - Otros
@@ -131,11 +128,11 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.pie_chart_outline, size: 64, color: secondaryColor.withOpacity(0.5)),
+            Icon(Icons.pie_chart_outline, size: 64, color: AppColors.secondary.withOpacity(0.5)),
             const SizedBox(height: 8),
             Text(
               'Sin ventas por categoría aún',
-              style: GoogleFonts.poppins(color: secondaryColor, fontSize: 14),
+              style: GoogleFonts.poppins(color: AppColors.secondary, fontSize: 14),
             ),
           ],
         ),
@@ -190,7 +187,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                     'Total',
                     style: GoogleFonts.poppins(
                       fontSize: 12,
-                      color: secondaryColor,
+                      color: AppColors.secondary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -199,7 +196,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: primaryColor,
+                      color: AppColors.primaryLight,
                     ),
                   ),
                 ],
@@ -222,13 +219,13 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                   decoration: BoxDecoration(
                     color: e.value,
                     shape: BoxShape.circle,
-                    border: Border.all(color: primaryColor.withOpacity(0.3), width: 1),
+                    border: Border.all(color: AppColors.primaryLight.withOpacity(0.3), width: 1),
                   ),
                 ),
                 const SizedBox(width: 6),
                 Text(
                   e.key,
-                  style: GoogleFonts.poppins(fontSize: 12, color: primaryColor, fontWeight: FontWeight.w500),
+                  style: GoogleFonts.poppins(fontSize: 12, color: AppColors.primaryLight, fontWeight: FontWeight.w500),
                 ),
               ],
             );
@@ -241,14 +238,14 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFBF7),
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: Text(
           'Ventas por categoría',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: accentColor),
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: AppColors.accent),
         ),
-        backgroundColor: primaryColor,
-        foregroundColor: accentColor,
+        backgroundColor: AppColors.primaryLight,
+        foregroundColor: AppColors.accent,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -257,7 +254,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
         ],
       ),
       body: _loading
-          ? Center(child: CircularProgressIndicator(color: accentColor))
+          ? Center(child: CircularProgressIndicator(color: AppColors.accent))
           : _error != null
               ? Center(
                   child: Padding(
@@ -275,7 +272,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       Card(
-                        color: accentColor.withOpacity(0.15),
+                        color: AppColors.accent.withOpacity(0.15),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(
@@ -284,7 +281,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                                 'Total ventas',
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
-                                  color: secondaryColor,
+                                  color: AppColors.secondary,
                                 ),
                               ),
                               Text(
@@ -292,14 +289,14 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                                 style: GoogleFonts.poppins(
                                   fontSize: 28,
                                   fontWeight: FontWeight.bold,
-                                  color: primaryColor,
+                                  color: AppColors.primaryLight,
                                 ),
                               ),
                               Text(
                                 '$_totalTransacciones transacciones',
                                 style: GoogleFonts.poppins(
                                   fontSize: 12,
-                                  color: secondaryColor,
+                                  color: AppColors.secondary,
                                 ),
                               ),
                             ],
@@ -312,7 +309,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: primaryColor,
+                          color: AppColors.primaryLight,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -323,7 +320,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: primaryColor,
+                          color: AppColors.primaryLight,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -338,10 +335,10 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                           margin: const EdgeInsets.only(bottom: 10),
                           child: ListTile(
                             leading: CircleAvatar(
-                              backgroundColor: accentColor.withOpacity(0.2),
+                              backgroundColor: AppColors.accent.withOpacity(0.2),
                               child: Icon(
                                 icono.isNotEmpty ? iconoCategoriaConIcono(icono) : iconoCategoria(cat),
-                                color: secondaryColor,
+                                color: AppColors.secondary,
                               ),
                             ),
                             title: Text(
@@ -352,14 +349,14 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                               '\$${monto.toStringAsFixed(0)} · $cant ítems · ${pct.toStringAsFixed(1)}%',
                               style: GoogleFonts.poppins(
                                 fontSize: 13,
-                                color: secondaryColor,
+                                color: AppColors.secondary,
                               ),
                             ),
                             trailing: Text(
                               '\$${monto.toStringAsFixed(0)}',
                               style: GoogleFonts.poppins(
                                 fontWeight: FontWeight.bold,
-                                color: accentColor,
+                                color: AppColors.accent,
                                 fontSize: 16,
                               ),
                             ),
@@ -371,8 +368,8 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                           margin: const EdgeInsets.only(bottom: 10),
                           child: ListTile(
                             leading: CircleAvatar(
-                              backgroundColor: accentColor.withOpacity(0.2),
-                              child: Icon(iconoCategoria(categoriaDefault), color: secondaryColor),
+                              backgroundColor: AppColors.accent.withOpacity(0.2),
+                              child: Icon(iconoCategoria(categoriaDefault), color: AppColors.secondary),
                             ),
                             title: Text(
                               categoriaDefault,
@@ -380,13 +377,13 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                             ),
                             subtitle: Text(
                               '\$${(_montoPorCategoria[categoriaDefault] ?? 0).toStringAsFixed(0)}',
-                              style: GoogleFonts.poppins(fontSize: 13, color: secondaryColor),
+                              style: GoogleFonts.poppins(fontSize: 13, color: AppColors.secondary),
                             ),
                             trailing: Text(
                               '\$${(_montoPorCategoria[categoriaDefault] ?? 0).toStringAsFixed(0)}',
                               style: GoogleFonts.poppins(
                                 fontWeight: FontWeight.bold,
-                                color: accentColor,
+                                color: AppColors.accent,
                                 fontSize: 16,
                               ),
                             ),

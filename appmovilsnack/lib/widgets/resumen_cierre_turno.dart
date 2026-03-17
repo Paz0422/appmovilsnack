@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:front_appsnack/core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -13,6 +14,8 @@ class ResumenCierreTurno extends StatefulWidget {
   final String? nombreEvento;
   /// Si es true (entró como admin), se muestra botón para volver al panel sin cerrar sesión.
   final bool fromAdmin;
+  /// Si es true, solo se muestra el reporte (sin botón de confirmar cierre). Para ver cierres ya realizados.
+  final bool soloVerReporte;
 
   const ResumenCierreTurno({
     super.key,
@@ -21,6 +24,7 @@ class ResumenCierreTurno extends StatefulWidget {
     required this.nombreSector,
     this.nombreEvento,
     this.fromAdmin = false,
+    this.soloVerReporte = false,
   });
 
   @override
@@ -28,10 +32,6 @@ class ResumenCierreTurno extends StatefulWidget {
 }
 
 class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
-  final Color primaryColor = const Color(0xFF2B2B2B);
-  final Color accentColor = const Color(0xFFDABF41);
-  final Color secondaryColor = const Color(0xFF6B4D2F);
-  final Color backgroundColor = const Color(0xFFFDFBF7);
 
   List<Map<String, dynamic>> _stock = [];
   double _totalVendido = 0.0;
@@ -230,27 +230,27 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
-        leading: widget.fromAdmin
+        leading: (widget.fromAdmin || widget.soloVerReporte)
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
-                tooltip: 'Volver al panel de vendedor',
+                tooltip: widget.soloVerReporte ? 'Volver' : 'Volver al panel de vendedor',
                 onPressed: () => Navigator.of(context).pop(),
               )
             : null,
         title: Text(
-          'Resumen Cierre de Turno',
+          widget.soloVerReporte ? 'Reporte de cierre' : 'Resumen Cierre de Turno',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
-            color: accentColor,
+            color: AppColors.accent,
             fontSize: 18,
           ),
         ),
-        backgroundColor: primaryColor,
-        foregroundColor: accentColor,
+        backgroundColor: AppColors.primaryLight,
+        foregroundColor: AppColors.accent,
         actions: [
-          if (widget.fromAdmin)
+          if (widget.fromAdmin && !widget.soloVerReporte)
             IconButton(
               icon: const Icon(Icons.admin_panel_settings_outlined),
               tooltip: 'Volver al panel de administración',
@@ -266,7 +266,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: accentColor))
+          ? Center(child: CircularProgressIndicator(color: AppColors.accent))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -279,8 +279,10 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                   _buildStockCard(),
                   const SizedBox(height: 24),
                   _buildExportButton(),
-                  const SizedBox(height: 16),
-                  _buildCerrarButton(),
+                  if (!widget.soloVerReporte) ...[
+                    const SizedBox(height: 16),
+                    _buildCerrarButton(),
+                  ],
                 ],
               ),
             ),
@@ -310,20 +312,20 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
             style: GoogleFonts.poppins(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: primaryColor,
+              color: AppColors.primaryLight,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             'Sector: ${widget.nombreSector}',
-            style: GoogleFonts.poppins(fontSize: 14, color: secondaryColor),
+            style: GoogleFonts.poppins(fontSize: 14, color: AppColors.secondary),
           ),
           const SizedBox(height: 8),
           Text(
             '${DateTime.now().day.toString().padLeft(2, '0')}/${DateTime.now().month.toString().padLeft(2, '0')}/${DateTime.now().year} - ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
             style: GoogleFonts.poppins(
               fontSize: 12,
-              color: secondaryColor.withValues(alpha: 0.8),
+              color: AppColors.secondary.withValues(alpha: 0.8),
             ),
           ),
         ],
@@ -337,14 +339,14 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [accentColor, secondaryColor],
+          colors: [AppColors.accent, AppColors.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-            color: accentColor.withValues(alpha: 0.3),
+            color: AppColors.accent.withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -429,14 +431,14 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.w600,
-              color: primaryColor,
+              color: AppColors.primaryLight,
             ),
           ),
           const SizedBox(height: 12),
           if (_stock.isEmpty)
             Text(
               'No hay productos en stock',
-              style: GoogleFonts.poppins(fontSize: 14, color: secondaryColor),
+              style: GoogleFonts.poppins(fontSize: 14, color: AppColors.secondary),
             )
           else
             ..._stock.map(
@@ -451,7 +453,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                         style: GoogleFonts.poppins(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: primaryColor,
+                          color: AppColors.primaryLight,
                         ),
                       ),
                     ),
@@ -459,7 +461,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                       '${item['cantidad']} unidades',
                       style: GoogleFonts.poppins(
                         fontSize: 14,
-                        color: secondaryColor,
+                        color: AppColors.secondary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -483,8 +485,8 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: accentColor,
-          foregroundColor: primaryColor,
+          backgroundColor: AppColors.accent,
+          foregroundColor: AppColors.primaryLight,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -505,8 +507,8 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: primaryColor,
-          foregroundColor: accentColor,
+          backgroundColor: AppColors.primaryLight,
+          foregroundColor: AppColors.accent,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
