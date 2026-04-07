@@ -7,7 +7,6 @@ import 'package:front_appsnack/auth/login_screen.dart';
 import 'package:front_appsnack/widgets/dashboard_card.dart';
 import 'package:front_appsnack/widgets/gestion_screen.dart';
 import 'package:front_appsnack/widgets/stock_reports.dart';
-import 'package:front_appsnack/widgets/transaction_reports.dart';
 import 'package:front_appsnack/widgets/ventas_por_categoria.dart';
 import 'package:front_appsnack/widgets/dashboard_ventas_vendedores.dart';
 import 'package:front_appsnack/widgets/reporte_mermas.dart';
@@ -214,7 +213,7 @@ class _HomeAdminState extends State<HomeAdmin> {
                   children: [
                     DashboardCard(
                       title: 'Transacciones',
-                      value: '${_fmtMiles((stats['cantidadTransacciones'] as int?) ?? 0)}',
+                      value: _fmtMiles((stats['cantidadTransacciones'] as int?) ?? 0),
                       icon: Icons.receipt_long_outlined,
                       color: Colors.black54,
                       darkText: true,
@@ -378,19 +377,6 @@ class _HomeAdminState extends State<HomeAdmin> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const StockReports()),
-                );
-              },
-            ),
-            _buildDrawerItem(
-              icon: Icons.receipt_long_outlined,
-              title: 'Reportes de Transacciones',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const TransactionReports(),
-                  ),
                 );
               },
             ),
@@ -969,7 +955,9 @@ class _AnalisisSectoresWidget extends StatelessWidget {
         if (eventoId == null ||
             sectorId == null ||
             totalPorSector[eventoId] == null ||
-            !totalPorSector[eventoId]!.containsKey(sectorId)) continue;
+            !totalPorSector[eventoId]!.containsKey(sectorId)) {
+          continue;
+        }
         final m = d['montoTotal'];
         if (m != null && m is num) {
           totalPorSector[eventoId]![sectorId] =

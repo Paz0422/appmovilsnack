@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:wave/wave.dart';
 import 'package:wave/config.dart';
+import 'package:front_appsnack/auth/firebase_auth_messages.dart';
 import 'package:front_appsnack/auth/register_screen.dart';
 import 'package:front_appsnack/auth/reset_password_screen.dart';
 
@@ -30,15 +31,43 @@ class _LoginScreenState extends State<LoginScreen> {
     color: AppColors.onSurface,
   );
 
+  static const Color _snackError = Color(0xFF722F37);
+
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: GoogleFonts.plusJakartaSans(color: Colors.white)),
-        backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
-        margin: const EdgeInsets.all(12),
+        elevation: 8,
+        duration: const Duration(seconds: 5),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        backgroundColor: _snackError,
+        showCloseIcon: true,
+        closeIconColor: Colors.white70,
+        content: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.lock_person_outlined,
+              color: Colors.white.withValues(alpha: 0.95),
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontSize: 14,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -69,17 +98,31 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (querySnapshot.docs.isEmpty) {
         if (mounted) Navigator.of(context).pop();
-        _showErrorSnackBar('Usuario no encontrado.');
+        _showErrorSnackBar(
+          'Usuario no encontrado. Revisa el nombre o pide que te den de alta.',
+        );
         return;
       }
 
       final userDocument = querySnapshot.docs.first;
       final userData = userDocument.data();
 
+      final emailRaw = userData['email'];
+      final email = emailRaw is String
+          ? emailRaw.trim()
+          : emailRaw?.toString().trim();
+      if (email == null || email.isEmpty) {
+        if (mounted) Navigator.of(context).pop();
+        _showErrorSnackBar(
+          'Falta el correo en tu perfil. Pide al administrador que lo agregue.',
+        );
+        return;
+      }
+
       final String userRole = userData['rol'] ?? 'vendedor';
 
       await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: userData['email'],
+        email: email,
         password: password,
       );
 
@@ -101,15 +144,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) Navigator.of(context).pop();
-      // Manejo de errores más específico para FirebaseAuthException
-      if (e.code == 'user-not-found' || e.code == 'wrong-password') {
-        _showErrorSnackBar('PIN o usuario incorrecto.');
-      } else {
-        _showErrorSnackBar('Error de autenticación: ${e.message}');
-      }
+      _showErrorSnackBar(mensajeInicioSesion(e));
     } catch (e) {
       if (mounted) Navigator.of(context).pop();
-      _showErrorSnackBar('Ocurrió un error inesperado: ${e.toString()}');
+      _showErrorSnackBar(mensajeErrorInesperado(e));
     }
   }
 

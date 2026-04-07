@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:front_appsnack/screens/vendedores/home_vendedor.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
@@ -23,7 +22,8 @@ class EstadioSelection extends StatefulWidget {
 }
 
 class _EstadioSelectionState extends State<EstadioSelection> {
-  late final Stream<QuerySnapshot> _eventosStream = FirestoreHelpers.streamEventosActivos();
+  /// Incrementar para forzar un nuevo StreamBuilder tras error/timeout.
+  int _eventosRetryKey = 0;
 
   String? _eventoSeleccionadoId;
   String? _nombreEventoSeleccionado;
@@ -73,8 +73,51 @@ class _EstadioSelectionState extends State<EstadioSelection> {
 
           // --- CONTENIDO PRINCIPAL ---
           StreamBuilder<QuerySnapshot>(
-            stream: _eventosStream,
+            key: ValueKey(_eventosRetryKey),
+            stream: FirestoreHelpers.streamEventosActivos().timeout(
+              const Duration(seconds: 30),
+            ),
             builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'No se pudieron cargar los eventos.',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                            color: primaryColor,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Revisa conexión o inténtalo de nuevo.',
+                          style: GoogleFonts.lato(
+                            fontSize: 13,
+                            color: secondaryColor,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: () =>
+                              setState(() => _eventosRetryKey++),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Reintentar'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: accentColor,
+                            foregroundColor: primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData) {
                 return const Center(
@@ -228,22 +271,8 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                     );
                     return;
                   }
-                  final bool puedeCerrarTurno;
-                  if (widget.fromAdmin) {
-                    puedeCerrarTurno = true; // El admin también puede cerrar turno
-                  } else {
-                    final user = FirebaseAuth.instance.currentUser;
-                    if (user == null) {
-                      puedeCerrarTurno = false;
-                    } else {
-                      final doc = await FirebaseFirestore.instance
-                          .collection('usuarios')
-                          .doc(user.uid)
-                          .get();
-                      final rol = doc.data()?['rol']?.toString() ?? 'vendedor';
-                      puedeCerrarTurno = rol == 'encargado';
-                    }
-                  }
+                  // Cualquier vendedor puede cerrar turno (rol encargado eliminado).
+                  const bool puedeCerrarTurno = true;
                   if (!mounted) return;
                   Navigator.pushReplacement(
                     context,
@@ -272,7 +301,7 @@ class _EstadioSelectionState extends State<EstadioSelection> {
 }
 
 // --- WIDGET DE SECTORES ---
-class SectoresList extends StatelessWidget {
+class SectoresList extends StatefulWidget {
   final String eventoId;
   final String? sectorSeleccionadoId;
   final Function(String id, String nombre) onSectorTap;
@@ -285,10 +314,44 @@ class SectoresList extends StatelessWidget {
   });
 
   @override
+  State<SectoresList> createState() => _SectoresListState();
+}
+
+class _SectoresListState extends State<SectoresList> {
+  int _retryKey = 0;
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirestoreHelpers.streamSectores(eventoId),
+      key: ValueKey(_retryKey),
+      stream: FirestoreHelpers.streamSectores(widget.eventoId).timeout(
+        const Duration(seconds: 25),
+      ),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No se pudieron cargar los sectores.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: primaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () => setState(() => _retryKey++),
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Reintentar'),
+                ),
+              ],
+            ),
+          );
+        }
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
           return const Padding(
@@ -302,12 +365,22 @@ class SectoresList extends StatelessWidget {
 
         final sectores = snapshot.data?.docs ?? [];
 
+        if (sectores.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Text(
+              'No hay sectores en este evento.',
+              style: GoogleFonts.lato(fontSize: 14, color: secondaryColor),
+            ),
+          );
+        }
+
         return Column(
           children: sectores.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
             final nombre = data['nombre'] ?? 'Sector';
             final turnoCerrado = data['turnoCerrado'] == true;
-            final isSelected = sectorSeleccionadoId == doc.id;
+            final isSelected = widget.sectorSeleccionadoId == doc.id;
 
             return ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 30),
@@ -347,10 +420,12 @@ class SectoresList extends StatelessWidget {
                           color: Colors.grey,
                           size: 20,
                         )),
-              tileColor: isSelected ? accentColor.withOpacity(0.05) : null,
+              tileColor: isSelected
+                  ? accentColor.withValues(alpha: 0.05)
+                  : null,
               onTap: turnoCerrado
                   ? null
-                  : () => onSectorTap(doc.id, nombre),
+                  : () => widget.onSectorTap(doc.id, nombre),
               enabled: !turnoCerrado,
             );
           }).toList(),

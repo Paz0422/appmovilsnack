@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:front_appsnack/auth/firebase_auth_messages.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // Paleta de cores baseada no logo "Fusión"
@@ -31,6 +32,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         content: Text(message, style: GoogleFonts.lato()),
         backgroundColor: isError ? Colors.redAccent : Colors.green,
         behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: isError ? 6 : 4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(10),
       ),
@@ -63,22 +65,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       });
     } on FirebaseAuthException catch (e) {
       if (mounted) Navigator.of(context).pop();
-      String errorMessage;
-      if (e.code == 'invalid-email') {
-        errorMessage = 'El formato del correo electrónico es inválido.';
-      } else if (e.code == 'user-not-found') {
-        errorMessage = 'No hay usuario registrado con ese correo electrónico.';
-      } else {
-        errorMessage =
-            'Error al enviar correo de restablecimiento: ${e.message}';
-      }
-      _showSnackBar(errorMessage, isError: true);
+      _showSnackBar(mensajeRestablecerClave(e), isError: true);
     } catch (e) {
       if (mounted) Navigator.of(context).pop();
-      _showSnackBar(
-        'Ocurrió un error inesperado: ${e.toString()}',
-        isError: true,
-      );
+      _showSnackBar(mensajeErrorInesperado(e), isError: true);
     }
   }
 

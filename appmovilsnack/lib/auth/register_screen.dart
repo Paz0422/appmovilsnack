@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:front_appsnack/auth/firebase_auth_messages.dart';
 import 'package:google_fonts/google_fonts.dart';
 // Necessário para ImageFilter.blur
 
@@ -40,6 +41,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         content: Text(message, style: GoogleFonts.lato()),
         backgroundColor: isError ? Colors.redAccent : Colors.green,
         behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: isError ? 6 : 4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(10),
       ),
@@ -141,24 +143,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       });
     } on FirebaseAuthException catch (e) {
       if (mounted) Navigator.of(context).pop();
-      String errorMessage;
-      if (e.code == 'weak-password') {
-        errorMessage =
-            'La contraseña es demasiado débil según Firebase (mínimo 6 caracteres).';
-      } else if (e.code == 'email-already-in-use') {
-        errorMessage = 'El correo electrónico ya está en uso.';
-      } else if (e.code == 'invalid-email') {
-        errorMessage = 'El formato del correo electrónico es inválido.';
-      } else {
-        errorMessage = 'Error de registro: ${e.message}';
-      }
-      _showSnackBar(errorMessage, isError: true);
+      _showSnackBar(mensajeRegistro(e), isError: true);
     } catch (e) {
       if (mounted) Navigator.of(context).pop();
-      _showSnackBar(
-        'Ocurrió un error inesperado: ${e.toString()}',
-        isError: true,
-      );
+      _showSnackBar(mensajeErrorInesperado(e), isError: true);
     }
   }
 

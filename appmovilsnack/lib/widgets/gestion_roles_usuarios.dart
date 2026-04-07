@@ -229,7 +229,6 @@ class _GestionRolesUsuariosState extends State<GestionRolesUsuarios> {
     );
   }
 }
-
 class _DropdownRol extends StatelessWidget {
   final String rolActual;
   final ValueChanged<String> onCambiar;
@@ -266,3 +265,4 @@ class _DropdownRol extends StatelessWidget {
     );
   }
 }
+
