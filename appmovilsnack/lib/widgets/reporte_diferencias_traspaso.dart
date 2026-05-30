@@ -1,23 +1,32 @@
-// Reporte de mermas para que el admin vea todas las mermas y el motivo
+// Reporte de traspasos recibidos con menos unidades de las enviadas.
 
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class ReporteMermas extends StatefulWidget {
-  const ReporteMermas({super.key});
-
-  @override
-  State<ReporteMermas> createState() => _ReporteMermasState();
+int _intDesdeFirestore(dynamic value, [int fallback = 0]) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value.trim()) ?? fallback;
+  return fallback;
 }
 
-class _ReporteMermasState extends State<ReporteMermas> {
+class ReporteDiferenciasTraspaso extends StatefulWidget {
+  const ReporteDiferenciasTraspaso({super.key});
+
+  @override
+  State<ReporteDiferenciasTraspaso> createState() =>
+      _ReporteDiferenciasTraspasoState();
+}
+
+class _ReporteDiferenciasTraspasoState
+    extends State<ReporteDiferenciasTraspaso> {
   bool _soloActivos = true;
   bool _isLoading = true;
   String? _errorMessage;
-  List<Map<String, dynamic>> _mermas = [];
+  List<Map<String, dynamic>> _registros = [];
   String? _eventoSeleccionadoId;
   String? _sectorSeleccionadoId;
 
@@ -26,49 +35,67 @@ class _ReporteMermasState extends State<ReporteMermas> {
       _isLoading = true;
       _errorMessage = null;
     });
+
     try {
-      final QuerySnapshot eventosSnapshot = _soloActivos
+      final eventosSnapshot = _soloActivos
           ? await FirestoreHelpers.getEventosActivos()
           : await FirestoreHelpers.getEventos();
 
-      final List<Map<String, dynamic>> list = [];
+      final list = <Map<String, dynamic>>[];
 
-      for (var eventoDoc in eventosSnapshot.docs) {
+      for (final eventoDoc in eventosSnapshot.docs) {
         final eventoId = eventoDoc.id;
+        final eventoData = eventoDoc.data() as Map<String, dynamic>;
         final eventoNombre =
-            (eventoDoc.data() as Map<String, dynamic>)['nombre']?.toString() ??
-            'Sin nombre';
+            eventoData['nombre']?.toString() ?? 'Sin nombre';
 
         final sectoresSnapshot = await FirestoreHelpers.getSectores(eventoId);
 
-        for (var sectorDoc in sectoresSnapshot.docs) {
-          final sectorId = sectorDoc.id;
-          final sectorNombre =
+        for (final sectorDoc in sectoresSnapshot.docs) {
+          final sectorDestinoId = sectorDoc.id;
+          final sectorDestinoNombre =
               (sectorDoc.data() as Map<String, dynamic>?)?['nombre']
-                  ?.toString() ??
-              'Sin sector';
+                      ?.toString() ??
+                  'Sin sector';
 
-          final mermasSnapshot = await FirebaseFirestore.instance
+          final traspasosSnapshot = await FirebaseFirestore.instance
               .collection('eventos')
               .doc(eventoId)
               .collection('sectores')
-              .doc(sectorId)
-              .collection('mermas')
-              .orderBy('fecha', descending: true)
+              .doc(sectorDestinoId)
+              .collection('traspasos_entrantes')
+              .where('estado', isEqualTo: 'confirmado')
               .get();
 
-          for (var mermaDoc in mermasSnapshot.docs) {
-            final d = mermaDoc.data();
+          for (final traspasoDoc in traspasosSnapshot.docs) {
+            final d = traspasoDoc.data();
+            final enviada = _intDesdeFirestore(d['cantidadEnviada']);
+            final recibida = _intDesdeFirestore(d['cantidadRecibida']);
+            final diferencia = d.containsKey('cantidadDiferencia')
+                ? _intDesdeFirestore(d['cantidadDiferencia'])
+                : enviada - recibida;
+
+            if (diferencia <= 0) continue;
+
             list.add({
               'eventoId': eventoId,
               'eventoNombre': eventoNombre,
-              'sectorId': sectorId,
-              'sectorNombre': sectorNombre,
-              'nombreProducto': d['nombreProducto']?.toString() ?? 'Sin nombre',
-              'cantidadPerdida': d['cantidadPerdida'] as int? ?? 0,
-              'motivo': d['motivo']?.toString() ?? 'Sin motivo',
+              'sectorDestinoId': sectorDestinoId,
+              'sectorDestinoNombre': d['sectorDestinoNombre']?.toString() ??
+                  sectorDestinoNombre,
+              'sectorOrigenId': d['sectorOrigenId']?.toString() ?? '',
+              'sectorOrigenNombre':
+                  d['sectorOrigenNombre']?.toString() ?? 'Origen desconocido',
+              'productoId': d['productoId']?.toString() ?? '',
+              'nombreProducto': d['nombre']?.toString() ?? 'Sin nombre',
+              'cantidadEnviada': enviada,
+              'cantidadRecibida': recibida,
+              'cantidadDiferencia': diferencia,
+              'comentarioDiferencia':
+                  d['comentarioDiferencia']?.toString() ?? '',
               'precio': (d['precio'] as num?)?.toDouble(),
-              'fecha': d['fecha'],
+              'pedidoId': d['pedidoId']?.toString() ?? '',
+              'fecha': d['confirmadoAt'] ?? d['fecha'],
             });
           }
         }
@@ -83,11 +110,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
         return fb.compareTo(fa);
       });
 
-      final Set<String> eventosIds = {};
-      for (var m in list) {
-        final eid = m['eventoId'] as String? ?? '';
-        if (eid.isNotEmpty) eventosIds.add(eid);
-      }
+      final eventosIds = list.map((r) => r['eventoId'] as String).toSet();
       if (_eventoSeleccionadoId != null &&
           !eventosIds.contains(_eventoSeleccionadoId)) {
         _eventoSeleccionadoId = null;
@@ -96,7 +119,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
 
       if (mounted) {
         setState(() {
-          _mermas = list;
+          _registros = list;
           _isLoading = false;
         });
       }
@@ -116,28 +139,29 @@ class _ReporteMermasState extends State<ReporteMermas> {
     _cargar();
   }
 
-  List<Map<String, dynamic>> get _mermasFiltradas {
-    return _mermas.where((m) {
+  List<Map<String, dynamic>> get _registrosFiltrados {
+    return _registros.where((r) {
       if (_eventoSeleccionadoId != null &&
-          m['eventoId'] != _eventoSeleccionadoId)
+          r['eventoId'] != _eventoSeleccionadoId) {
         return false;
+      }
       if (_sectorSeleccionadoId == null) return true;
       if (_sectorSeleccionadoId!.contains('|')) {
         final parts = _sectorSeleccionadoId!.split('|');
-        return m['eventoId'] == parts[0] && m['sectorId'] == parts[1];
+        return r['eventoId'] == parts[0] &&
+            r['sectorDestinoId'] == parts[1];
       }
-      return m['sectorId'] == _sectorSeleccionadoId;
+      return r['sectorDestinoId'] == _sectorSeleccionadoId;
     }).toList();
   }
 
   List<Map<String, String>> get _eventosOpciones {
-    final Set<String> ids = {};
-    final List<Map<String, String>> op = [];
-    for (var m in _mermas) {
-      final eid = m['eventoId'] as String? ?? '';
-      final enom = m['eventoNombre'] as String? ?? 'Sin nombre';
-      if (eid.isNotEmpty && !ids.contains(eid)) {
-        ids.add(eid);
+    final ids = <String>{};
+    final op = <Map<String, String>>[];
+    for (final r in _registros) {
+      final eid = r['eventoId'] as String? ?? '';
+      final enom = r['eventoNombre'] as String? ?? 'Sin nombre';
+      if (eid.isNotEmpty && ids.add(eid)) {
         op.add({'id': eid, 'nombre': enom});
       }
     }
@@ -146,31 +170,29 @@ class _ReporteMermasState extends State<ReporteMermas> {
   }
 
   List<Map<String, String>> get _sectoresOpciones {
-    final List<Map<String, String>> op = [];
-    final String? eidSel = _eventoSeleccionadoId;
+    final op = <Map<String, String>>[];
+    final eidSel = _eventoSeleccionadoId;
     if (eidSel != null) {
-      final Set<String> sidSet = {};
-      for (var m in _mermas) {
-        if (m['eventoId'] != eidSel) continue;
-        final sid = m['sectorId'] as String? ?? '';
-        final snom = m['sectorNombre'] as String? ?? 'Sector';
-        if (sid.isNotEmpty && !sidSet.contains(sid)) {
-          sidSet.add(sid);
+      final sidSet = <String>{};
+      for (final r in _registros) {
+        if (r['eventoId'] != eidSel) continue;
+        final sid = r['sectorDestinoId'] as String? ?? '';
+        final snom = r['sectorDestinoNombre'] as String? ?? 'Sector';
+        if (sid.isNotEmpty && sidSet.add(sid)) {
           op.add({'id': sid, 'nombre': snom});
         }
       }
       op.sort((a, b) => (a['nombre'] ?? '').compareTo(b['nombre'] ?? ''));
     } else {
-      final Set<String> compSet = {};
-      for (var m in _mermas) {
-        final eid = m['eventoId'] as String? ?? '';
-        final enom = m['eventoNombre'] as String? ?? '';
-        final sid = m['sectorId'] as String? ?? '';
-        final snom = m['sectorNombre'] as String? ?? 'Sector';
+      final compSet = <String>{};
+      for (final r in _registros) {
+        final eid = r['eventoId'] as String? ?? '';
+        final enom = r['eventoNombre'] as String? ?? '';
+        final sid = r['sectorDestinoId'] as String? ?? '';
+        final snom = r['sectorDestinoNombre'] as String? ?? 'Sector';
         if (eid.isEmpty || sid.isEmpty) continue;
         final comp = '$eid|$sid';
-        if (!compSet.contains(comp)) {
-          compSet.add(comp);
+        if (compSet.add(comp)) {
           op.add({'id': comp, 'nombre': '$snom ($enom)'});
         }
       }
@@ -179,13 +201,23 @@ class _ReporteMermasState extends State<ReporteMermas> {
     return op;
   }
 
+  String _formatearFecha(dynamic fecha) {
+    if (fecha is! Timestamp) return '--/--/-- --:--';
+    final dt = fecha.toDate();
+    return '${dt.day.toString().padLeft(2, '0')}/'
+        '${dt.month.toString().padLeft(2, '0')}/'
+        '${dt.year} '
+        '${dt.hour.toString().padLeft(2, '0')}:'
+        '${dt.minute.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: Text(
-          'Reporte de mermas',
+          'Diferencias en traspasos',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
             color: AppColors.accent,
@@ -221,94 +253,102 @@ class _ReporteMermasState extends State<ReporteMermas> {
           ),
         ],
       ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: AppColors.accent))
-          : _errorMessage != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Error al cargar',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primaryLight,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _errorMessage!,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    TextButton.icon(
-                      onPressed: _cargar,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Reintentar'),
-                    ),
-                  ],
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return Center(child: CircularProgressIndicator(color: AppColors.accent));
+    }
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
+              const SizedBox(height: 16),
+              Text(
+                'Error al cargar',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryLight,
                 ),
               ),
-            )
-          : _mermas.isEmpty
-          ? Center(
-              child: Text(
-                _soloActivos
-                    ? 'No hay mermas en eventos activos'
-                    : 'No hay mermas registradas',
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage!,
                 style: GoogleFonts.poppins(
+                  fontSize: 12,
                   color: Colors.grey[600],
-                  fontSize: 14,
                 ),
                 textAlign: TextAlign.center,
               ),
-            )
-          : RefreshIndicator(
-              onRefresh: _cargar,
-              color: AppColors.accent,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _buildFiltros(),
-                  const SizedBox(height: 16),
-                  _buildCardPerdidaTotal(),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Detalle de mermas',
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: AppColors.primaryLight,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (_mermasFiltradas.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Center(
-                        child: Text(
-                          'No hay mermas con los filtros seleccionados',
-                          style: GoogleFonts.poppins(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    )
-                  else
-                    ..._mermasFiltradas.map((m) => _buildCardMerma(m)),
-                ],
+              const SizedBox(height: 16),
+              TextButton.icon(
+                onPressed: _cargar,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reintentar'),
               ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_registros.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            _soloActivos
+                ? 'No hay traspasos con diferencia en eventos activos'
+                : 'No hay traspasos recibidos con menos unidades',
+            style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 14),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _cargar,
+      color: AppColors.accent,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildFiltros(),
+          const SizedBox(height: 16),
+          _buildResumenTotal(),
+          const SizedBox(height: 16),
+          Text(
+            'Detalle de diferencias',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: AppColors.primaryLight,
             ),
+          ),
+          const SizedBox(height: 12),
+          if (_registrosFiltrados.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'No hay registros con los filtros seleccionados',
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
+          else
+            ..._registrosFiltrados.map(_buildCardRegistro),
+        ],
+      ),
     );
   }
 
@@ -322,7 +362,6 @@ class _ReporteMermasState extends State<ReporteMermas> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             'Filtrar por',
@@ -334,8 +373,9 @@ class _ReporteMermasState extends State<ReporteMermas> {
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
-            initialValue:
-                _eventosOpciones.any((e) => e['id'] == _eventoSeleccionadoId)
+            initialValue: _eventosOpciones.any(
+              (e) => e['id'] == _eventoSeleccionadoId,
+            )
                 ? _eventoSeleccionadoId
                 : null,
             isExpanded: true,
@@ -374,13 +414,14 @@ class _ReporteMermasState extends State<ReporteMermas> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            initialValue:
-                _sectoresOpciones.any((s) => s['id'] == _sectorSeleccionadoId)
+            initialValue: _sectoresOpciones.any(
+              (s) => s['id'] == _sectorSeleccionadoId,
+            )
                 ? _sectorSeleccionadoId
                 : null,
             isExpanded: true,
             decoration: InputDecoration(
-              labelText: 'Sector',
+              labelText: 'Sector destino',
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -405,53 +446,48 @@ class _ReporteMermasState extends State<ReporteMermas> {
                 ),
               ),
             ],
-            onChanged: (v) {
-              setState(() {
-                _sectorSeleccionadoId = v;
-              });
-            },
+            onChanged: (v) => setState(() => _sectorSeleccionadoId = v),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildCardPerdidaTotal() {
-    int totalUnidades = 0;
-    double totalValor = 0.0;
-    for (var m in _mermasFiltradas) {
-      final cant = m['cantidadPerdida'] as int? ?? 0;
-      final precio = (m['precio'] as num?)?.toDouble();
-      totalUnidades += cant;
-      if (precio != null) totalValor += cant * precio;
+  Widget _buildResumenTotal() {
+    var totalUnidades = 0;
+    var totalValor = 0.0;
+    final pedidos = <String>{};
+
+    for (final r in _registrosFiltrados) {
+      final diff = r['cantidadDiferencia'] as int? ?? 0;
+      final precio = (r['precio'] as num?)?.toDouble();
+      totalUnidades += diff;
+      if (precio != null) totalValor += diff * precio;
+      final pedidoId = r['pedidoId'] as String? ?? '';
+      if (pedidoId.isNotEmpty) pedidos.add(pedidoId);
     }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.red[700]!, Colors.red[900]!],
+          colors: [AppColors.secondary, AppColors.primaryLight],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.red.withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.trending_down, color: Colors.white70, size: 22),
+              const Icon(Icons.sync_problem_rounded, color: Colors.white70),
               const SizedBox(width: 8),
               Text(
-                'Pérdida total',
+                'Unidades no recibidas',
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   color: Colors.white70,
@@ -462,21 +498,30 @@ class _ReporteMermasState extends State<ReporteMermas> {
           ),
           const SizedBox(height: 12),
           Text(
-            '$totalUnidades unidades',
+            '$totalUnidades u. en ${_registrosFiltrados.length} línea'
+            '${_registrosFiltrados.length == 1 ? '' : 's'}',
             style: GoogleFonts.poppins(
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
           ),
+          if (pedidos.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${pedidos.length} pedido${pedidos.length == 1 ? '' : 's'} afectado'
+              '${pedidos.length == 1 ? '' : 's'}',
+              style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
+            ),
+          ],
           if (totalValor > 0) ...[
             const SizedBox(height: 4),
             Text(
-              '\$${totalValor.toStringAsFixed(0)}',
+              '\$${totalValor.toStringAsFixed(0)} estimado',
               style: GoogleFonts.poppins(
-                fontSize: 24,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: AppColors.accent,
               ),
             ),
           ],
@@ -485,19 +530,17 @@ class _ReporteMermasState extends State<ReporteMermas> {
     );
   }
 
-  Widget _buildCardMerma(Map<String, dynamic> m) {
-    final nombreProducto = m['nombreProducto'] as String? ?? 'Sin nombre';
-    final cantidad = m['cantidadPerdida'] as int? ?? 0;
-    final motivo = m['motivo'] as String? ?? 'Sin motivo';
-    final eventoNombre = m['eventoNombre'] as String? ?? '';
-    final sectorNombre = m['sectorNombre'] as String? ?? '';
-    final fecha = m['fecha'] as Timestamp?;
-    String fechaStr = '--/--/-- --:--';
-    if (fecha != null) {
-      final dt = fecha.toDate();
-      fechaStr =
-          '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    }
+  Widget _buildCardRegistro(Map<String, dynamic> r) {
+    final nombre = r['nombreProducto'] as String? ?? 'Sin nombre';
+    final enviada = r['cantidadEnviada'] as int? ?? 0;
+    final recibida = r['cantidadRecibida'] as int? ?? 0;
+    final diferencia = r['cantidadDiferencia'] as int? ?? 0;
+    final comentario = (r['comentarioDiferencia'] as String? ?? '').trim();
+    final origen = r['sectorOrigenNombre'] as String? ?? '';
+    final destino = r['sectorDestinoNombre'] as String? ?? '';
+    final evento = r['eventoNombre'] as String? ?? '';
+    final fechaStr = _formatearFecha(r['fecha']);
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
@@ -508,16 +551,17 @@ class _ReporteMermasState extends State<ReporteMermas> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
+                    color: AppColors.accent.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
-                    Icons.remove_circle_outline,
-                    color: Colors.red[700],
+                    Icons.swap_horiz_rounded,
+                    color: AppColors.secondary,
                     size: 26,
                   ),
                 ),
@@ -527,7 +571,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        nombreProducto,
+                        nombre,
                         style: GoogleFonts.poppins(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -536,12 +580,12 @@ class _ReporteMermasState extends State<ReporteMermas> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '$eventoNombre · $sectorNombre',
+                        '$evento · $origen → $destino',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
                           color: Colors.grey[600],
                         ),
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
@@ -553,18 +597,28 @@ class _ReporteMermasState extends State<ReporteMermas> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
+                    color: Colors.orange.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    '-$cantidad',
+                    '-$diferencia',
                     style: GoogleFonts.poppins(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: Colors.red[700],
+                      color: Colors.orange[800],
                     ),
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _chipCantidad('Enviado', enviada, AppColors.primaryLight),
+                const SizedBox(width: 8),
+                _chipCantidad('Recibido', recibida, AppColors.success),
+                const SizedBox(width: 8),
+                _chipCantidad('Faltante', diferencia, Colors.orange[800]!),
               ],
             ),
             const SizedBox(height: 12),
@@ -580,7 +634,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Motivo',
+                    'Comentario del receptor',
                     style: GoogleFonts.poppins(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -589,19 +643,55 @@ class _ReporteMermasState extends State<ReporteMermas> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    motivo,
+                    comentario.isNotEmpty
+                        ? comentario
+                        : 'Sin comentario registrado',
                     style: GoogleFonts.poppins(
                       fontSize: 14,
-                      color: AppColors.primaryLight,
+                      color: comentario.isNotEmpty
+                          ? AppColors.primaryLight
+                          : Colors.grey[500],
+                      fontStyle: comentario.isEmpty
+                          ? FontStyle.italic
+                          : FontStyle.normal,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
-              fechaStr,
+              'Confirmado: $fechaStr',
               style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chipCantidad(String label, int valor, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '$valor',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
             ),
           ],
         ),

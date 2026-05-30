@@ -1,7 +1,8 @@
-// Admin: gestionar roles de usuarios (vendedor / encargado)
+// Admin: consultar roles de usuarios (admin / vendedor)
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class GestionRolesUsuarios extends StatefulWidget {
@@ -53,30 +54,8 @@ class _GestionRolesUsuariosState extends State<GestionRolesUsuarios> {
     }
   }
 
-  Future<void> _cambiarRol(String uid, String nuevoRol) async {
-    try {
-      await FirebaseFirestore.instance.collection('usuarios').doc(uid).update({
-        'rol': nuevoRol,
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Rol actualizado a $nuevoRol'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        _cargar();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+  String _etiquetaRol(String rol) {
+    return AuthManager.esAdmin(rol) ? 'Admin' : 'Vendedor';
   }
 
   @override
@@ -132,7 +111,7 @@ class _GestionRolesUsuariosState extends State<GestionRolesUsuarios> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       Text(
-                        'Asigna el rol de cada usuario. Solo vendedor y encargado se pueden cambiar desde aquí.',
+                        'Listado de usuarios con rol admin o vendedor.',
                         style: GoogleFonts.poppins(
                           fontSize: 13,
                           color: Colors.black54,
@@ -145,9 +124,11 @@ class _GestionRolesUsuariosState extends State<GestionRolesUsuarios> {
                         final username =
                             (data['username'] ?? data['email'] ?? uid).toString();
                         final email = (data['email'] ?? '').toString();
-                        final rol = (data['rol'] ?? 'vendedor').toString();
-                        final esAdmin = rol == 'admin';
+                        final rolNormalizado =
+                            AuthManager.normalizarRol(data['rol']?.toString());
+                        final esAdmin = rolNormalizado == 'admin';
                         final esYo = uid == currentUid;
+                        final etiqueta = esYo ? 'Tú' : _etiquetaRol(rolNormalizado);
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 10),
@@ -162,7 +143,7 @@ class _GestionRolesUsuariosState extends State<GestionRolesUsuarios> {
                                 CircleAvatar(
                                   backgroundColor: esAdmin
                                       ? accentColor
-                                      : primaryColor.withOpacity(0.2),
+                                      : primaryColor.withValues(alpha: 0.2),
                                   child: Icon(
                                     esAdmin ? Icons.admin_panel_settings : Icons.person,
                                     color: esAdmin ? primaryColor : primaryColor,
@@ -194,30 +175,23 @@ class _GestionRolesUsuariosState extends State<GestionRolesUsuarios> {
                                     ],
                                   ),
                                 ),
-                                if (esAdmin || esYo)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: (esAdmin ? accentColor : Colors.grey)
-                                          .withOpacity(0.3),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      esAdmin ? 'Admin' : 'Tú',
-                                      style: GoogleFonts.poppins(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
-                                        color: primaryColor,
-                                      ),
-                                    ),
-                                  )
-                                else
-                                  _DropdownRol(
-                                    rolActual: rol,
-                                    onCambiar: (nuevoRol) =>
-                                        _cambiarRol(uid, nuevoRol),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: (esAdmin ? accentColor : Colors.grey)
+                                        .withValues(alpha: 0.3),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
+                                  child: Text(
+                                    etiqueta,
+                                    style: GoogleFonts.poppins(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                      color: primaryColor,
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -229,40 +203,3 @@ class _GestionRolesUsuariosState extends State<GestionRolesUsuarios> {
     );
   }
 }
-class _DropdownRol extends StatelessWidget {
-  final String rolActual;
-  final ValueChanged<String> onCambiar;
-
-  const _DropdownRol({
-    required this.rolActual,
-    required this.onCambiar,
-  });
-
-  static const List<String> roles = ['vendedor', 'encargado'];
-
-  @override
-  Widget build(BuildContext context) {
-    const primaryColor = Color(0xFF2B2B2B);
-
-    return DropdownButton<String>(
-      value: roles.contains(rolActual) ? rolActual : 'vendedor',
-      underline: const SizedBox.shrink(),
-      icon: const Icon(Icons.arrow_drop_down, color: primaryColor),
-      items: roles.map((r) {
-        return DropdownMenuItem<String>(
-          value: r,
-          child: Text(
-            r == 'encargado' ? 'Encargado' : 'Vendedor',
-            style: GoogleFonts.poppins(fontSize: 14, color: primaryColor),
-          ),
-        );
-      }).toList(),
-      onChanged: (String? value) {
-        if (value != null && value != rolActual) {
-          onCambiar(value);
-        }
-      },
-    );
-  }
-}
-

@@ -26,7 +26,9 @@ class GestionStock extends StatefulWidget {
   final String sectorId;
   final String nombreSector;
   final bool soloLectura;
-  /// Si se proporciona, se llama tras guardar con éxito (ej. para ir al panel de ventas).
+  /// Si true, al guardar muestra advertencia de ingreso único y cierra la pantalla.
+  final bool esIngresoInicial;
+  /// Si se proporciona, se llama tras guardar con éxito.
   final VoidCallback? onGuardado;
 
   const GestionStock({
@@ -35,6 +37,7 @@ class GestionStock extends StatefulWidget {
     required this.sectorId,
     required this.nombreSector,
     this.soloLectura = false,
+    this.esIngresoInicial = false,
     this.onGuardado,
   });
 
@@ -88,33 +91,16 @@ class _GestionStockState extends State<GestionStock> {
     }
   }
 
-  Future<void> _guardar() async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Guardar stock', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-        content: Text(
-          '¿Desea guardar los cambios del stock?',
-          style: GoogleFonts.poppins(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancelar', style: GoogleFonts.poppins(color: _secondaryColor)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: Text('Guardar', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
+  String _resumenStockLectura() {
+    final totalUnidades = _items.fold<int>(
+      0,
+      (sum, item) => sum + (item['cantidad'] as int? ?? 0),
     );
-    if (confirmar != true || !mounted) return;
+    final n = _items.length;
+    return '$n producto${n == 1 ? '' : 's'} · $totalUnidades u. en stock';
+  }
 
+  Future<bool> _persistirStock() async {
     try {
       final col = FirebaseFirestore.instance
           .collection('eventos')
@@ -130,6 +116,7 @@ class _GestionStockState extends State<GestionStock> {
           'nombre': item['nombre'],
           'precio': item['precio'],
           'cantidad': item['cantidad'],
+          'cantidadInicial': item['cantidad'],
           'categoria': item['categoria'] ?? categoriaDefault,
         });
       }
@@ -146,22 +133,109 @@ class _GestionStockState extends State<GestionStock> {
           .collection('sectores')
           .doc(widget.sectorId)
           .set({'stockInicialIngresado': true}, SetOptions(merge: true));
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() => _dirty = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Stock guardado', style: GoogleFonts.poppins()),
-          backgroundColor: Colors.green,
-        ),
-      );
-      widget.onGuardado?.call();
+      return true;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al guardar: $e', style: GoogleFonts.poppins()), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Error al guardar: $e', style: GoogleFonts.poppins()),
+            backgroundColor: Colors.red,
+          ),
         );
       }
+      return false;
     }
+  }
+
+  Future<void> _guardarYSalir() async {
+    if (_items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Agregue al menos un producto antes de finalizar.',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (widget.esIngresoInicial) {
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(
+            'Finalizar ingreso de stock inicial',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _primaryColor),
+          ),
+          content: Text(
+            'Atención: esta es la ÚNICA vez que podrá ingresar stock manualmente para este sector.\n\n'
+            'Si necesita agregar stock después, debe ser mediante TRASPASO entre sectores.\n\n'
+            '¿Desea guardar y finalizar?',
+            style: GoogleFonts.poppins(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text('Cancelar', style: GoogleFonts.poppins(color: _secondaryColor)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accentColor,
+                foregroundColor: _primaryColor,
+              ),
+              child: Text(
+                'Guardar y salir',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (confirmar != true || !mounted) return;
+    } else if (_dirty) {
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Guardar cambios', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+          content: Text(
+            '¿Desea guardar los cambios antes de salir?',
+            style: GoogleFonts.poppins(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text('Cancelar', style: GoogleFonts.poppins(color: _secondaryColor)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: Text('Guardar y salir', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      if (confirmar != true || !mounted) return;
+    }
+
+    final ok = await _persistirStock();
+    if (!ok || !mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Stock inicial guardado', style: GoogleFonts.poppins()),
+        backgroundColor: Colors.green,
+      ),
+    );
+    widget.onGuardado?.call();
+    if (mounted) Navigator.of(context).pop();
   }
 
   void _agregarItemLocal(String productoId, String nombre, double precio, int cantidad, [String categoria = 'Otros']) {
@@ -197,7 +271,7 @@ class _GestionStockState extends State<GestionStock> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: !_dirty,
+      canPop: widget.soloLectura || !_dirty,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         final salir = await showDialog<bool>(
@@ -226,7 +300,7 @@ class _GestionStockState extends State<GestionStock> {
       backgroundColor: _backgroundColor,
       appBar: AppBar(
         title: Text(
-          'Gestión de Stock',
+          widget.soloLectura ? 'Ver stock' : 'Stock inicial del punto',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.bold,
             color: _accentColor,
@@ -234,31 +308,40 @@ class _GestionStockState extends State<GestionStock> {
         ),
         backgroundColor: _primaryColor,
         foregroundColor: _accentColor,
-        actions: widget.soloLectura
-            ? null
-            : [
-                if (_dirty)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: TextButton.icon(
-                      onPressed: _guardar,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        backgroundColor: Colors.green,
+      ),
+      bottomNavigationBar: widget.soloLectura
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _guardarYSalir,
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: Text(
+                      'Guardar y salir',
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      icon: const Icon(Icons.save, size: 20),
-                      label: Text('Guardar', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
                     ),
                   ),
-              ],
-      ),
+                ),
+              ),
+            ),
       body: Column(
         children: [
           // Información del sector
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            color: _accentColor.withOpacity(0.1),
+            color: _accentColor.withValues(alpha: 0.1),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -272,7 +355,11 @@ class _GestionStockState extends State<GestionStock> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Agregue con "+" y pulse Guardar',
+                  widget.soloLectura
+                      ? 'Consultá las cantidades disponibles en tu sector'
+                      : widget.esIngresoInicial
+                          ? 'Ingrese las cantidades y pulse Guardar y salir'
+                          : 'Ingrese las cantidades iniciales y pulse Guardar',
                   style: GoogleFonts.poppins(
                     fontSize: 12,
                     color: _secondaryColor,
@@ -293,7 +380,7 @@ class _GestionStockState extends State<GestionStock> {
                             Icon(
                               Icons.inventory_2_outlined,
                               size: 64,
-                              color: _secondaryColor.withOpacity(0.5),
+                              color: _secondaryColor.withValues(alpha: 0.5),
                             ),
                             const SizedBox(height: 16),
                             Text(
@@ -304,13 +391,14 @@ class _GestionStockState extends State<GestionStock> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            Text(
-                              'Apriete "+" para agregar productos',
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                color: _secondaryColor.withOpacity(0.8),
+                            if (!widget.soloLectura)
+                              Text(
+                                'Apriete "+" para agregar productos al stock inicial',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: _secondaryColor.withValues(alpha: 0.8),
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       )
@@ -320,10 +408,12 @@ class _GestionStockState extends State<GestionStock> {
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                             child: Text(
-                              'Agregue con "+" y pulse Guardar',
+                              widget.soloLectura
+                                  ? _resumenStockLectura()
+                                  : 'Stock inicial — agregue con "+" y pulse Guardar y salir',
                               style: GoogleFonts.poppins(
                                 fontSize: 13,
-                                color: _secondaryColor.withOpacity(0.8),
+                                color: _secondaryColor.withValues(alpha: 0.8),
                               ),
                             ),
                           ),
@@ -416,7 +506,7 @@ class _ProductoStockCard extends StatelessWidget {
           width: 50,
           height: 50,
           decoration: BoxDecoration(
-            color: _accentColor.withOpacity(0.2),
+            color: _accentColor.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(Icons.fastfood, color: _secondaryColor, size: 28),
@@ -442,12 +532,12 @@ class _ProductoStockCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: cantidad > 0
-                    ? Colors.green.withOpacity(0.1)
-                    : Colors.red.withOpacity(0.1),
+                    ? Colors.green.withValues(alpha: 0.1)
+                    : Colors.red.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                'Stock: $cantidad',
+                soloLectura ? 'Stock: $cantidad' : 'Stock inicial: $cantidad',
                 style: GoogleFonts.poppins(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,

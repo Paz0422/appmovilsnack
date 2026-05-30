@@ -156,7 +156,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      value: nombresCat.contains(categoriaSeleccionada) ? categoriaSeleccionada : (nombresCat.isNotEmpty ? nombresCat.first : null),
+                      initialValue: nombresCat.contains(categoriaSeleccionada) ? categoriaSeleccionada : (nombresCat.isNotEmpty ? nombresCat.first : null),
                       decoration: InputDecoration(
                         labelText: 'Categoría',
                         labelStyle: GoogleFonts.poppins(color: secondaryColor),
@@ -477,7 +477,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
                               Icon(
                                 Icons.inventory_2_outlined,
                                 size: 64,
-                                color: secondaryColor.withOpacity(0.5),
+                                color: secondaryColor.withValues(alpha: 0.5),
                               ),
                               const SizedBox(height: 16),
                               Text(
@@ -543,7 +543,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
                                   width: 50,
                                   height: 50,
                                   decoration: BoxDecoration(
-                                    color: accentColor.withOpacity(0.2),
+                                    color: accentColor.withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Icon(

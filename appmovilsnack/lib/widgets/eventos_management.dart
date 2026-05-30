@@ -227,7 +227,7 @@ class _EventosManagementState extends State<EventosManagement> {
                             constraints: const BoxConstraints(maxHeight: 150),
                             decoration: BoxDecoration(
                               border: Border.all(
-                                color: secondaryColor.withOpacity(0.3),
+                                color: secondaryColor.withValues(alpha: 0.3),
                               ),
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -638,7 +638,7 @@ class _EventosManagementState extends State<EventosManagement> {
                               Icon(
                                 Icons.event_outlined,
                                 size: 64,
-                                color: secondaryColor.withOpacity(0.5),
+                                color: secondaryColor.withValues(alpha: 0.5),
                               ),
                               const SizedBox(height: 16),
                               Text(
@@ -708,8 +708,8 @@ class _EventosManagementState extends State<EventosManagement> {
                                   height: 50,
                                   decoration: BoxDecoration(
                                     color: activo
-                                        ? Colors.green.withOpacity(0.2)
-                                        : accentColor.withOpacity(0.2),
+                                        ? Colors.green.withValues(alpha: 0.2)
+                                        : accentColor.withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Icon(
@@ -737,7 +737,7 @@ class _EventosManagementState extends State<EventosManagement> {
                                           vertical: 4,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Colors.green.withOpacity(0.2),
+                                          color: Colors.green.withValues(alpha: 0.2),
                                           borderRadius: BorderRadius.circular(
                                             12,
                                           ),
@@ -972,6 +972,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
       await sector.reference.update({
         'turnoCerrado': false,
         'turnoCerradoAt': FieldValue.delete(),
+        'stockInicialIngresado': false,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1141,7 +1142,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                     Icon(
                       Icons.location_on_outlined,
                       size: 64,
-                      color: secondaryColor.withOpacity(0.5),
+                      color: secondaryColor.withValues(alpha: 0.5),
                     ),
                     const SizedBox(height: 16),
                     Text(
@@ -1247,7 +1248,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                           width: 50,
                           height: 50,
                           decoration: BoxDecoration(
-                            color: secondaryColor.withOpacity(0.2),
+                            color: secondaryColor.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
@@ -1271,7 +1272,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.2),
+                                  color: Colors.orange.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(

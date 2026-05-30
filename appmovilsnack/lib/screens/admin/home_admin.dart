@@ -8,12 +8,13 @@ import 'package:front_appsnack/widgets/dashboard_card.dart';
 import 'package:front_appsnack/widgets/gestion_screen.dart';
 import 'package:front_appsnack/widgets/stock_reports.dart';
 import 'package:front_appsnack/widgets/ventas_por_categoria.dart';
-import 'package:front_appsnack/widgets/dashboard_ventas_vendedores.dart';
 import 'package:front_appsnack/widgets/reporte_mermas.dart';
+import 'package:front_appsnack/widgets/reporte_diferencias_traspaso.dart';
 import 'package:front_appsnack/widgets/gestion_categorias.dart';
 import 'package:front_appsnack/widgets/gestion_roles_usuarios.dart';
 import 'package:front_appsnack/widgets/estadio_selection.dart';
 import 'package:front_appsnack/widgets/cierres_partidos_activos.dart';
+import 'package:front_appsnack/core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class HomeAdmin extends StatefulWidget {
@@ -33,66 +34,66 @@ class _HomeAdminState extends State<HomeAdmin> {
     return snap.docs.map((d) => d.id).toSet();
   }
 
-  /// Consulta solo transacciones de eventos activos (whereIn por lotes de 10)
-  Future<Map<String, int>> _getTransaccionesActivosAggregate() async {
+  /// Suma totalVendido de sectores en eventos activos (conciliación por inventario).
+  Future<Map<String, int>> _getTotalesActivosAggregate() async {
     final activosIds = await _getEventosActivosIds();
     if (activosIds.isEmpty) return {'total': 0, 'count': 0};
-    final ids = activosIds.toList();
     int totalVendido = 0;
     int count = 0;
-    for (var i = 0; i < ids.length; i += 10) {
-      final batch = ids.skip(i).take(10).toList();
-      final snap = await FirebaseFirestore.instance
-          .collection('transacciones')
-          .where('eventoId', whereIn: batch)
+    for (final eventoId in activosIds) {
+      final sectores = await FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(eventoId)
+          .collection('sectores')
           .get();
-      for (var doc in snap.docs) {
-        final m = doc.data()['montoTotal'];
-        if (m != null && m is num) {
-          totalVendido += m.toInt();
-          count++;
+      for (final sector in sectores.docs) {
+        final data = sector.data();
+        if (data['turnoCerrado'] == true) {
+          final m = data['ultimoCierre']?['totalEstimado'] ?? data['totalVendido'];
+          if (m != null && m is num && m > 0) {
+            totalVendido += m.toInt();
+            count++;
+          }
         }
       }
     }
     return {'total': totalVendido, 'count': count};
   }
 
-  /// Total vendido solo de transacciones de eventos activos
   Future<int> _getMontoTotalActivos() async {
     try {
-      final agg = await _getTransaccionesActivosAggregate();
+      final agg = await _getTotalesActivosAggregate();
       return agg['total'] ?? 0;
     } catch (e) {
       rethrow;
     }
   }
 
-  /// Estadísticas de ventas solo para eventos activos
   Future<Map<String, dynamic>> _getEstadisticasActivos() async {
     try {
       final activosIds = await _getEventosActivosIds();
       if (activosIds.isEmpty) {
         return {
           'totalVendido': 0,
-          'cantidadTransacciones': 0,
-          'promedioTicket': 0.0,
+          'cantidadCierres': 0,
+          'promedioPorCierre': 0.0,
           'cantidadEventosActivos': 0,
         };
       }
-      final agg = await _getTransaccionesActivosAggregate();
+      final agg = await _getTotalesActivosAggregate();
       final totalVendido = agg['total'] ?? 0;
       final count = agg['count'] ?? 0;
       return {
         'totalVendido': totalVendido,
-        'cantidadTransacciones': count,
-        'promedioTicket': count > 0 ? totalVendido / count : 0.0,
+        'cantidadCierres': count,
+        'promedioPorCierre': count > 0 ? totalVendido / count : 0.0,
         'cantidadEventosActivos': activosIds.length,
       };
     } catch (e) {
       return {
         'totalVendido': 0,
-        'cantidadTransacciones': 0,
-        'promedioTicket': 0.0,
+        'cantidadCierres': 0,
+        'promedioPorCierre': 0.0,
         'cantidadEventosActivos': 0,
       };
     }
@@ -127,7 +128,7 @@ class _HomeAdminState extends State<HomeAdmin> {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Total vendido (eventos activos)',
+              'Total estimado (eventos activos)',
               style: TextStyle(
                 color: Colors.black,
                 fontSize: 18,
@@ -142,36 +143,32 @@ class _HomeAdminState extends State<HomeAdmin> {
                 builder: (context, snapshot) {
                   String value;
                   IconData icon = Icons.emoji_events;
-                  Color color = Colors.amber;
 
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     value = '—';
                   } else if (snapshot.hasError) {
                     value = 'Error';
                     icon = Icons.error_outline;
-                    color = Colors.red;
                   } else {
                     final total = snapshot.data ?? 0;
                     value = '\$${_fmtMiles(total)}';
                   }
 
-                  return DashboardCard(
-                    title: 'Suma de transacciones',
+                  return DashboardCard.kpi(
+                    title: 'Dinero estimado (cierres)',
                     value: value,
-                    subtitle: 'Solo eventos activos',
+                    subtitle: 'Sectores con turno cerrado',
                     icon: icon,
-                    color: color,
-                    darkText: true,
-                    backgroundColor: Colors.white,
-                    elevation: 6,
-                    emphasis: true,
+                    iconColor: snapshot.hasError
+                        ? AppColors.error
+                        : AppColors.accent,
                   );
                 },
               ),
             ),
             const SizedBox(height: 24),
             const Text(
-              'Estadísticas de ventas (eventos activos)',
+              'Estadísticas de cierres (eventos activos)',
               style: TextStyle(
                 color: Colors.black,
                 fontSize: 18,
@@ -211,49 +208,29 @@ class _HomeAdminState extends State<HomeAdmin> {
                   mainAxisSpacing: 12,
                   childAspectRatio: 3.0,
                   children: [
-                    DashboardCard(
-                      title: 'Transacciones',
-                      value: _fmtMiles((stats['cantidadTransacciones'] as int?) ?? 0),
+                    DashboardCard.stat(
+                      title: 'Cierres realizados',
+                      value: _fmtMiles(
+                        (stats['cantidadCierres'] as int?) ?? 0,
+                      ),
                       icon: Icons.receipt_long_outlined,
-                      color: Colors.black54,
-                      darkText: true,
-                      backgroundColor: Colors.white,
-                      borderColor: Colors.grey[300],
-                      elevation: 0,
-                      compact: true,
                     ),
-                    DashboardCard(
-                      title: 'Promedio ticket',
-                      value: '\$${_fmtMiles(((stats['promedioTicket'] as num?) ?? 0).round())}',
+                    DashboardCard.stat(
+                      title: 'Promedio por cierre',
+                      value:
+                          '\$${_fmtMiles(((stats['promedioPorCierre'] as num?) ?? 0).round())}',
                       icon: Icons.trending_up,
-                      color: Colors.black54,
-                      darkText: true,
-                      backgroundColor: Colors.white,
-                      borderColor: Colors.grey[300],
-                      elevation: 0,
-                      compact: true,
                     ),
-                    DashboardCard(
+                    DashboardCard.stat(
                       title: 'Eventos activos',
                       value: '${stats['cantidadEventosActivos'] ?? 0}',
                       icon: Icons.event_available,
-                      color: Colors.black54,
-                      darkText: true,
-                      backgroundColor: Colors.white,
-                      borderColor: Colors.grey[300],
-                      elevation: 0,
-                      compact: true,
                     ),
-                    DashboardCard(
-                      title: 'Total vendido',
-                      value: '\$${_fmtMiles((stats['totalVendido'] as int?) ?? 0)}',
+                    DashboardCard.stat(
+                      title: 'Total estimado',
+                      value:
+                          '\$${_fmtMiles((stats['totalVendido'] as int?) ?? 0)}',
                       icon: Icons.payments_outlined,
-                      color: Colors.black54,
-                      darkText: true,
-                      backgroundColor: Colors.white,
-                      borderColor: Colors.grey[300],
-                      elevation: 0,
-                      compact: true,
                     ),
                   ],
                 );
@@ -270,11 +247,8 @@ class _HomeAdminState extends State<HomeAdmin> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Ventas por evento (solo activos)',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 13,
-              ),
+              'Ingresos estimados por evento (solo activos)',
+              style: TextStyle(color: Colors.grey[600], fontSize: 13),
             ),
             const SizedBox(height: 12),
             _EventosIngresosWidget(),
@@ -289,11 +263,8 @@ class _HomeAdminState extends State<HomeAdmin> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Ventas por sector en cada partido (eventos activos)',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 13,
-              ),
+              'Ingresos estimados por sector en cada partido (eventos activos)',
+              style: TextStyle(color: Colors.grey[600], fontSize: 13),
             ),
             const SizedBox(height: 12),
             _AnalisisSectoresWidget(),
@@ -352,17 +323,18 @@ class _HomeAdminState extends State<HomeAdmin> {
                 ],
               ),
             ),
-            _drawerSectionLabel('Ventas'),
+            _drawerSectionLabel('Operación'),
             _buildDrawerItem(
-              icon: Icons.point_of_sale_outlined,
-              title: 'Realizar ventas',
+              icon: Icons.storefront_outlined,
+              title: 'Panel de vendedor',
               subtitle: 'Elegir sector y operar como vendedor',
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const EstadioSelection(fromAdmin: true),
+                    builder: (context) =>
+                        const EstadioSelection(fromAdmin: true),
                   ),
                 );
               },
@@ -383,26 +355,13 @@ class _HomeAdminState extends State<HomeAdmin> {
             _buildDrawerItem(
               icon: Icons.pie_chart_outline,
               title: 'Ventas por categoría',
+              subtitle: 'Estimación por inventario (inicial − final)',
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const VentasPorCategoria(),
-                  ),
-                );
-              },
-            ),
-            _buildDrawerItem(
-              icon: Icons.people_outline,
-              title: 'Ventas por vendedor',
-              subtitle: 'Total vendido por cada vendedor',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const DashboardVentasVendedores(),
                   ),
                 );
               },
@@ -417,6 +376,21 @@ class _HomeAdminState extends State<HomeAdmin> {
                   context,
                   MaterialPageRoute(
                     builder: (context) => const ReporteMermas(),
+                  ),
+                );
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.sync_problem_rounded,
+              title: 'Diferencias en traspasos',
+              subtitle: 'Recibido menos de lo enviado',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        const ReporteDiferenciasTraspaso(),
                   ),
                 );
               },
@@ -467,7 +441,7 @@ class _HomeAdminState extends State<HomeAdmin> {
             _buildDrawerItem(
               icon: Icons.badge_outlined,
               title: 'Roles de usuarios',
-              subtitle: 'Vendedor o encargado por usuario',
+              subtitle: 'Admin y vendedor por usuario',
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -537,17 +511,13 @@ class _HomeAdminState extends State<HomeAdmin> {
       subtitle: subtitle != null
           ? Text(
               subtitle,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: Colors.white60,
-              ),
+              style: GoogleFonts.poppins(fontSize: 12, color: Colors.white60),
             )
           : null,
       onTap: onTap,
       hoverColor: accentColor.withValues(alpha: 0.1),
     );
   }
-
 }
 
 // ===== Componentes UI existentes =====
@@ -621,7 +591,10 @@ class _LiveRelojState extends State<_LiveReloj> {
       crossAxisAlignment: CrossAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(hora, style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+        Text(
+          hora,
+          style: TextStyle(color: color, fontWeight: FontWeight.w700),
+        ),
         Text(fecha, style: TextStyle(color: sub, fontSize: 12)),
       ],
     );
@@ -743,7 +716,7 @@ class _SimpleBarChartState extends State<_SimpleBarChart> {
                               top: top - 1,
                               child: Container(
                                 height: 1,
-                                color: Colors.grey.withOpacity(0.15),
+                                color: Colors.grey.withValues(alpha: 0.15),
                               ),
                             );
                           }),
@@ -760,17 +733,25 @@ class _SimpleBarChartState extends State<_SimpleBarChart> {
                                     : 0.0;
                                 final barH = h.clamp(6.0, double.infinity);
                                 final c = colors[i % colors.length];
-                                final label = labels.length > i ? labels[i] : '';
+                                final label = labels.length > i
+                                    ? labels[i]
+                                    : '';
                                 const barWidth = 18.0;
                                 const barSpacing = 10.0;
                                 final isSelected = _selectedIndex == i;
                                 return Padding(
-                                  padding: EdgeInsets.only(right: i < values.length - 1 ? barSpacing : 0),
+                                  padding: EdgeInsets.only(
+                                    right: i < values.length - 1
+                                        ? barSpacing
+                                        : 0,
+                                  ),
                                   child: GestureDetector(
                                     behavior: HitTestBehavior.opaque,
                                     onTap: () {
                                       setState(() {
-                                        _selectedIndex = _selectedIndex == i ? null : i;
+                                        _selectedIndex = _selectedIndex == i
+                                            ? null
+                                            : i;
                                       });
                                     },
                                     child: Stack(
@@ -786,13 +767,22 @@ class _SimpleBarChartState extends State<_SimpleBarChart> {
                                             decoration: BoxDecoration(
                                               color: c,
                                               border: Border.all(
-                                                color: Color.lerp(c, Colors.black, 0.2) ?? c,
+                                                color:
+                                                    Color.lerp(
+                                                      c,
+                                                      Colors.black,
+                                                      0.2,
+                                                    ) ??
+                                                    c,
                                                 width: 1,
                                               ),
-                                              borderRadius: const BorderRadius.only(
-                                                topLeft: Radius.circular(6),
-                                                topRight: Radius.circular(6),
-                                              ),
+                                              borderRadius:
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(6),
+                                                    topRight: Radius.circular(
+                                                      6,
+                                                    ),
+                                                  ),
                                             ),
                                           ),
                                         ),
@@ -806,50 +796,86 @@ class _SimpleBarChartState extends State<_SimpleBarChart> {
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
                                                   Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                                    constraints: const BoxConstraints(maxWidth: 130),
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 6,
+                                                        ),
+                                                    constraints:
+                                                        const BoxConstraints(
+                                                          maxWidth: 130,
+                                                        ),
                                                     decoration: BoxDecoration(
                                                       color: Colors.white,
-                                                      borderRadius: BorderRadius.circular(8),
-                                                      border: Border.all(color: Colors.grey.shade300),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      border: Border.all(
+                                                        color: Colors
+                                                            .grey
+                                                            .shade300,
+                                                      ),
                                                       boxShadow: [
                                                         BoxShadow(
-                                                          color: Colors.black.withOpacity(0.1),
+                                                          color: Colors.black
+                                                              .withValues(
+                                                                alpha: 0.1,
+                                                              ),
                                                           blurRadius: 6,
-                                                          offset: const Offset(0, 1),
+                                                          offset: const Offset(
+                                                            0,
+                                                            1,
+                                                          ),
                                                         ),
                                                       ],
                                                     ),
                                                     child: Column(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .center,
                                                       children: [
                                                         Text(
                                                           label,
-                                                          style: GoogleFonts.poppins(
-                                                            fontSize: 11,
-                                                            fontWeight: FontWeight.w600,
-                                                            color: Colors.grey[800],
-                                                          ),
+                                                          style:
+                                                              GoogleFonts.poppins(
+                                                                fontSize: 11,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: Colors
+                                                                    .grey[800],
+                                                              ),
                                                           maxLines: 2,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          textAlign: TextAlign.center,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                          textAlign:
+                                                              TextAlign.center,
                                                         ),
-                                                        const SizedBox(height: 2),
+                                                        const SizedBox(
+                                                          height: 2,
+                                                        ),
                                                         Text(
                                                           formatValue(v),
-                                                          style: GoogleFonts.poppins(
-                                                            fontSize: 12,
-                                                            fontWeight: FontWeight.bold,
-                                                            color: Colors.grey[900],
-                                                          ),
+                                                          style:
+                                                              GoogleFonts.poppins(
+                                                                fontSize: 12,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                color: Colors
+                                                                    .grey[900],
+                                                              ),
                                                         ),
                                                       ],
                                                     ),
                                                   ),
                                                   CustomPaint(
                                                     size: const Size(14, 7),
-                                                    painter: _TrianglePointerPainter(),
+                                                    painter:
+                                                        _TrianglePointerPainter(),
                                                   ),
                                                 ],
                                               ),
@@ -873,7 +899,9 @@ class _SimpleBarChartState extends State<_SimpleBarChart> {
                   runSpacing: 6,
                   children: List.generate(values.length, (i) {
                     final name = labels.length > i ? labels[i] : '';
-                    final short = name.length > 14 ? '${name.substring(0, 14)}...' : name;
+                    final short = name.length > 14
+                        ? '${name.substring(0, 14)}...'
+                        : name;
                     return Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -888,7 +916,10 @@ class _SimpleBarChartState extends State<_SimpleBarChart> {
                         const SizedBox(width: 4),
                         Text(
                           short,
-                          style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[700]),
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.grey[700],
+                          ),
                         ),
                       ],
                     );
@@ -903,11 +934,11 @@ class _SimpleBarChartState extends State<_SimpleBarChart> {
   }
 }
 
-// Análisis de ventas por sector (eventos activos)
+// Análisis de ingresos estimados por sector (cierres de inventario)
 class _AnalisisSectoresWidget extends StatelessWidget {
   const _AnalisisSectoresWidget();
 
-  Future<List<Map<String, dynamic>>> _cargarVentasPorSector() async {
+  Future<List<Map<String, dynamic>>> _cargarIngresosPorSector() async {
     try {
       final eventosSnapshot = await FirebaseFirestore.instance
           .collection('eventos')
@@ -923,6 +954,11 @@ class _AnalisisSectoresWidget extends StatelessWidget {
         sectoresPorEvento[eventoId] = {};
       }
 
+      final Map<String, Map<String, double>> totalPorSector = {};
+      for (final eventoId in sectoresPorEvento.keys) {
+        totalPorSector[eventoId] = {};
+      }
+
       for (var eventoDoc in eventosSnapshot.docs) {
         final eventoId = eventoDoc.id;
         final sectoresSnapshot = await FirebaseFirestore.instance
@@ -931,37 +967,16 @@ class _AnalisisSectoresWidget extends StatelessWidget {
             .collection('sectores')
             .get();
         for (var sectorDoc in sectoresSnapshot.docs) {
+          final data = sectorDoc.data();
           sectoresPorEvento[eventoId]![sectorDoc.id] =
-              sectorDoc.data()['nombre']?.toString() ?? 'Sector';
-        }
-      }
-
-      final transSnapshot = await FirebaseFirestore.instance
-          .collection('transacciones')
-          .get();
-
-      final Map<String, Map<String, double>> totalPorSector = {};
-      for (final eventoId in sectoresPorEvento.keys) {
-        totalPorSector[eventoId] = {};
-        for (final sectorId in sectoresPorEvento[eventoId]!.keys) {
-          totalPorSector[eventoId]![sectorId] = 0.0;
-        }
-      }
-
-      for (var doc in transSnapshot.docs) {
-        final d = doc.data();
-        final eventoId = d['eventoId']?.toString();
-        final sectorId = d['sectorId']?.toString();
-        if (eventoId == null ||
-            sectorId == null ||
-            totalPorSector[eventoId] == null ||
-            !totalPorSector[eventoId]!.containsKey(sectorId)) {
-          continue;
-        }
-        final m = d['montoTotal'];
-        if (m != null && m is num) {
-          totalPorSector[eventoId]![sectorId] =
-              (totalPorSector[eventoId]![sectorId] ?? 0) + m.toDouble();
+              data['nombre']?.toString() ?? 'Sector';
+          totalPorSector[eventoId]![sectorDoc.id] = 0.0;
+          if (data['turnoCerrado'] != true) continue;
+          final m = data['ultimoCierre']?['totalEstimado'] ?? data['totalVendido'];
+          if (m != null && m is num && m > 0) {
+            totalPorSector[eventoId]![sectorDoc.id] =
+                (totalPorSector[eventoId]![sectorDoc.id] ?? 0) + m.toDouble();
+          }
         }
       }
 
@@ -973,7 +988,8 @@ class _AnalisisSectoresWidget extends StatelessWidget {
               'eventoId': eventoId,
               'sectorId': sectorId,
               'nombreEvento': nombresEventos[eventoId] ?? 'Sin nombre',
-              'nombreSector': sectoresPorEvento[eventoId]![sectorId] ?? 'Sector',
+              'nombreSector':
+                  sectoresPorEvento[eventoId]![sectorId] ?? 'Sector',
               'total': total,
             });
           }
@@ -981,7 +997,8 @@ class _AnalisisSectoresWidget extends StatelessWidget {
       });
 
       lista.sort(
-          (a, b) => (b['total'] as double).compareTo(a['total'] as double));
+        (a, b) => (b['total'] as double).compareTo(a['total'] as double),
+      );
       return lista;
     } catch (e) {
       return [];
@@ -995,7 +1012,7 @@ class _AnalisisSectoresWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _cargarVentasPorSector(),
+      future: _cargarIngresosPorSector(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -1005,7 +1022,7 @@ class _AnalisisSectoresWidget extends StatelessWidget {
             child: Text(
               snapshot.hasError
                   ? 'Error al cargar datos'
-                  : 'No hay ventas por sector en eventos activos',
+                  : 'No hay cierres por sector en eventos activos',
               style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 14),
             ),
           );
@@ -1013,7 +1030,11 @@ class _AnalisisSectoresWidget extends StatelessWidget {
 
         final items = snapshot.data!;
         final topItems = items.take(12).toList();
-        final maxTotal = topItems.isEmpty ? 1.0 : (topItems.map((e) => e['total'] as double).reduce((a, b) => a > b ? a : b));
+        final maxTotal = topItems.isEmpty
+            ? 1.0
+            : (topItems
+                  .map((e) => e['total'] as double)
+                  .reduce((a, b) => a > b ? a : b));
         const sectorBarColors = [
           Color(0xFF6B4D2F),
           Color(0xFFDABF41),
@@ -1031,7 +1052,9 @@ class _AnalisisSectoresWidget extends StatelessWidget {
 
         return Card(
           elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -1040,7 +1063,9 @@ class _AnalisisSectoresWidget extends StatelessWidget {
                 _SimpleBarChart(
                   key: const ValueKey('chart_sectores'),
                   chartHeight: 260,
-                  labels: topItems.map((e) => e['nombreSector'] as String? ?? '').toList(),
+                  labels: topItems
+                      .map((e) => e['nombreSector'] as String? ?? '')
+                      .toList(),
                   values: topItems.map((e) => e['total'] as double).toList(),
                   colors: sectorBarColors,
                   maxY: maxTotal * 1.15,
@@ -1067,10 +1092,6 @@ class _EventosIngresosWidget extends StatelessWidget {
           .where('activo', isEqualTo: true)
           .get();
 
-      final transaccionesSnapshot = await FirebaseFirestore.instance
-          .collection('transacciones')
-          .get();
-
       final Map<String, double> ingresosPorEvento = {};
       final Map<String, String> nombresEventos = {};
 
@@ -1080,29 +1101,20 @@ class _EventosIngresosWidget extends StatelessWidget {
         nombresEventos[eventoId] =
             eventoData['nombre']?.toString() ?? 'Sin nombre';
         ingresosPorEvento[eventoId] = 0.0;
-      }
 
-      // Calcular ingresos por evento
-      for (var transDoc in transaccionesSnapshot.docs) {
-        final transData = transDoc.data();
-        final eventoId = transData['eventoId']?.toString();
-
-        if (eventoId != null && ingresosPorEvento.containsKey(eventoId)) {
-          final montoTotal = transData['montoTotal'];
-          double monto = 0.0;
-
-          if (montoTotal != null) {
-            if (montoTotal is num) {
-              monto = montoTotal.toDouble();
-            } else if (montoTotal is int) {
-              monto = montoTotal.toDouble();
-            } else if (montoTotal is double) {
-              monto = montoTotal;
-            }
+        final sectoresSnapshot = await FirebaseFirestore.instance
+            .collection('eventos')
+            .doc(eventoId)
+            .collection('sectores')
+            .get();
+        for (var sectorDoc in sectoresSnapshot.docs) {
+          final data = sectorDoc.data();
+          if (data['turnoCerrado'] != true) continue;
+          final m = data['ultimoCierre']?['totalEstimado'] ?? data['totalVendido'];
+          if (m != null && m is num) {
+            ingresosPorEvento[eventoId] =
+                (ingresosPorEvento[eventoId] ?? 0.0) + m.toDouble();
           }
-
-          ingresosPorEvento[eventoId] =
-              (ingresosPorEvento[eventoId] ?? 0.0) + monto;
         }
       }
 
@@ -1154,7 +1166,9 @@ class _EventosIngresosWidget extends StatelessWidget {
         final eventos = snapshot.data!;
         final maxIngreso = eventos.isEmpty
             ? 1.0
-            : (eventos.map((e) => e['ingresos'] as double).reduce((a, b) => a > b ? a : b));
+            : (eventos
+                  .map((e) => e['ingresos'] as double)
+                  .reduce((a, b) => a > b ? a : b));
         const barColors = [
           Color(0xFFDABF41),
           Color(0xFF6B4D2F),
@@ -1168,7 +1182,9 @@ class _EventosIngresosWidget extends StatelessWidget {
 
         return Card(
           elevation: 3,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -1177,7 +1193,9 @@ class _EventosIngresosWidget extends StatelessWidget {
                 _SimpleBarChart(
                   key: const ValueKey('chart_eventos'),
                   chartHeight: 220,
-                  labels: eventos.map((e) => e['nombre'] as String? ?? '').toList(),
+                  labels: eventos
+                      .map((e) => e['nombre'] as String? ?? '')
+                      .toList(),
                   values: eventos.map((e) => e['ingresos'] as double).toList(),
                   colors: barColors,
                   maxY: maxIngreso * 1.15,
@@ -1194,11 +1212,21 @@ class _EventosIngresosWidget extends StatelessWidget {
                     return Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(width: 12, height: 12, decoration: BoxDecoration(color: barColors[i % barColors.length], borderRadius: BorderRadius.circular(2))),
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: barColors[i % barColors.length],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           '${nombre.length > 15 ? '${nombre.substring(0, 15)}...' : nombre}: ${_formatearMonto(ing)}',
-                          style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[700]),
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.grey[700],
+                          ),
                         ),
                       ],
                     );

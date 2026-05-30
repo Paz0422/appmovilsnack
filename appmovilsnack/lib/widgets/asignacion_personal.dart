@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:front_appsnack/widgets/share_csv_file_io.dart' if (dart.library.html) 'package:front_appsnack/widgets/share_csv_file.dart' as share_csv;
+import 'package:front_appsnack/widgets/share_csv_file_io.dart'
+    if (dart.library.html) 'package:front_appsnack/widgets/share_csv_file.dart'
+    as share_csv;
 
 const String _kRolVendedor = 'Vendedor';
 
@@ -100,7 +102,10 @@ class _AsignacionPersonalState extends State<AsignacionPersonal>
                 children: [
                   const Icon(Icons.list_alt, size: 20),
                   const SizedBox(width: 8),
-                  Text('Lista y exportar', style: GoogleFonts.poppins(fontSize: 14)),
+                  Text(
+                    'Lista y exportar',
+                    style: GoogleFonts.poppins(fontSize: 14),
+                  ),
                 ],
               ),
             ),
@@ -147,10 +152,16 @@ class _EmpleadosTab extends StatelessWidget {
     DocumentSnapshot? doc,
   }) async {
     final nombreController = TextEditingController(
-      text: doc != null ? (doc.data() as Map<String, dynamic>)['nombre']?.toString() ?? '' : '',
+      text: doc != null
+          ? (doc.data() as Map<String, dynamic>)['nombre']?.toString() ?? ''
+          : '',
     );
     final rutController = TextEditingController(
-      text: doc != null ? formatRut((doc.data() as Map<String, dynamic>)['rut']?.toString() ?? '') : '',
+      text: doc != null
+          ? formatRut(
+              (doc.data() as Map<String, dynamic>)['rut']?.toString() ?? '',
+            )
+          : '',
     );
 
     final guardado = await showDialog<bool>(
@@ -160,7 +171,10 @@ class _EmpleadosTab extends StatelessWidget {
           backgroundColor: backgroundColor,
           title: Text(
             doc == null ? 'Agregar empleado' : 'Editar empleado',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: primaryColor),
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.bold,
+              color: primaryColor,
+            ),
           ),
           content: SingleChildScrollView(
             child: Column(
@@ -171,7 +185,9 @@ class _EmpleadosTab extends StatelessWidget {
                   decoration: InputDecoration(
                     labelText: 'Nombre',
                     labelStyle: GoogleFonts.poppins(color: secondaryColor),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide(color: accentColor, width: 2),
@@ -185,7 +201,9 @@ class _EmpleadosTab extends StatelessWidget {
                   decoration: InputDecoration(
                     labelText: 'RUT (ej: 20.458.984-7)',
                     labelStyle: GoogleFonts.poppins(color: secondaryColor),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide(color: accentColor, width: 2),
@@ -201,21 +219,36 @@ class _EmpleadosTab extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text('Cancelar', style: GoogleFonts.poppins(color: secondaryColor)),
+              child: Text(
+                'Cancelar',
+                style: GoogleFonts.poppins(color: secondaryColor),
+              ),
             ),
             ElevatedButton(
               onPressed: () {
                 final nombre = nombreController.text.trim();
                 if (nombre.isEmpty) {
                   ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(content: Text('Ingresa el nombre', style: GoogleFonts.poppins()), backgroundColor: Colors.red),
+                    SnackBar(
+                      content: Text(
+                        'Ingresa el nombre',
+                        style: GoogleFonts.poppins(),
+                      ),
+                      backgroundColor: Colors.red,
+                    ),
                   );
                   return;
                 }
                 Navigator.of(ctx).pop(true);
               },
-              style: ElevatedButton.styleFrom(backgroundColor: accentColor, foregroundColor: primaryColor),
-              child: Text('Guardar', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accentColor,
+                foregroundColor: primaryColor,
+              ),
+              child: Text(
+                'Guardar',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         );
@@ -243,11 +276,17 @@ class _EmpleadosTab extends StatelessWidget {
           );
         }
       } else {
-        await doc.reference.update({'nombre': nombre, 'rut': rut.isEmpty ? rutController.text.trim() : rut});
+        await doc.reference.update({
+          'nombre': nombre,
+          'rut': rut.isEmpty ? rutController.text.trim() : rut,
+        });
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Empleado actualizado', style: GoogleFonts.poppins()),
+              content: Text(
+                'Empleado actualizado',
+                style: GoogleFonts.poppins(),
+              ),
               backgroundColor: Colors.green,
               behavior: SnackBarBehavior.floating,
             ),
@@ -268,25 +307,39 @@ class _EmpleadosTab extends StatelessWidget {
   }
 
   Future<void> _eliminar(BuildContext context, DocumentSnapshot doc) async {
-    final nombre = (doc.data() as Map<String, dynamic>)['nombre']?.toString() ?? 'este empleado';
+    final nombre =
+        (doc.data() as Map<String, dynamic>)['nombre']?.toString() ??
+        'este empleado';
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: backgroundColor,
-        title: Text('Eliminar empleado', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: primaryColor)),
-        content: Text(
-          '¿Eliminar a "$nombre"?',
-          style: GoogleFonts.poppins(),
+        title: Text(
+          'Eliminar empleado',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            color: primaryColor,
+          ),
         ),
+        content: Text('¿Eliminar a "$nombre"?', style: GoogleFonts.poppins()),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancelar', style: GoogleFonts.poppins(color: secondaryColor)),
+            child: Text(
+              'Cancelar',
+              style: GoogleFonts.poppins(color: secondaryColor),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: Text('Eliminar', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(
+              'Eliminar',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -306,7 +359,11 @@ class _EmpleadosTab extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e', style: GoogleFonts.poppins()), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating),
+          SnackBar(
+            content: Text('Error: $e', style: GoogleFonts.poppins()),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
@@ -345,12 +402,19 @@ class _EmpleadosTab extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.people_outline, size: 64, color: secondaryColor.withOpacity(0.5)),
+                      Icon(
+                        Icons.people_outline,
+                        size: 64,
+                        color: secondaryColor.withValues(alpha: 0.5),
+                      ),
                       const SizedBox(height: 16),
                       Text(
                         'No hay empleados.\nAgrega nombre y RUT.',
                         textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(color: secondaryColor, fontSize: 16),
+                        style: GoogleFonts.poppins(
+                          color: secondaryColor,
+                          fontSize: 16,
+                        ),
                       ),
                     ],
                   ),
@@ -368,15 +432,33 @@ class _EmpleadosTab extends StatelessWidget {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 10),
                   elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     leading: CircleAvatar(
-                      backgroundColor: accentColor.withOpacity(0.2),
+                      backgroundColor: accentColor.withValues(alpha: 0.2),
                       child: Icon(Icons.person, color: accentColor),
                     ),
-                    title: Text(nombre, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 16, color: primaryColor)),
-                    subtitle: Text('RUT: $rut', style: GoogleFonts.poppins(fontSize: 13, color: secondaryColor)),
+                    title: Text(
+                      nombre,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                        color: primaryColor,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'RUT: $rut',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: secondaryColor,
+                      ),
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -386,7 +468,10 @@ class _EmpleadosTab extends StatelessWidget {
                           tooltip: 'Editar',
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.red,
+                          ),
                           onPressed: () => _eliminar(context, doc),
                           tooltip: 'Eliminar',
                         ),
@@ -476,13 +561,19 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
               Expanded(
                 child: Text(
                   'Marca los empleados que van en la lista y exporta a Excel.',
-                  style: GoogleFonts.poppins(fontSize: 13, color: widget.secondaryColor),
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: widget.secondaryColor,
+                  ),
                 ),
               ),
               TextButton.icon(
                 onPressed: _refrescarLista,
                 icon: const Icon(Icons.refresh, size: 20),
-                label: Text('Refrescar', style: GoogleFonts.poppins(fontSize: 13)),
+                label: Text(
+                  'Refrescar',
+                  style: GoogleFonts.poppins(fontSize: 13),
+                ),
               ),
             ],
           ),
@@ -544,9 +635,16 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
           child: ElevatedButton.icon(
             onPressed: _exportando ? null : _exportarCsv,
             icon: _exportando
-                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.table_chart),
-            label: Text(_exportando ? 'Exportando...' : 'Exportar a Excel / CSV', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+            label: Text(
+              _exportando ? 'Exportando...' : 'Exportar a Excel / CSV',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: widget.accentColor,
               foregroundColor: widget.primaryColor,
@@ -561,7 +659,9 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
   Future<void> _exportarCsv() async {
     setState(() => _exportando = true);
     try {
-      final empleadosSnap = await FirebaseFirestore.instance.collection('empleados').get();
+      final empleadosSnap = await FirebaseFirestore.instance
+          .collection('empleados')
+          .get();
       final filas = <List<String>>[];
       for (final doc in empleadosSnap.docs) {
         if (_seleccionados[doc.id] != true) continue;
@@ -576,7 +676,10 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Marca al menos un empleado para exportar.', style: GoogleFonts.poppins()),
+              content: Text(
+                'Marca al menos un empleado para exportar.',
+                style: GoogleFonts.poppins(),
+              ),
               backgroundColor: Colors.orange,
               behavior: SnackBarBehavior.floating,
             ),
@@ -598,7 +701,10 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Lista exportada. Abre el archivo .csv con Excel.', style: GoogleFonts.poppins()),
+            content: Text(
+              'Lista exportada. Abre el archivo .csv con Excel.',
+              style: GoogleFonts.poppins(),
+            ),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
           ),
@@ -607,7 +713,14 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al exportar: $e', style: GoogleFonts.poppins()), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating),
+          SnackBar(
+            content: Text(
+              'Error al exportar: $e',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } finally {
@@ -660,7 +773,10 @@ class _FilaEmpleadoLista extends StatelessWidget {
         ),
         title: Text(
           nombre,
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: primaryColor),
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w600,
+            color: primaryColor,
+          ),
         ),
         subtitle: Text(
           'RUT: $rut',

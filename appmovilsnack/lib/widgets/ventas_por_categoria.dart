@@ -1,4 +1,4 @@
-// Estadísticas de ventas por categoría (Bebestibles, Snacks, Masas, Galletas, Otros)
+// Estimación por categoría según cierres de inventario (stock inicial − stock final)
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:front_appsnack/core/app_theme.dart';
@@ -19,23 +19,28 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
   Map<String, double> _montoPorCategoria = {};
   Map<String, int> _cantidadPorCategoria = {};
   List<Map<String, String>> _categorias = [];
-  int _totalTransacciones = 0;
+  int _totalCierres = 0;
   double _montoTotal = 0;
 
-  /// Colores para cada porción del gráfico circular (por índice)
   static const List<Color> _coloresGrafico = [
-    AppColors.accent, // Bebestibles
-    AppColors.secondary, // Snacks
-    Color(0xFF8B4513), // saddle brown - Masas
-    Color(0xFFCD853F), // peru - Galletas
-    Color(0xFFA0522D), // sienna - Otros
-    Color(0xFFBC8F8F), // rosy brown - extra
+    AppColors.accent,
+    AppColors.secondary,
+    Color(0xFF8B4513),
+    Color(0xFFCD853F),
+    Color(0xFFA0522D),
+    Color(0xFFBC8F8F),
   ];
 
   @override
   void initState() {
     super.initState();
     _cargar();
+  }
+
+  String _catKey(String? cat) {
+    final c = cat?.trim();
+    if (c == null || c.isEmpty) return categoriaDefault;
+    return categoriasProducto.contains(c) ? c : categoriaDefault;
   }
 
   Future<void> _cargar() async {
@@ -47,14 +52,12 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
     });
     try {
       _categorias = await cargarCategoriasFirestore();
-      final nombresCat = _categorias.map((e) => e['nombre'] ?? '').where((s) => s.isNotEmpty).toList();
-      if (nombresCat.isEmpty) _categorias = categoriasProductoDefault.map((c) => {'nombre': c, 'icono': ''}).toList();
+      if (_categorias.isEmpty) {
+        _categorias = categoriasProductoDefault
+            .map((c) => {'nombre': c, 'icono': ''})
+            .toList();
+      }
 
-      final snap = await FirebaseFirestore.instance
-          .collection('transacciones')
-          .get();
-      double montoTotal = 0;
-      int countTrans = 0;
       final Map<String, double> montoCat = {};
       final Map<String, int> cantCat = {};
       for (final e in _categorias) {
@@ -67,23 +70,56 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
       montoCat[categoriaDefault] = 0;
       cantCat[categoriaDefault] = 0;
 
-      for (final doc in snap.docs) {
-        final d = doc.data();
-        countTrans++;
-        final monto = (d['montoTotal'] as num?)?.toDouble() ?? 0;
-        montoTotal += monto;
-        final items = d['items'] as List<dynamic>?;
-        if (items != null) {
-          for (final it in items) {
-            final map = it as Map<String, dynamic>?;
-            if (map == null) continue;
-            final cat = map['categoria']?.toString() ?? categoriaDefault;
-            final key = categoriasProducto.contains(cat) ? cat : categoriaDefault;
-            final precio = (map['precio'] as num?)?.toDouble() ?? 0;
-            final cantidad = (map['cantidad'] as int?) ?? 0;
-            final subtotal = precio * cantidad;
+      // Cache categoría por productoId (catálogo global)
+      final productosSnap =
+          await FirebaseFirestore.instance.collection('productos').get();
+      final Map<String, String> catPorProducto = {
+        for (final doc in productosSnap.docs)
+          doc.id: _catKey(doc.data()['categoria']?.toString()),
+      };
+
+      double montoTotal = 0;
+      int cierres = 0;
+
+      final eventosSnap =
+          await FirebaseFirestore.instance.collection('eventos').get();
+
+      for (final eventoDoc in eventosSnap.docs) {
+        final sectoresSnap = await eventoDoc.reference
+            .collection('sectores')
+            .get();
+
+        for (final sectorDoc in sectoresSnap.docs) {
+          final sectorData = sectorDoc.data();
+          final cierre = sectorData['ultimoCierre'];
+          if (cierre is! Map<String, dynamic>) continue;
+
+          cierres++;
+          final productos = cierre['productos'] as List<dynamic>? ?? [];
+
+          for (final raw in productos) {
+            if (raw is! Map) continue;
+            final m = Map<String, dynamic>.from(raw);
+
+            final vendido = (m['cantidadVendida'] as int?) ??
+                (((m['cantidadInicial'] as int?) ?? 0) -
+                    ((m['cantidadFinal'] as int?) ?? 0));
+            if (vendido <= 0) continue;
+
+            final precio = (m['precio'] as num?)?.toDouble() ?? 0;
+            final subtotal = (m['subtotal'] as num?)?.toDouble() ??
+                (vendido * precio);
+            if (subtotal <= 0) continue;
+
+            final productoId = m['productoId']?.toString() ?? '';
+            final key = _catKey(
+              m['categoria']?.toString() ??
+                  (productoId.isNotEmpty ? catPorProducto[productoId] : null),
+            );
+
             montoCat[key] = (montoCat[key] ?? 0) + subtotal;
-            cantCat[key] = (cantCat[key] ?? 0) + cantidad;
+            cantCat[key] = (cantCat[key] ?? 0) + vendido;
+            montoTotal += subtotal;
           }
         }
       }
@@ -92,7 +128,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
         setState(() {
           _montoPorCategoria = montoCat;
           _cantidadPorCategoria = cantCat;
-          _totalTransacciones = countTrans;
+          _totalCierres = cierres;
           _montoTotal = montoTotal;
           _loading = false;
         });
@@ -108,15 +144,15 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
   }
 
   Widget _buildGraficoCircular() {
-    // Orden fijo: categorías de la lista + Otros al final (mismo orden que la lista de abajo)
     final ordenCategorias = <String>[
       ..._categorias.map((e) => e['nombre'] ?? '').where((s) => s.isNotEmpty),
     ];
-    if (!ordenCategorias.contains(categoriaDefault)) ordenCategorias.add(categoriaDefault);
+    if (!ordenCategorias.contains(categoriaDefault)) {
+      ordenCategorias.add(categoriaDefault);
+    }
 
     final listaConMonto = <MapEntry<String, double>>[];
-    for (var i = 0; i < ordenCategorias.length; i++) {
-      final cat = ordenCategorias[i];
+    for (final cat in ordenCategorias) {
       final monto = _montoPorCategoria[cat] ?? 0;
       if (monto > 0) listaConMonto.add(MapEntry(cat, monto));
     }
@@ -128,18 +164,33 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.pie_chart_outline, size: 64, color: AppColors.secondary.withOpacity(0.5)),
+            Icon(
+              Icons.pie_chart_outline,
+              size: 64,
+              color: AppColors.secondary.withValues(alpha: 0.5),
+            ),
             const SizedBox(height: 8),
             Text(
-              'Sin ventas por categoría aún',
-              style: GoogleFonts.poppins(color: AppColors.secondary, fontSize: 14),
+              'Sin cierres de inventario aún',
+              style: GoogleFonts.poppins(
+                color: AppColors.secondary,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Los datos aparecen al cerrar turno con stock inicial y final.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                color: AppColors.secondary.withValues(alpha: 0.85),
+                fontSize: 12,
+              ),
             ),
           ],
         ),
       );
     }
 
-    // Color por índice en orden fijo (para que coincida con la leyenda)
     int colorIndex = 0;
     final secciones = <PieChartSectionData>[];
     final leyenda = <MapEntry<String, Color>>[];
@@ -165,6 +216,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
       leyenda.add(MapEntry(cat, color));
       colorIndex++;
     }
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -184,7 +236,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Total',
+                    'Total estimado',
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       color: AppColors.secondary,
@@ -219,13 +271,20 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                   decoration: BoxDecoration(
                     color: e.value,
                     shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.primaryLight.withOpacity(0.3), width: 1),
+                    border: Border.all(
+                      color: AppColors.primaryLight.withValues(alpha: 0.3),
+                      width: 1,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 6),
                 Text(
                   e.key,
-                  style: GoogleFonts.poppins(fontSize: 12, color: AppColors.primaryLight, fontWeight: FontWeight.w500),
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: AppColors.primaryLight,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             );
@@ -242,7 +301,10 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
       appBar: AppBar(
         title: Text(
           'Ventas por categoría',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: AppColors.accent),
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            color: AppColors.accent,
+          ),
         ),
         backgroundColor: AppColors.primaryLight,
         foregroundColor: AppColors.accent,
@@ -272,13 +334,13 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       Card(
-                        color: AppColors.accent.withOpacity(0.15),
+                        color: AppColors.accent.withValues(alpha: 0.15),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(
                             children: [
                               Text(
-                                'Total ventas',
+                                'Total estimado (inventario)',
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
                                   color: AppColors.secondary,
@@ -293,10 +355,19 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                                 ),
                               ),
                               Text(
-                                '$_totalTransacciones transacciones',
+                                '$_totalCierres sectores con cierre registrado',
                                 style: GoogleFonts.poppins(
                                   fontSize: 12,
                                   color: AppColors.secondary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Calculado: stock inicial − stock final por producto',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  color: AppColors.secondary.withValues(alpha: 0.9),
                                 ),
                               ),
                             ],
@@ -329,31 +400,37 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                         if (cat.isEmpty) return const SizedBox.shrink();
                         final monto = _montoPorCategoria[cat] ?? 0;
                         final cant = _cantidadPorCategoria[cat] ?? 0;
-                        final pct = _montoTotal > 0 ? (monto / _montoTotal * 100) : 0.0;
+                        final pct =
+                            _montoTotal > 0 ? (monto / _montoTotal * 100) : 0.0;
                         final icono = e['icono'] ?? '';
                         return Card(
                           margin: const EdgeInsets.only(bottom: 10),
                           child: ListTile(
                             leading: CircleAvatar(
-                              backgroundColor: AppColors.accent.withOpacity(0.2),
+                              backgroundColor:
+                                  AppColors.accent.withValues(alpha: 0.2),
                               child: Icon(
-                                icono.isNotEmpty ? iconoCategoriaConIcono(icono) : iconoCategoria(cat),
+                                icono.isNotEmpty
+                                    ? iconoCategoriaConIcono(icono)
+                                    : iconoCategoria(cat),
                                 color: AppColors.secondary,
                               ),
                             ),
                             title: Text(
                               cat,
-                              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             subtitle: Text(
-                              '\$${monto.toStringAsFixed(0)} · $cant ítems · ${pct.toStringAsFixed(1)}%',
+                              '\$${monto.toStringAsFixed(0)} · $cant u. · ${pct.toStringAsFixed(1)}%',
                               style: GoogleFonts.poppins(
                                 fontSize: 13,
                                 color: AppColors.secondary,
                               ),
                             ),
                             trailing: Text(
-                              '\$${monto.toStringAsFixed(0)}',
+                              '${pct.toStringAsFixed(1)}%',
                               style: GoogleFonts.poppins(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.accent,
@@ -363,28 +440,33 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                           ),
                         );
                       }),
-                      if ((_montoPorCategoria[categoriaDefault] ?? 0) > 0)
+                      if ((_montoPorCategoria[categoriaDefault] ?? 0) > 0 &&
+                          !_categorias.any(
+                            (e) => (e['nombre'] ?? '') == categoriaDefault,
+                          ))
                         Card(
                           margin: const EdgeInsets.only(bottom: 10),
                           child: ListTile(
                             leading: CircleAvatar(
-                              backgroundColor: AppColors.accent.withOpacity(0.2),
-                              child: Icon(iconoCategoria(categoriaDefault), color: AppColors.secondary),
+                              backgroundColor:
+                                  AppColors.accent.withValues(alpha: 0.2),
+                              child: Icon(
+                                iconoCategoria(categoriaDefault),
+                                color: AppColors.secondary,
+                              ),
                             ),
                             title: Text(
                               categoriaDefault,
-                              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             subtitle: Text(
-                              '\$${(_montoPorCategoria[categoriaDefault] ?? 0).toStringAsFixed(0)}',
-                              style: GoogleFonts.poppins(fontSize: 13, color: AppColors.secondary),
-                            ),
-                            trailing: Text(
-                              '\$${(_montoPorCategoria[categoriaDefault] ?? 0).toStringAsFixed(0)}',
+                              '\$${(_montoPorCategoria[categoriaDefault] ?? 0).toStringAsFixed(0)} · '
+                              '${_cantidadPorCategoria[categoriaDefault] ?? 0} u.',
                               style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.accent,
-                                fontSize: 16,
+                                fontSize: 13,
+                                color: AppColors.secondary,
                               ),
                             ),
                           ),

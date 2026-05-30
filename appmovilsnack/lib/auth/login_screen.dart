@@ -119,7 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final String userRole = userData['rol'] ?? 'vendedor';
+      final userRole = AuthManager.normalizarRol(userData['rol']?.toString());
 
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,

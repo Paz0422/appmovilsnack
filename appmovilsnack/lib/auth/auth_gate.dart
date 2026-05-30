@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:front_appsnack/screens/admin/home_admin.dart';
 import 'package:front_appsnack/widgets/estadio_selection.dart';
 import 'package:front_appsnack/auth/login_screen.dart';
+import 'package:front_appsnack/auth/auth_manager.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -72,7 +73,7 @@ class _AuthGateState extends State<AuthGate> {
                 // 3. ¡Tenemos los datos del vendedor! Aplicamos la misma lógica del signIn.
                 final userData =
                     userSnapshot.data!.data() as Map<String, dynamic>;
-                final String userRole = userData['rol'] ?? 'vendedor';
+                final userRole = AuthManager.normalizarRol(userData['rol']?.toString());
 
                 if (userRole == 'admin') {
                   return const HomeAdmin(); // Admin

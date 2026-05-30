@@ -52,3 +52,13 @@ GoogleService-Info.plist
 # Variables de entorno
 .env
 .env.*
+
+# Logs y cachés extra
+**/.kotlin/
+**/android/.gradle/
+firebase-debug.log
+firestore-debug.log
+*.apk
+*.aab
+coverage/
+Thumbs.db

@@ -65,7 +65,10 @@ class _GestionCategoriasState extends State<GestionCategorias> {
             return AlertDialog(
               title: Text(
                 'Agregar categoría',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: primaryColor),
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  color: primaryColor,
+                ),
               ),
               content: SingleChildScrollView(
                 child: Column(
@@ -75,7 +78,9 @@ class _GestionCategoriasState extends State<GestionCategorias> {
                       decoration: InputDecoration(
                         labelText: 'Nombre',
                         hintText: 'Ej: Bebidas calientes',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(color: accentColor, width: 2),
@@ -86,10 +91,12 @@ class _GestionCategoriasState extends State<GestionCategorias> {
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      value: iconoSeleccionado,
+                      initialValue: iconoSeleccionado,
                       decoration: InputDecoration(
                         labelText: 'Ícono',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                       items: iconosDisponibles.map((e) {
                         return DropdownMenuItem(
@@ -116,14 +123,20 @@ class _GestionCategoriasState extends State<GestionCategorias> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(false),
-                  child: Text('Cancelar', style: GoogleFonts.poppins(color: secondaryColor)),
+                  child: Text(
+                    'Cancelar',
+                    style: GoogleFonts.poppins(color: secondaryColor),
+                  ),
                 ),
                 ElevatedButton(
                   onPressed: () {
                     if (nombre.isEmpty) {
                       ScaffoldMessenger.of(ctx).showSnackBar(
                         SnackBar(
-                          content: Text('Escribe un nombre', style: GoogleFonts.poppins()),
+                          content: Text(
+                            'Escribe un nombre',
+                            style: GoogleFonts.poppins(),
+                          ),
                           backgroundColor: Colors.red,
                         ),
                       );
@@ -131,8 +144,14 @@ class _GestionCategoriasState extends State<GestionCategorias> {
                     }
                     Navigator.of(ctx).pop(true);
                   },
-                  style: ElevatedButton.styleFrom(backgroundColor: accentColor, foregroundColor: primaryColor),
-                  child: Text('Agregar', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accentColor,
+                    foregroundColor: primaryColor,
+                  ),
+                  child: Text(
+                    'Agregar',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             );
@@ -145,8 +164,12 @@ class _GestionCategoriasState extends State<GestionCategorias> {
 
     try {
       final col = FirebaseFirestore.instance.collection('categorias');
-      final ultimo = _docs.isEmpty ? null : _docs.last.data() as Map<String, dynamic>?;
-      final orden = _docs.isEmpty ? 0 : (ultimo?['orden'] as num? ?? 0).toInt() + 1;
+      final ultimo = _docs.isEmpty
+          ? null
+          : _docs.last.data() as Map<String, dynamic>?;
+      final orden = _docs.isEmpty
+          ? 0
+          : (ultimo?['orden'] as num? ?? 0).toInt() + 1;
       await col.add({
         'nombre': nombre,
         'icono': iconoSeleccionado,
@@ -155,7 +178,10 @@ class _GestionCategoriasState extends State<GestionCategorias> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Categoría "$nombre" agregada', style: GoogleFonts.poppins()),
+            content: Text(
+              'Categoría "$nombre" agregada',
+              style: GoogleFonts.poppins(),
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -179,7 +205,10 @@ class _GestionCategoriasState extends State<GestionCategorias> {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Eliminar categoría', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        title: Text(
+          'Eliminar categoría',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
         content: Text(
           '¿Eliminar "$nombre"? Los productos con esta categoría quedarán como "Otros".',
           style: GoogleFonts.poppins(),
@@ -187,11 +216,17 @@ class _GestionCategoriasState extends State<GestionCategorias> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancelar', style: GoogleFonts.poppins(color: secondaryColor)),
+            child: Text(
+              'Cancelar',
+              style: GoogleFonts.poppins(color: secondaryColor),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Eliminar', style: GoogleFonts.poppins(color: Colors.red)),
+            child: Text(
+              'Eliminar',
+              style: GoogleFonts.poppins(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -211,7 +246,10 @@ class _GestionCategoriasState extends State<GestionCategorias> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e', style: GoogleFonts.poppins()), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Error: $e', style: GoogleFonts.poppins()),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -224,53 +262,72 @@ class _GestionCategoriasState extends State<GestionCategorias> {
       appBar: AppBar(
         title: Text(
           'Categorías de productos',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: accentColor),
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            color: accentColor,
+          ),
         ),
         backgroundColor: primaryColor,
         foregroundColor: accentColor,
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loading ? null : _cargar),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loading ? null : _cargar,
+          ),
         ],
       ),
       body: _loading
           ? Center(child: CircularProgressIndicator(color: accentColor))
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text('Error: $_error', style: GoogleFonts.poppins(color: Colors.red), textAlign: TextAlign.center),
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _docs.length,
-                  itemBuilder: (context, index) {
-                    final doc = _docs[index];
-                    final data = doc.data() as Map<String, dynamic>?;
-                    final nombre = data?['nombre']?.toString() ?? 'Sin nombre';
-                    final icono = data?['icono']?.toString() ?? 'restaurant';
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: accentColor.withOpacity(0.2),
-                          child: Icon(iconoDesdeNombre(icono), color: secondaryColor),
-                        ),
-                        title: Text(nombre, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red),
-                          onPressed: () => _eliminarCategoria(doc),
-                        ),
-                      ),
-                    );
-                  },
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Error: $_error',
+                  style: GoogleFonts.poppins(color: Colors.red),
+                  textAlign: TextAlign.center,
                 ),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _docs.length,
+              itemBuilder: (context, index) {
+                final doc = _docs[index];
+                final data = doc.data() as Map<String, dynamic>?;
+                final nombre = data?['nombre']?.toString() ?? 'Sin nombre';
+                final icono = data?['icono']?.toString() ?? 'restaurant';
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: accentColor.withValues(alpha: 0.2),
+                      child: Icon(
+                        iconoDesdeNombre(icono),
+                        color: secondaryColor,
+                      ),
+                    ),
+                    title: Text(
+                      nombre,
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      onPressed: () => _eliminarCategoria(doc),
+                    ),
+                  ),
+                );
+              },
+            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _agregarCategoria,
         backgroundColor: accentColor,
         foregroundColor: primaryColor,
         icon: const Icon(Icons.add),
-        label: Text('Agregar categoría', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        label: Text(
+          'Agregar categoría',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }

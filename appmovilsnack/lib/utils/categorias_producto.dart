@@ -39,15 +39,16 @@ IconData iconoDesdeNombre(String nombre) {
 IconData iconoCategoria(String categoria) {
   final n = categoria.toLowerCase();
   if (n == 'bebestibles') return Icons.local_drink;
-  if (n == 'snacks') return Icons.fastfood;      // papas / comida rápida
-  if (n == 'masas') return Icons.lunch_dining;   // hamburguesa
+  if (n == 'snacks') return Icons.fastfood; // papas / comida rápida
+  if (n == 'masas') return Icons.lunch_dining; // hamburguesa
   if (n == 'galletas') return Icons.cookie;
-  return Icons.takeout_dining;                   // Otros: servilleta / llevar
+  return Icons.takeout_dining; // Otros: servilleta / llevar
 }
 
 /// Ícono para una categoría cargada desde Firestore (tiene campo icono)
 IconData iconoCategoriaConIcono(String? iconoName) {
-  if (iconoName != null && iconoName.isNotEmpty) return iconoDesdeNombre(iconoName);
+  if (iconoName != null && iconoName.isNotEmpty)
+    return iconoDesdeNombre(iconoName);
   return Icons.restaurant;
 }
 
@@ -67,7 +68,13 @@ Future<List<Map<String, String>>> cargarCategoriasFirestore() async {
   final snap = await col.orderBy('orden').get();
   if (snap.docs.isEmpty) {
     // Crear categorías por defecto
-    const iconos = ['local_drink', 'fastfood', 'lunch_dining', 'cookie', 'takeout_dining'];
+    const iconos = [
+      'local_drink',
+      'fastfood',
+      'lunch_dining',
+      'cookie',
+      'takeout_dining',
+    ];
     for (int i = 0; i < categoriasProductoDefault.length; i++) {
       await col.add({
         'nombre': categoriasProductoDefault[i],
@@ -75,10 +82,11 @@ Future<List<Map<String, String>>> cargarCategoriasFirestore() async {
         'orden': i,
       });
     }
-    return categoriasProductoDefault.asMap().entries.map((e) => {
-      'nombre': e.value,
-      'icono': iconos[e.key],
-    }).toList();
+    return categoriasProductoDefault
+        .asMap()
+        .entries
+        .map((e) => {'nombre': e.value, 'icono': iconos[e.key]})
+        .toList();
   }
   return snap.docs.map((d) {
     final data = d.data();

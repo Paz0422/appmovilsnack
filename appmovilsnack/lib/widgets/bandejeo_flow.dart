@@ -617,7 +617,7 @@ class _PasoSeleccionBandejero extends StatelessWidget {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
-          color: _accentColor.withOpacity(0.12),
+          color: _accentColor.withValues(alpha: 0.12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -658,8 +658,14 @@ class _PasoSeleccionBandejero extends StatelessWidget {
               final rawDocs = snapshot.data?.docs ?? const [];
               final docs = List<QueryDocumentSnapshot>.from(rawDocs)
                 ..sort((a, b) {
-                  final na = (a.data() as Map<String, dynamic>)['nombre']?.toString() ?? '';
-                  final nb = (b.data() as Map<String, dynamic>)['nombre']?.toString() ?? '';
+                  final na =
+                      (a.data() as Map<String, dynamic>)['nombre']
+                          ?.toString() ??
+                      '';
+                  final nb =
+                      (b.data() as Map<String, dynamic>)['nombre']
+                          ?.toString() ??
+                      '';
                   return na.toLowerCase().compareTo(nb.toLowerCase());
                 });
               if (docs.isEmpty) {
@@ -672,7 +678,7 @@ class _PasoSeleccionBandejero extends StatelessWidget {
                         Icon(
                           Icons.person_add_alt_1,
                           size: 64,
-                          color: _secondaryColor.withOpacity(0.6),
+                          color: _secondaryColor.withValues(alpha: 0.6),
                         ),
                         const SizedBox(height: 12),
                         Text(
@@ -710,7 +716,7 @@ class _PasoSeleccionBandejero extends StatelessWidget {
                     ),
                     child: ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: _accentColor.withOpacity(0.2),
+                        backgroundColor: _accentColor.withValues(alpha: 0.2),
                         child: Icon(Icons.person, color: _accentColor),
                       ),
                       title: Text(
@@ -739,7 +745,7 @@ class _PasoSeleccionBandejero extends StatelessWidget {
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 10,
                 offset: const Offset(0, -2),
               ),
@@ -840,7 +846,7 @@ class _PasoCargaBandeja extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            color: _accentColor.withOpacity(0.1),
+            color: _accentColor.withValues(alpha: 0.1),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -907,7 +913,7 @@ class _PasoCargaBandeja extends StatelessWidget {
                       Icon(
                         Icons.inventory_2_outlined,
                         size: 64,
-                        color: _secondaryColor.withOpacity(0.5),
+                        color: _secondaryColor.withValues(alpha: 0.5),
                       ),
                       const SizedBox(height: 16),
                       Text(
@@ -969,8 +975,8 @@ class _PasoCargaBandeja extends StatelessWidget {
                         height: 50,
                         decoration: BoxDecoration(
                           color: enBandeja
-                              ? _accentColor.withOpacity(0.2)
-                              : Colors.grey.withOpacity(0.1),
+                              ? _accentColor.withValues(alpha: 0.2)
+                              : Colors.grey.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
@@ -1006,7 +1012,7 @@ class _PasoCargaBandeja extends StatelessWidget {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: _accentColor.withOpacity(0.2),
+                                color: _accentColor.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
@@ -1082,7 +1088,7 @@ class _PasoCargaBandeja extends StatelessWidget {
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 10,
                 offset: const Offset(0, -2),
               ),
@@ -1188,7 +1194,7 @@ class _PasoResumenRonda extends StatelessWidget {
                     width: 50,
                     height: 50,
                     decoration: BoxDecoration(
-                      color: _accentColor.withOpacity(0.2),
+                      color: _accentColor.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(Icons.fastfood, color: _accentColor, size: 28),
@@ -1228,7 +1234,7 @@ class _PasoResumenRonda extends StatelessWidget {
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 10,
                 offset: const Offset(0, -2),
               ),
@@ -1295,7 +1301,7 @@ class _PasoRendicion extends StatelessWidget {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(20),
-          color: Colors.green.withOpacity(0.1),
+          color: Colors.green.withValues(alpha: 0.1),
           child: Column(
             children: [
               Text(
@@ -1507,7 +1513,7 @@ class _PasoRendicion extends StatelessWidget {
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 10,
                 offset: const Offset(0, -2),
               ),

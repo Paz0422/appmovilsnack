@@ -38,23 +38,7 @@ class AppShadows {
 
   static List<BoxShadow> card = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.06),
-      blurRadius: 12,
-      offset: const Offset(0, 4),
-    ),
-  ];
-
-  static List<BoxShadow> cardHover = [
-    BoxShadow(
-      color: Colors.black.withOpacity(0.08),
-      blurRadius: 20,
-      offset: const Offset(0, 6),
-    ),
-  ];
-
-  static List<BoxShadow> button = [
-    BoxShadow(
-      color: AppColors.accent.withOpacity(0.35),
+      color: Colors.black.withValues(alpha: 0.06),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),
@@ -110,8 +94,13 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surfaceCard,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: const BorderSide(color: AppColors.outline),
@@ -124,8 +113,13 @@ class AppTheme {
           borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: const BorderSide(color: AppColors.error),
         ),
-        labelStyle: GoogleFonts.plusJakartaSans(color: AppColors.onSurfaceVariant, fontSize: 14),
-        hintStyle: GoogleFonts.plusJakartaSans(color: AppColors.onSurfaceVariant.withOpacity(0.7)),
+        labelStyle: GoogleFonts.plusJakartaSans(
+          color: AppColors.onSurfaceVariant,
+          fontSize: 14,
+        ),
+        hintStyle: GoogleFonts.plusJakartaSans(
+          color: AppColors.onSurfaceVariant.withValues(alpha: 0.7),
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -150,11 +144,18 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
         backgroundColor: AppColors.primaryLight,
-        contentTextStyle: GoogleFonts.plusJakartaSans(color: AppColors.onPrimary),
+        contentTextStyle: GoogleFonts.plusJakartaSans(
+          color: AppColors.onPrimary,
+        ),
       ),
-      dividerTheme: const DividerThemeData(color: AppColors.outline, thickness: 1),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.outline,
+        thickness: 1,
+      ),
     );
   }
 

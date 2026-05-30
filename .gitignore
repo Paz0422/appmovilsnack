@@ -52,3 +52,20 @@ GoogleService-Info.plist
 # Variables de entorno
 .env
 .env.*
+
+# Logs y cachés extra
+**/.kotlin/
+**/android/.gradle/
+firebase-debug.log
+firestore-debug.log
+*.apk
+*.aab
+coverage/
+Thumbs.db
+
+# Evitar artefactos Flutter duplicados en la raíz del monorepo
+/pubspec.lock
+/.metadata
+/analysis_options.yaml
+/assets/
+/firebase.json

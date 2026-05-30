@@ -114,9 +114,12 @@ class _PerdidaTotalAcumulada extends StatelessWidget {
           margin: const EdgeInsets.all(16),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.red.withOpacity(0.1),
+            color: Colors.red.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.red.withOpacity(0.3), width: 1),
+            border: Border.all(
+              color: Colors.red.withValues(alpha: 0.3),
+              width: 1,
+            ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -205,7 +208,7 @@ class _TabNuevaMerma extends StatelessWidget {
                 Icon(
                   Icons.inventory_2_outlined,
                   size: 64,
-                  color: _secondaryColor.withOpacity(0.5),
+                  color: _secondaryColor.withValues(alpha: 0.5),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -220,7 +223,7 @@ class _TabNuevaMerma extends StatelessWidget {
                   'No se pueden registrar mermas sin stock',
                   style: GoogleFonts.poppins(
                     fontSize: 12,
-                    color: _secondaryColor.withOpacity(0.7),
+                    color: _secondaryColor.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -242,7 +245,7 @@ class _TabNuevaMerma extends StatelessWidget {
                 Icon(
                   Icons.inventory_2_outlined,
                   size: 64,
-                  color: _secondaryColor.withOpacity(0.5),
+                  color: _secondaryColor.withValues(alpha: 0.5),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -257,7 +260,7 @@ class _TabNuevaMerma extends StatelessWidget {
                   'No se pueden registrar mermas sin stock',
                   style: GoogleFonts.poppins(
                     fontSize: 12,
-                    color: _secondaryColor.withOpacity(0.7),
+                    color: _secondaryColor.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -341,7 +344,7 @@ class _TabHistorial extends StatelessWidget {
                 Icon(
                   Icons.history,
                   size: 64,
-                  color: _secondaryColor.withOpacity(0.5),
+                  color: _secondaryColor.withValues(alpha: 0.5),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -356,7 +359,7 @@ class _TabHistorial extends StatelessWidget {
                   'Las mermas registradas aparecerán aquí',
                   style: GoogleFonts.poppins(
                     fontSize: 12,
-                    color: _secondaryColor.withOpacity(0.7),
+                    color: _secondaryColor.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -400,7 +403,7 @@ class _TabHistorial extends StatelessWidget {
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -428,7 +431,7 @@ class _TabHistorial extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.1),
+                        color: Colors.red.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -468,7 +471,7 @@ class _TabHistorial extends StatelessWidget {
                       motivo,
                       style: GoogleFonts.poppins(
                         fontSize: 12,
-                        color: _secondaryColor.withOpacity(0.8),
+                        color: _secondaryColor.withValues(alpha: 0.8),
                         fontStyle: FontStyle.italic,
                       ),
                       maxLines: 2,
@@ -526,7 +529,7 @@ class _ProductoMermaCard extends StatelessWidget {
             width: 50,
             height: 50,
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.2),
+              color: Colors.orange.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(Icons.inventory_2, color: Colors.orange[700], size: 28),
@@ -554,7 +557,7 @@ class _ProductoMermaCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -603,7 +606,7 @@ class _ProductoMermaCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _accentColor.withOpacity(0.1),
+                    color: _accentColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Column(

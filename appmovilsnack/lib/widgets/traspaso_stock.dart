@@ -1,19 +1,64 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/utils/categorias_producto.dart';
+
+class _LineaPedido {
+  final String productoId;
+  final String nombre;
+  final double precio;
+  final int stockMax;
+  String? categoria;
+  int cantidad;
+
+  _LineaPedido({
+    required this.productoId,
+    required this.nombre,
+    required this.precio,
+    required this.stockMax,
+    required this.cantidad,
+    this.categoria,
+  });
+}
+
+class _LineaEnvioTraspaso {
+  final _LineaPedido linea;
+  final DocumentReference<Map<String, dynamic>> origenRef;
+  final Map<String, dynamic> origenData;
+  final int stockActual;
+  final String traspasoId;
+  final String categoria;
+
+  const _LineaEnvioTraspaso({
+    required this.linea,
+    required this.origenRef,
+    required this.origenData,
+    required this.stockActual,
+    required this.traspasoId,
+    required this.categoria,
+  });
+}
+
+int _intDesdeFirestore(dynamic value, [int fallback = 0]) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value.trim()) ?? fallback;
+  return fallback;
+}
 
 class TraspasoStock extends StatefulWidget {
   final String eventoId;
   final String nombreEvento;
-  final String? sectorIdDestinoInicial;
-  final String? nombreSectorDestinoInicial;
+  final String? sectorIdOrigenInicial;
+  final String? nombreSectorOrigenInicial;
 
   const TraspasoStock({
     super.key,
     required this.eventoId,
     required this.nombreEvento,
-    this.sectorIdDestinoInicial,
-    this.nombreSectorDestinoInicial,
+    this.sectorIdOrigenInicial,
+    this.nombreSectorOrigenInicial,
   });
 
   @override
@@ -27,11 +72,16 @@ class _TraspasoStockState extends State<TraspasoStock> {
   final Color backgroundColor = const Color(0xFFFDFBF7);
 
   bool _isLoading = true;
+  bool _enviando = false;
   String? _error;
 
   List<Map<String, String>> _sectores = [];
   String? _sectorOrigenId;
   String? _sectorDestinoId;
+  final Map<String, _LineaPedido> _pedido = {};
+
+  int get _totalUnidadesPedido =>
+      _pedido.values.fold(0, (total, l) => total + l.cantidad);
 
   @override
   void initState() {
@@ -58,12 +108,10 @@ class _TraspasoStockState extends State<TraspasoStock> {
       if (mounted) {
         setState(() {
           _sectores = sectores;
-          _sectorDestinoId =
-              widget.sectorIdDestinoInicial ?? sectores.firstOrNull?['id'];
-
-          // por defecto: primer sector distinto al destino
-          _sectorOrigenId = sectores
-              .where((s) => s['id'] != null && s['id'] != _sectorDestinoId)
+          _sectorOrigenId =
+              widget.sectorIdOrigenInicial ?? sectores.firstOrNull?['id'];
+          _sectorDestinoId = sectores
+              .where((s) => s['id'] != null && s['id'] != _sectorOrigenId)
               .firstOrNull?['id'];
           _isLoading = false;
           _error = null;
@@ -79,18 +127,28 @@ class _TraspasoStockState extends State<TraspasoStock> {
     }
   }
 
-  Future<void> _pedirYTransferirProducto({
+  void _limpiarPedido() {
+    setState(_pedido.clear);
+  }
+
+  Future<void> _agregarAlPedido({
     required String productoId,
     required String nombre,
     required double precio,
     required int stockDisponible,
+    String? categoria,
   }) async {
-    final controller = TextEditingController();
+    final existente = _pedido[productoId];
+    final controller = TextEditingController(
+      text: existente != null ? '${existente.cantidad}' : '',
+    );
+
     final cantidad = await showDialog<int?>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Traspasar producto',
+          existente != null ? 'Actualizar cantidad' : 'Agregar al pedido',
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
         content: Column(
@@ -101,177 +159,412 @@ class _TraspasoStockState extends State<TraspasoStock> {
               nombre,
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.w600,
+                fontSize: 16,
                 color: primaryColor,
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              'Disponible en origen: $stockDisponible',
-              style: GoogleFonts.poppins(color: secondaryColor),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Disponible: $stockDisponible u.',
+                style: GoogleFonts.poppins(fontSize: 13, color: secondaryColor),
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             TextField(
               controller: controller,
               autofocus: true,
               keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
               decoration: InputDecoration(
-                labelText: 'Cantidad a traspasar',
+                labelText: 'Cantidad',
+                hintText: 'Ej: 10',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
+              onSubmitted: (v) {
+                final n = int.tryParse(v.trim());
+                if (n != null) Navigator.of(dialogContext).pop(n);
+              },
             ),
           ],
         ),
         actions: [
+          if (existente != null)
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(-1),
+              child: Text(
+                'Quitar',
+                style: GoogleFonts.poppins(color: AppColors.error),
+              ),
+            ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(null),
             child: Text('Cancelar', style: GoogleFonts.poppins()),
           ),
-          ElevatedButton(
+          ElevatedButton.icon(
             onPressed: () {
-              final v = int.tryParse(controller.text);
+              final v = int.tryParse(controller.text.trim());
               Navigator.of(dialogContext).pop(v);
             },
+            icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
+            label: Text(
+              existente != null ? 'Actualizar' : 'Agregar',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: accentColor,
               foregroundColor: primaryColor,
-            ),
-            child: Text(
-              'Traspasar',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
             ),
           ),
         ],
       ),
     );
 
-    if (cantidad == null) return;
-    if (cantidad <= 0 || cantidad > stockDisponible) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Cantidad inválida', style: GoogleFonts.poppins()),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    if (cantidad == null || !mounted) return;
+
+    if (cantidad == -1) {
+      setState(() => _pedido.remove(productoId));
+      _mostrarMensaje('"$nombre" quitado del pedido.');
       return;
     }
+
+    if (cantidad <= 0 || cantidad > stockDisponible) {
+      _mostrarMensaje('Cantidad inválida.', esError: true);
+      return;
+    }
+
+    setState(() {
+      _pedido[productoId] = _LineaPedido(
+        productoId: productoId,
+        nombre: nombre,
+        precio: precio,
+        stockMax: stockDisponible,
+        cantidad: cantidad,
+        categoria: categoria,
+      );
+    });
+  }
+
+  Future<void> _mostrarResumenPedido() async {
+    if (_pedido.isEmpty) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final lineas = _pedido.values.toList()
+          ..sort((a, b) => a.nombre.compareTo(b.nombre));
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.outline,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Tu pedido',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: primaryColor,
+                ),
+              ),
+              Text(
+                'Hacia: ${_nombreSector(_sectorDestinoId)}',
+                style: GoogleFonts.poppins(fontSize: 13, color: secondaryColor),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: lineas.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final l = lineas[i];
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        l.nombre,
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        '${l.cantidad} u.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: secondaryColor,
+                        ),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _agregarAlPedido(
+                            productoId: l.productoId,
+                            nombre: l.nombre,
+                            precio: l.precio,
+                            stockDisponible: l.stockMax,
+                            categoria: l.categoria,
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${lineas.length} productos · $_totalUnidadesPedido unidades',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: primaryColor,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _enviarPedido() async {
+    if (_pedido.isEmpty || _enviando) return;
 
     final origenId = _sectorOrigenId;
     final destinoId = _sectorDestinoId;
     if (origenId == null || destinoId == null) return;
     if (origenId == destinoId) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'El sector origen y destino no pueden ser el mismo.',
-            style: GoogleFonts.poppins(),
-          ),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
+      _mostrarMensaje(
+        'El sector origen y destino no pueden ser el mismo.',
+        esError: true,
       );
       return;
     }
 
+    final destinoNombre = _nombreSector(destinoId);
+    final origenNombre = _nombreSector(origenId);
+    final lineas = _pedido.values.toList();
+    final resumen = lineas.map((l) => '• ${l.nombre}: ${l.cantidad} u.').join('\n');
+
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          '¿Enviar pedido?',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Hacia: $destinoNombre',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: secondaryColor,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(resumen, style: GoogleFonts.poppins(height: 1.45)),
+              const SizedBox(height: 8),
+              Text(
+                'Total: ${lineas.length} productos · $_totalUnidadesPedido u.',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: primaryColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancelar', style: GoogleFonts.poppins()),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            icon: const Icon(Icons.send_rounded, size: 18),
+            label: Text(
+              'Enviar pedido',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: accentColor,
+              foregroundColor: primaryColor,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmado != true || !mounted) return;
+
+    setState(() => _enviando = true);
+
     try {
+      final pedidoId = FirebaseFirestore.instance.collection('_').doc().id;
+
       await FirebaseFirestore.instance.runTransaction((tx) async {
-        final origenRef = FirebaseFirestore.instance
-            .collection('eventos')
-            .doc(widget.eventoId)
-            .collection('sectores')
-            .doc(origenId)
-            .collection('stock')
-            .doc(productoId);
+        final origenNombreTx = origenNombre;
+        final destinoNombreTx = destinoNombre;
+        final pendientes = <_LineaEnvioTraspaso>[];
 
-        final destinoRef = FirebaseFirestore.instance
-            .collection('eventos')
-            .doc(widget.eventoId)
-            .collection('sectores')
-            .doc(destinoId)
-            .collection('stock')
-            .doc(productoId);
+        for (final linea in lineas) {
+          final origenRef = FirebaseFirestore.instance
+              .collection('eventos')
+              .doc(widget.eventoId)
+              .collection('sectores')
+              .doc(origenId)
+              .collection('stock')
+              .doc(linea.productoId);
 
-        // 1. --- TODAS LAS LECTURAS PRIMERO ---
-        final origenSnap = await tx.get(origenRef);
-        final destinoSnap = await tx.get(destinoRef);
+          final origenSnap = await tx.get(origenRef);
+          if (!origenSnap.exists) {
+            throw Exception('"${linea.nombre}" ya no está en tu sector.');
+          }
 
-        // 2. --- VALIDACIONES ---
-        if (!origenSnap.exists) {
-          throw Exception('El producto ya no existe en el sector origen.');
+          final origenData = origenSnap.data()!;
+          final stockActual = _intDesdeFirestore(origenData['cantidad']);
+          if (stockActual < linea.cantidad) {
+            throw Exception(
+              'Stock insuficiente de "${linea.nombre}" (hay $stockActual u.).',
+            );
+          }
+
+          pendientes.add(
+            _LineaEnvioTraspaso(
+              linea: linea,
+              origenRef: origenRef,
+              origenData: origenData,
+              stockActual: stockActual,
+              traspasoId: FirebaseFirestore.instance.collection('_').doc().id,
+              categoria:
+                  linea.categoria ??
+                  origenData['categoria']?.toString() ??
+                  categoriaDefault,
+            ),
+          );
         }
 
-        final origenData = origenSnap.data() as Map<String, dynamic>;
-        final origenCantidad = origenData['cantidad'] as int? ?? 0;
-        if (origenCantidad < cantidad) {
-          throw Exception('Stock insuficiente en el sector origen.');
-        }
-
-        // 3. --- TODAS LAS ESCRITURAS AL FINAL ---
-        // Descontamos del origen
-        tx.update(origenRef, {'cantidad': origenCantidad - cantidad});
-
-        // Sumamos al destino o lo creamos si no existe
-        if (destinoSnap.exists) {
-          final destData = destinoSnap.data() as Map<String, dynamic>;
-          final destCantidad = destData['cantidad'] as int? ?? 0;
-          tx.update(destinoRef, {'cantidad': destCantidad + cantidad});
-        } else {
-          tx.set(destinoRef, {
-            'productoId': productoId,
-            'nombre': nombre,
-            'precio': precio,
-            'cantidad': cantidad,
+        for (final item in pendientes) {
+          final linea = item.linea;
+          tx.update(item.origenRef, {
+            'cantidad': item.stockActual - linea.cantidad,
           });
+
+          final traspasoData = {
+            'fecha': FieldValue.serverTimestamp(),
+            'registradoAt': FieldValue.serverTimestamp(),
+            'pedidoId': pedidoId,
+            'totalProductosPedido': lineas.length,
+            'totalUnidadesPedido': _totalUnidadesPedido,
+            'sectorOrigenId': origenId,
+            'sectorOrigenNombre': origenNombreTx,
+            'sectorDestinoId': destinoId,
+            'sectorDestinoNombre': destinoNombreTx,
+            'productoId': linea.productoId,
+            'nombre': linea.nombre,
+            'precio': linea.precio,
+            'categoria': item.categoria,
+            'cantidadEnviada': linea.cantidad,
+            'estado': 'pendiente',
+          };
+
+          final entranteRef = FirebaseFirestore.instance
+              .collection('eventos')
+              .doc(widget.eventoId)
+              .collection('sectores')
+              .doc(destinoId)
+              .collection('traspasos_entrantes')
+              .doc(item.traspasoId);
+
+          final salienteRef = FirebaseFirestore.instance
+              .collection('eventos')
+              .doc(widget.eventoId)
+              .collection('sectores')
+              .doc(origenId)
+              .collection('traspasos_salientes')
+              .doc(item.traspasoId);
+
+          tx.set(entranteRef, traspasoData);
+          tx.set(salienteRef, traspasoData);
         }
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Traspaso realizado', style: GoogleFonts.poppins()),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      if (!mounted) return;
+      setState(() {
+        _pedido.clear();
+        _enviando = false;
+      });
+      _mostrarMensaje(
+        'Pedido enviado a $destinoNombre (${lineas.length} productos). '
+        'Esperá su confirmación.',
+      );
     } on FirebaseException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Error en traspaso (${e.code}): ${e.message ?? e.toString()}',
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
+        setState(() => _enviando = false);
+        _mostrarMensaje(
+          'Error al enviar (${e.code}): ${e.message ?? e.toString()}',
+          esError: true,
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Error en traspaso: $e',
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        setState(() => _enviando = false);
+        _mostrarMensaje('Error al enviar: $e', esError: true);
       }
     }
   }
 
+  void _mostrarMensaje(String msg, {bool esError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: GoogleFonts.poppins()),
+        backgroundColor: esError ? Colors.red : AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: esError ? 3 : 4),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tienePedido = _pedido.isNotEmpty;
+
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
         title: Text(
-          'Traspaso entre sectores',
+          'Traspaso',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
             color: accentColor,
@@ -280,6 +573,19 @@ class _TraspasoStockState extends State<TraspasoStock> {
         ),
         backgroundColor: primaryColor,
         foregroundColor: accentColor,
+        actions: [
+          if (tienePedido)
+            TextButton(
+              onPressed: _limpiarPedido,
+              child: Text(
+                'Vaciar',
+                style: GoogleFonts.poppins(
+                  color: accentColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: accentColor))
@@ -305,124 +611,352 @@ class _TraspasoStockState extends State<TraspasoStock> {
                             style: GoogleFonts.poppins(color: secondaryColor),
                           ),
                         )
-                      : _buildListaStockOrigen(),
+                      : _ListaStockTraspaso(
+                          key: ValueKey(_sectorOrigenId),
+                          eventoId: widget.eventoId,
+                          sectorOrigenId: _sectorOrigenId!,
+                          sectorDestinoNombre: _nombreSector(_sectorDestinoId),
+                          pedido: Map.from(_pedido),
+                          accentColor: accentColor,
+                          primaryColor: primaryColor,
+                          secondaryColor: secondaryColor,
+                          bottomPadding: tienePedido ? 88 : 16,
+                          onAgregar: _agregarAlPedido,
+                        ),
                 ),
+                if (tienePedido) _buildBarraPedido(),
               ],
             ),
     );
   }
 
-  Widget _buildSelector() {
-    final destinoNombre =
-        _sectores.firstWhere(
-          (s) => s['id'] == _sectorDestinoId,
-          orElse: () => {'nombre': widget.nombreSectorDestinoInicial ?? ''},
+  Widget _buildBarraPedido() {
+    return Material(
+      elevation: 8,
+      color: Colors.white,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: _mostrarResumenPedido,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${_pedido.length} productos en el pedido',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: primaryColor,
+                          ),
+                        ),
+                        Text(
+                          '$_totalUnidadesPedido u. · Tocá para ver',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: secondaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              FilledButton.icon(
+                onPressed: _enviando ? null : _enviarPedido,
+                icon: _enviando
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: primaryColor,
+                        ),
+                      )
+                    : const Icon(Icons.send_rounded, size: 18),
+                label: Text(
+                  'Enviar',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: accentColor,
+                  foregroundColor: primaryColor,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _nombreSector(String? id) {
+    if (id == null) return '';
+    if (id == widget.sectorIdOrigenInicial &&
+        (widget.nombreSectorOrigenInicial?.isNotEmpty ?? false)) {
+      return widget.nombreSectorOrigenInicial!;
+    }
+    return _sectores.firstWhere(
+          (s) => s['id'] == id,
+          orElse: () => {'nombre': ''},
         )['nombre'] ??
-        widget.nombreSectorDestinoInicial ??
         '';
+  }
+
+  Widget _buildSectorDropdown({
+    required String label,
+    required String? value,
+    required List<Map<String, String>> options,
+    required ValueChanged<String?> onChanged,
+    bool bloqueado = false,
+  }) {
+    final valorValido = value != null &&
+        options.any((s) => s['id'] == value);
+    return DropdownButtonFormField<String>(
+      initialValue: valorValido ? value : null,
+      isExpanded: true,
+      isDense: true,
+      decoration: InputDecoration(
+        labelText: label,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      items: options
+          .map(
+            (s) => DropdownMenuItem<String>(
+              value: s['id'],
+              child: Text(
+                s['nombre'] ?? 'Sin nombre',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.poppins(fontSize: 13),
+              ),
+            ),
+          )
+          .toList(),
+      selectedItemBuilder: (context) => options
+          .map(
+            (s) => Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                s['nombre'] ?? 'Sin nombre',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: primaryColor,
+                ),
+              ),
+            ),
+          )
+          .toList(),
+      onChanged: bloqueado ? null : onChanged,
+    );
+  }
+
+  Widget _buildSelector() {
+    final origenNombre = _nombreSector(_sectorOrigenId).isNotEmpty
+        ? _nombreSector(_sectorOrigenId)
+        : (widget.nombreSectorOrigenInicial ?? 'Tu sector');
+
+    final origenOptions =
+        _sectores.where((s) => s['id'] != _sectorDestinoId).toList();
+    final destinoOptions =
+        _sectores.where((s) => s['id'] != _sectorOrigenId).toList();
+    final origenFijo = widget.sectorIdOrigenInicial != null;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Destino: ${destinoNombre.isEmpty ? 'Selecciona un sector' : destinoNombre}',
+            widget.nombreEvento,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: GoogleFonts.poppins(
-              fontWeight: FontWeight.bold,
-              color: primaryColor,
-              fontSize: 16,
+              fontSize: 12,
+              color: secondaryColor,
+              fontWeight: FontWeight.w500,
             ),
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _sectorOrigenId,
-                  decoration: InputDecoration(
-                    labelText: 'Sector origen',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  items: _sectores
-                      .where((s) => s['id'] != _sectorDestinoId)
-                      .map(
-                        (s) => DropdownMenuItem<String>(
-                          value: s['id'],
-                          child: Text(
-                            s['nombre'] ?? 'Sin nombre',
-                            style: GoogleFonts.poppins(),
-                          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: accentColor.withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.upload_outlined, size: 20, color: secondaryColor),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Sector origen (envías desde)',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: secondaryColor,
                         ),
-                      )
-                      .toList(),
-                  onChanged: (v) => setState(() => _sectorOrigenId = v),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _sectorDestinoId,
-                  decoration: InputDecoration(
-                    labelText: 'Sector destino',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  items: _sectores
-                      .where((s) => s['id'] != _sectorOrigenId)
-                      .map(
-                        (s) => DropdownMenuItem<String>(
-                          value: s['id'],
-                          child: Text(
-                            s['nombre'] ?? 'Sin nombre',
-                            style: GoogleFonts.poppins(),
-                          ),
+                      ),
+                      Text(
+                        origenNombre,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                          fontSize: 14,
                         ),
-                      )
-                      .toList(),
-                  onChanged: (v) => setState(() => _sectorDestinoId = v),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          if (!origenFijo) ...[
+            _buildSectorDropdown(
+              label: 'Sector origen',
+              value: _sectorOrigenId,
+              options: origenOptions,
+              onChanged: (v) => setState(() {
+                _sectorOrigenId = v;
+                _pedido.clear();
+              }),
+            ),
+            const SizedBox(height: 10),
+          ],
+          _buildSectorDropdown(
+            label: 'Sector destino (recibe y confirma)',
+            value: _sectorDestinoId,
+            options: destinoOptions,
+            onChanged: (v) {
+              if (v == _sectorDestinoId) return;
+              setState(() {
+                _sectorDestinoId = v;
+                _pedido.clear();
+              });
+            },
+          ),
+          const SizedBox(height: 10),
           Text(
-            'Toca un producto para traspasar cantidad al destino.',
+            'Tocá los productos para armar el pedido. '
+            'Cuando termines, envialo todo junto.',
             style: GoogleFonts.poppins(
               fontSize: 12,
-              color: secondaryColor.withValues(alpha: 0.85),
+              color: secondaryColor.withValues(alpha: 0.9),
+              height: 1.35,
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildListaStockOrigen() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(widget.eventoId)
-          .collection('sectores')
-          .doc(_sectorOrigenId)
-          .collection('stock')
-          .snapshots(),
+typedef _AgregarPedidoCallback = Future<void> Function({
+  required String productoId,
+  required String nombre,
+  required double precio,
+  required int stockDisponible,
+  String? categoria,
+});
+
+class _ListaStockTraspaso extends StatefulWidget {
+  final String eventoId;
+  final String sectorOrigenId;
+  final String sectorDestinoNombre;
+  final Map<String, _LineaPedido> pedido;
+  final double bottomPadding;
+  final Color accentColor;
+  final Color primaryColor;
+  final Color secondaryColor;
+  final _AgregarPedidoCallback onAgregar;
+
+  const _ListaStockTraspaso({
+    super.key,
+    required this.eventoId,
+    required this.sectorOrigenId,
+    required this.sectorDestinoNombre,
+    required this.pedido,
+    required this.bottomPadding,
+    required this.accentColor,
+    required this.primaryColor,
+    required this.secondaryColor,
+    required this.onAgregar,
+  });
+
+  @override
+  State<_ListaStockTraspaso> createState() => _ListaStockTraspasoState();
+}
+
+class _ListaStockTraspasoState extends State<_ListaStockTraspaso> {
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _stockStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stockStream = _crearStream(widget.sectorOrigenId);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ListaStockTraspaso oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sectorOrigenId != widget.sectorOrigenId) {
+      _stockStream = _crearStream(widget.sectorOrigenId);
+    }
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _crearStream(String sectorId) {
+    return FirebaseFirestore.instance
+        .collection('eventos')
+        .doc(widget.eventoId)
+        .collection('sectores')
+        .doc(sectorId)
+        .collection('stock')
+        .snapshots();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _stockStream,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator(color: accentColor));
+        final cargando = snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData;
+        if (cargando) {
+          return Center(
+            child: CircularProgressIndicator(color: widget.accentColor),
+          );
         }
         if (snapshot.hasError) {
           return Center(
@@ -432,60 +966,163 @@ class _TraspasoStockState extends State<TraspasoStock> {
             ),
           );
         }
-        final docs = snapshot.data?.docs ?? [];
-        docs.sort((a, b) {
-          final ad = a.data() as Map<String, dynamic>;
-          final bd = b.data() as Map<String, dynamic>;
-          final an = ad['nombre']?.toString() ?? '';
-          final bn = bd['nombre']?.toString() ?? '';
-          return an.compareTo(bn);
-        });
+
+        final docs = List<DocumentSnapshot<Map<String, dynamic>>>.from(
+          snapshot.data?.docs ?? [],
+        )..sort((a, b) {
+            final an = a.data()?['nombre']?.toString() ?? '';
+            final bn = b.data()?['nombre']?.toString() ?? '';
+            return an.compareTo(bn);
+          });
+
         if (docs.isEmpty) {
           return Center(
             child: Text(
-              'No hay stock en el sector origen.',
-              style: GoogleFonts.poppins(color: secondaryColor),
+              'No hay stock en tu sector para traspasar.',
+              style: GoogleFonts.poppins(color: widget.secondaryColor),
             ),
           );
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, widget.bottomPadding),
           itemCount: docs.length,
           itemBuilder: (context, index) {
             final doc = docs[index];
-            final data = doc.data() as Map<String, dynamic>;
+            final data = doc.data() ?? {};
             final nombre = data['nombre'] as String? ?? 'Sin nombre';
             final precio = (data['precio'] as num?)?.toDouble() ?? 0.0;
             final cantidad = data['cantidad'] as int? ?? 0;
+            final categoria = data['categoria']?.toString();
+            final enPedido = widget.pedido[doc.id];
+            final habilitado = cantidad > 0;
+            final destino = widget.sectorDestinoNombre.trim();
 
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: ListTile(
-                leading: Icon(Icons.fastfood, color: secondaryColor),
-                title: Text(
-                  nombre,
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  'Stock: $cantidad  •  \$${precio.toStringAsFixed(0)}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: secondaryColor,
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: habilitado
+                      ? () => widget.onAgregar(
+                          productoId: doc.id,
+                          nombre: nombre,
+                          precio: precio,
+                          stockDisponible: cantidad,
+                          categoria: categoria,
+                        )
+                      : null,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      color: enPedido != null
+                          ? widget.accentColor.withValues(alpha: 0.08)
+                          : AppColors.surfaceCard,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      border: Border.all(
+                        color: enPedido != null
+                            ? widget.accentColor.withValues(alpha: 0.55)
+                            : habilitado
+                            ? AppColors.outline
+                            : AppColors.outline.withValues(alpha: 0.6),
+                        width: enPedido != null ? 1.5 : 1,
+                      ),
+                      boxShadow: habilitado ? AppShadows.card : null,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: enPedido != null
+                                ? widget.accentColor.withValues(alpha: 0.28)
+                                : habilitado
+                                ? widget.accentColor.withValues(alpha: 0.16)
+                                : AppColors.outline.withValues(alpha: 0.35),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            enPedido != null
+                                ? Icons.check_rounded
+                                : Icons.add_rounded,
+                            color: habilitado
+                                ? widget.secondaryColor
+                                : AppColors.onSurfaceVariant,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                nombre,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: habilitado
+                                      ? widget.primaryColor
+                                      : AppColors.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Stock: $cantidad  ·  \$${precio.toStringAsFixed(0)}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: widget.secondaryColor,
+                                ),
+                              ),
+                              if (enPedido != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'En pedido: ${enPedido.cantidad} u.',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: widget.secondaryColor,
+                                  ),
+                                ),
+                              ] else if (habilitado && destino.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Tocá para agregar al pedido',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: widget.accentColor.withValues(
+                                      alpha: 0.95,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          enPedido != null
+                              ? Icons.edit_outlined
+                              : Icons.chevron_right_rounded,
+                          color: habilitado
+                              ? widget.secondaryColor
+                              : AppColors.onSurfaceVariant.withValues(
+                                  alpha: 0.5,
+                                ),
+                          size: 20,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                trailing: Icon(Icons.swap_horiz, color: accentColor),
-                onTap: cantidad <= 0
-                    ? null
-                    : () => _pedirYTransferirProducto(
-                        productoId: doc.id,
-                        nombre: nombre,
-                        precio: precio,
-                        stockDisponible: cantidad,
-                      ),
               ),
             );
           },

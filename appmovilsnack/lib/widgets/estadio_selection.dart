@@ -248,10 +248,28 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                   elevation: 5,
                 ),
                 onPressed: () async {
+                  final eventId = _eventoSeleccionadoId;
+                  final sectorId = _sectorSeleccionadoId;
+                  final sectorNombre = _sectorSeleccionado;
+                  if (eventId == null || sectorId == null || sectorNombre == null) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Seleccione un sector antes de continuar.',
+                          style: GoogleFonts.poppins(),
+                        ),
+                        backgroundColor: Colors.orange,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+
                   // No permitir entrar a sectores con turno cerrado
                   final sectorDoc = await FirestoreHelpers.getSector(
-                    _eventoSeleccionadoId!,
-                    _sectorSeleccionadoId!,
+                    eventId,
+                    sectorId,
                   );
                   final sectorData = sectorDoc.data() as Map<String, dynamic>?;
                   if (sectorDoc.exists &&
@@ -271,18 +289,15 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                     );
                     return;
                   }
-                  // Cualquier vendedor puede cerrar turno (rol encargado eliminado).
-                  const bool puedeCerrarTurno = true;
                   if (!mounted) return;
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(
                       builder: (context) => HomeVendedor(
-                        eventId: _eventoSeleccionadoId!,
-                        sectorId: _sectorSeleccionadoId!,
-                        nombreSector: _sectorSeleccionado!,
+                        eventId: eventId,
+                        sectorId: sectorId,
+                        nombreSector: sectorNombre,
                         fromAdmin: widget.fromAdmin,
-                        puedeCerrarTurno: puedeCerrarTurno,
                       ),
                     ),
                   );
