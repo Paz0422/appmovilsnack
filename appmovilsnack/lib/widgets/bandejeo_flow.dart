@@ -8,13 +8,83 @@ const Color _accentColor = Color(0xFFDABF41);
 const Color _secondaryColor = Color(0xFF6B4D2F);
 const Color _backgroundColor = Color(0xFFFDFBF7);
 
+int _intFirestore(dynamic value, [int fallback = 0]) {
+  if (value == null) return fallback;
+  if (value is int) return value;
+  if (value is num) return value.round();
+  return int.tryParse(value.toString()) ?? fallback;
+}
+
+int _intClamp(int value, int min, int max) {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+/// Cerrado si tiene marca de cierre (no usamos solo activo:false para no perderlo en la lista).
+bool _bandejeroEstaCerrado(Map<String, dynamic> data) {
+  if (data['bandejeoCerrado'] == true) return true;
+  if (data['bandejeoCerradoEn'] != null) return true;
+  return data['activo'] == false;
+}
+
+Map<String, int> _cantidadesBandejaDesdeRonda(
+  Map<String, dynamic>? rondaData,
+) {
+  final map = <String, int>{};
+  if (rondaData == null) return map;
+  final productos = rondaData['productos'] as List<dynamic>? ?? const [];
+  for (final item in productos.whereType<Map<String, dynamic>>()) {
+    final id = item['productoId']?.toString();
+    if (id == null || id.isEmpty) continue;
+    map[id] = _intFirestore(item['cantidadInicial']);
+  }
+  return map;
+}
+
+/// Unidades del stock que vinieron por traspaso (no se editan a mano en bandeja).
+int _unidadesPorTraspasoEnStock(Map<String, dynamic> data) {
+  final cantidad = _intFirestore(data['cantidad']);
+  if (cantidad <= 0) return 0;
+  final porTraspasoDoc = _intFirestore(data['cantidadPorTraspaso'], -1);
+  if (porTraspasoDoc > 0) {
+    return _intClamp(porTraspasoDoc, 0, cantidad);
+  }
+  final cantidadInicial = data['cantidadInicial'];
+  if (cantidadInicial == null) return cantidad;
+  final inicial = _intFirestore(cantidadInicial);
+  if (cantidad <= inicial) return 0;
+  return cantidad - inicial;
+}
+
+int _unidadesPropioEnStock(Map<String, dynamic> data) {
+  final cantidad = _intFirestore(data['cantidad']);
+  if (data['cantidadPropio'] != null) {
+    return _intClamp(_intFirestore(data['cantidadPropio']), 0, cantidad);
+  }
+  return cantidad - _unidadesPorTraspasoEnStock(data);
+}
+
+int _totalBandejaDesdePropio(
+  int propio,
+  int traspasoFijo,
+  int maxTotal,
+) {
+  if (traspasoFijo > 0) {
+    return _intClamp(propio + traspasoFijo, traspasoFijo, maxTotal);
+  }
+  return _intClamp(propio, 1, maxTotal);
+}
+
 /// Modelo para productos en la bandeja
 class _ProductoBandeja {
   final String productoId;
   final String nombre;
   final double precio;
-  int cantidadInicial; // Lo que lleva
+  int cantidadInicial; // Total en bandeja (propio + traspaso fijo)
   int cantidadSobrante; // Lo que trae de vuelta
+  /// Traspaso incluido automáticamente al cargar (no editable).
+  int cantidadTraspasoEnBandeja;
 
   _ProductoBandeja({
     required this.productoId,
@@ -22,10 +92,359 @@ class _ProductoBandeja {
     required this.precio,
     required this.cantidadInicial,
     this.cantidadSobrante = 0,
+    this.cantidadTraspasoEnBandeja = 0,
   });
+
+  int get cantidadPropioEnBandeja => _intClamp(
+        cantidadInicial - cantidadTraspasoEnBandeja,
+        0,
+        cantidadInicial,
+      );
 
   int get cantidadVendida => cantidadInicial - cantidadSobrante;
   double get totalVendido => cantidadVendida * precio;
+}
+
+/// Casilla para escribir cantidad sin abrir diálogo.
+class _CasillaCantidadBandeja extends StatefulWidget {
+  final int valor;
+  final int maxDisponible;
+  final int minValor;
+  final bool habilitado;
+  final void Function(int cantidad) onConfirmar;
+
+  const _CasillaCantidadBandeja({
+    super.key,
+    required this.valor,
+    required this.maxDisponible,
+    this.minValor = 1,
+    this.habilitado = true,
+    required this.onConfirmar,
+  });
+
+  @override
+  State<_CasillaCantidadBandeja> createState() => _CasillaCantidadBandejaState();
+}
+
+class _CasillaCantidadBandejaState extends State<_CasillaCantidadBandeja> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _textoInicial);
+    _focusNode = FocusNode()
+      ..addListener(() {
+        if (mounted) setState(() {});
+        _alCambiarFoco();
+      });
+  }
+
+  String get _textoInicial {
+    if (!widget.habilitado) return '—';
+    if (widget.valor > 0) return '${widget.valor}';
+    return widget.minValor == 0 ? '0' : '';
+  }
+
+  @override
+  void didUpdateWidget(covariant _CasillaCantidadBandeja oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_focusNode.hasFocus && oldWidget.valor != widget.valor) {
+      _controller.text = _textoInicial;
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_alCambiarFoco);
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _alCambiarFoco() {
+    if (!_focusNode.hasFocus) _confirmar();
+  }
+
+  void _confirmar() {
+    if (!widget.habilitado) return;
+    final texto = _controller.text.trim();
+    if (texto.isEmpty) {
+      _controller.text = _textoInicial;
+      return;
+    }
+    final cantidad = int.tryParse(texto);
+    if (cantidad == null || cantidad < widget.minValor) {
+      _controller.text = _textoInicial;
+      return;
+    }
+    final valida = _intClamp(cantidad, widget.minValor, widget.maxDisponible);
+    _controller.text = valida > 0 ? '$valida' : '';
+    if (valida > 0 && valida != widget.valor) {
+      widget.onConfirmar(valida);
+    }
+  }
+
+  InputBorder _bordeCasilla({required bool enfocado}) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(
+        color: enfocado
+            ? _accentColor
+            : _accentColor.withValues(alpha: 0.55),
+        width: enfocado ? 2 : 1.2,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enfocado = _focusNode.hasFocus;
+    final borde = _bordeCasilla(enfocado: enfocado);
+
+    return SizedBox(
+      width: 52,
+      height: 40,
+      child: TextField(
+        controller: _controller,
+        focusNode: _focusNode,
+        enabled: widget.habilitado,
+        readOnly: !widget.habilitado,
+        textAlign: TextAlign.center,
+        keyboardType: TextInputType.number,
+        style: GoogleFonts.poppins(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: _primaryColor,
+        ),
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: Colors.white,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          hintText: '—',
+          border: borde,
+          enabledBorder: borde,
+          focusedBorder: borde,
+          disabledBorder: borde,
+          errorBorder: borde,
+          focusedErrorBorder: borde,
+        ),
+        onSubmitted: (_) => _confirmar(),
+      ),
+    );
+  }
+}
+
+/// Controles de carga: solo propio editable; traspaso y total visibles.
+class _ControlesCargaBandeja extends StatelessWidget {
+  final bool modoTraspaso;
+  final bool esSumaAdicional;
+  final int traspasoFijo;
+  final int propioActual;
+  final int totalActual;
+  final int maxPropio;
+  final int maxTotal;
+  final int maxAgregar;
+  final bool enBandeja;
+  final VoidCallback? onQuitarDeBandeja;
+  final void Function(int valor) onPropioChanged;
+  final VoidCallback onAgregarPrimero;
+
+  const _ControlesCargaBandeja({
+    required this.modoTraspaso,
+    this.esSumaAdicional = false,
+    required this.traspasoFijo,
+    required this.propioActual,
+    required this.totalActual,
+    required this.maxPropio,
+    required this.maxTotal,
+    this.maxAgregar = 0,
+    required this.enBandeja,
+    required this.onPropioChanged,
+    required this.onAgregarPrimero,
+    this.onQuitarDeBandeja,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final valorCasilla = esSumaAdicional && enBandeja ? 0 : (enBandeja ? (modoTraspaso ? propioActual : totalActual) : 0);
+    final maxCasilla = esSumaAdicional && enBandeja
+        ? maxAgregar
+        : (modoTraspaso ? maxPropio : maxTotal);
+    final etiquetaCasilla = esSumaAdicional && enBandeja
+        ? 'Sumar ahora'
+        : (modoTraspaso ? 'Lo que cargás' : null);
+
+    if (!modoTraspaso) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (enBandeja)
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  icon: const Icon(Icons.remove_circle),
+                  color: Colors.red,
+                  onPressed: onQuitarDeBandeja,
+                ),
+              if (etiquetaCasilla != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Text(
+                    etiquetaCasilla,
+                    style: GoogleFonts.poppins(
+                      fontSize: 9,
+                      color: _secondaryColor,
+                    ),
+                  ),
+                ),
+              _CasillaCantidadBandeja(
+                valor: valorCasilla,
+                maxDisponible: maxCasilla,
+                minValor: esSumaAdicional && enBandeja ? 0 : 1,
+                onConfirmar: onPropioChanged,
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                icon: const Icon(Icons.add_circle),
+                color: _accentColor,
+                onPressed: enBandeja
+                    ? (esSumaAdicional
+                        ? (maxAgregar > 0 ? () => onPropioChanged(1) : null)
+                        : (totalActual < maxTotal
+                            ? () => onPropioChanged(totalActual + 1)
+                            : null))
+                    : onAgregarPrimero,
+              ),
+            ],
+          ),
+          if (esSumaAdicional && enBandeja && maxAgregar > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'Podés sumar hasta $maxAgregar u. más (llevás $totalActual)',
+                textAlign: TextAlign.right,
+                style: GoogleFonts.poppins(
+                  fontSize: 10,
+                  color: Colors.orange[900],
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
+    final propioParaPreview = esSumaAdicional && enBandeja ? propioActual : propioActual;
+    final totalCalculado = _totalBandejaDesdePropio(
+      propioParaPreview,
+      traspasoFijo,
+      maxTotal,
+    );
+    final puedeSubir = esSumaAdicional && enBandeja
+        ? maxAgregar > 0
+        : propioActual < maxPropio;
+    final puedeBajar = enBandeja && (propioActual > 0 || totalActual > traspasoFijo);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            if (enBandeja)
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                icon: const Icon(Icons.remove_circle),
+                color: Colors.red,
+                onPressed: puedeBajar
+                    ? () {
+                        if (propioActual <= 0) {
+                          onQuitarDeBandeja?.call();
+                        } else {
+                          onPropioChanged(propioActual - 1);
+                        }
+                      }
+                    : onQuitarDeBandeja,
+              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  etiquetaCasilla ?? 'Lo que cargás',
+                  style: GoogleFonts.poppins(
+                    fontSize: 9,
+                    color: _secondaryColor,
+                  ),
+                ),
+                _CasillaCantidadBandeja(
+                  key: ValueKey('propio-$propioActual-$traspasoFijo-$esSumaAdicional'),
+                  valor: valorCasilla,
+                  maxDisponible: maxCasilla,
+                  minValor: esSumaAdicional && enBandeja
+                      ? 0
+                      : (maxPropio == 0 ? 0 : 1),
+                  habilitado: maxCasilla > 0,
+                  onConfirmar: onPropioChanged,
+                ),
+              ],
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              icon: const Icon(Icons.add_circle),
+              color: _accentColor,
+              onPressed: enBandeja
+                  ? (esSumaAdicional
+                      ? (maxAgregar > 0 ? () => onPropioChanged(1) : null)
+                      : (puedeSubir
+                          ? () => onPropioChanged(propioActual + 1)
+                          : null))
+                  : (maxPropio > 0
+                      ? onAgregarPrimero
+                      : () => onPropioChanged(0)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.green.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.green.withValues(alpha: 0.35)),
+          ),
+          child: Text(
+            esSumaAdicional && enBandeja
+                ? 'Llevás $totalActual u. ($propioActual + $traspasoFijo traspaso)\n'
+                    'Al sumar, el traspaso no se duplica.'
+                : enBandeja
+                    ? 'Total en bandeja: $totalCalculado u.\n'
+                        '($propioActual + $traspasoFijo traspaso automático)'
+                    : 'Al cargar: total $totalCalculado u.\n'
+                        '($propioActual + $traspasoFijo traspaso automático)',
+            textAlign: TextAlign.right,
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Colors.green[800],
+              height: 1.3,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 /// Widget principal del flujo de Bandejeo
@@ -53,6 +472,8 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
   String? _bandejeroId;
   String? _bandejeroNombre;
   String? _rondaId; // ronda en curso / activa para este bandejero
+  /// true cuando se entró por "Agregar más cosas" a una ronda en curso.
+  bool _actualizandoBandeja = false;
 
   @override
   void dispose() {
@@ -71,11 +492,40 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
 
   void _anteriorPaso() {
     if (_currentPage > 0) {
+      if (_currentPage == 1 && _actualizandoBandeja) {
+        _volverAListaBandejeros();
+        return;
+      }
+      if (_currentPage == 1) {
+        setState(() => _actualizandoBandeja = false);
+      }
       _pageController.previousPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
     }
+  }
+
+  /// Guarda la ronda y vuelve a la lista de bandejeros (ronda sigue en curso).
+  Future<void> _volverAListaBandejeros() async {
+    try {
+      await _upsertRondaEnCurso();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se pudo guardar la ronda: $e',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _currentPage = 0);
+    _pageController.jumpToPage(0);
   }
 
   double _calcularValorTotal() {
@@ -96,16 +546,66 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
     return _calcularTotalVendido() * 0.10; // 10% de comisión
   }
 
+  bool get _muestraFlechaAtrasEnAppBar =>
+      _currentPage == 1 || _currentPage == 3;
+
+  void _irASeleccionBandejero() {
+    setState(() {
+      _bandejeroId = null;
+      _bandejeroNombre = null;
+      _productosBandeja = [];
+      _rondaId = null;
+      _actualizandoBandeja = false;
+      _currentPage = 0;
+    });
+    _pageController.jumpToPage(0);
+  }
+
+  void _irAListaTrasRendirRonda() {
+    if (!mounted) return;
+    setState(() {
+      _isGuardando = false;
+      _productosBandeja = [];
+      _rondaId = null;
+      _bandejeroId = null;
+      _bandejeroNombre = null;
+      _actualizandoBandeja = false;
+      _currentPage = 0;
+    });
+    _pageController.jumpToPage(0);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Ronda rendida correctamente',
+          style: GoogleFonts.poppins(),
+        ),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: _currentPage == 0,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (_currentPage == 2 || _currentPage == 3) {
+          await _volverAListaBandejeros();
+        } else {
+          _anteriorPaso();
+        }
+      },
+      child: Scaffold(
       backgroundColor: _backgroundColor,
       appBar: AppBar(
         title: Text(
           _currentPage == 0
               ? 'Bandejeo'
               : _currentPage == 1
-              ? 'Carga de Bandeja'
+              ? (_actualizandoBandeja
+                  ? 'Agregar a la bandeja'
+                  : 'Carga de Bandeja')
               : _currentPage == 2
               ? 'Ronda en Curso'
               : 'Rendición de Cuentas',
@@ -116,29 +616,26 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
         ),
         backgroundColor: _primaryColor,
         foregroundColor: _accentColor,
-        leading: _currentPage > 0
+        automaticallyImplyLeading:
+            _currentPage == 0 || _muestraFlechaAtrasEnAppBar,
+        leading: _currentPage == 0
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
-                onPressed: _anteriorPaso,
+                tooltip: 'Volver',
+                onPressed: () => Navigator.of(context).pop(),
               )
-            : null,
-        actions: [
-          if (_currentPage > 0)
-            IconButton(
-              icon: const Icon(Icons.swap_horiz),
-              tooltip: 'Cambiar bandejero / Entrar con otra cuenta',
-              onPressed: () {
-                setState(() {
-                  _bandejeroId = null;
-                  _bandejeroNombre = null;
-                  _productosBandeja = [];
-                  _rondaId = null;
-                  _currentPage = 0;
-                });
-                _pageController.jumpToPage(0);
-              },
-            ),
-        ],
+            : _currentPage == 3
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: 'Lista de bandejeros',
+                    onPressed: _volverAListaBandejeros,
+                  )
+                : _currentPage == 1
+                    ? IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: _anteriorPaso,
+                      )
+                    : null,
       ),
       body: PageView(
         controller: _pageController,
@@ -151,23 +648,17 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
             const NeverScrollableScrollPhysics(), // Deshabilitar swipe manual
         children: [
           _PasoSeleccionBandejero(
+            key: const PageStorageKey<String>('bandejeo-paso-bandejeros'),
             eventoId: widget.eventoId,
             sectorId: widget.sectorId,
-            onSeleccionado: (id, nombre) async {
-              setState(() {
-                _bandejeroId = id;
-                _bandejeroNombre = nombre;
-                _productosBandeja = [];
-                _rondaId = null;
-              });
-
-              await _handleSeleccionBandejero();
-            },
+            onSeleccionado: _seleccionarBandejero,
+            onVerResumenCierre: _mostrarResumenBandejeroCerrado,
           ),
           _PasoCargaBandeja(
             eventoId: widget.eventoId,
             sectorId: widget.sectorId,
             productosBandeja: _productosBandeja,
+            esActualizacionRonda: _actualizandoBandeja,
             onProductosChanged: (productos) {
               setState(() {
                 _productosBandeja = productos;
@@ -175,6 +666,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
             },
             onSiguiente: () async {
               if (_productosBandeja.isNotEmpty) {
+                final eraActualizacion = _actualizandoBandeja;
                 try {
                   await _upsertRondaEnCurso();
                 } catch (e) {
@@ -190,7 +682,23 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
                   );
                   return;
                 }
-                _siguientePaso();
+                if (!context.mounted) return;
+                setState(() => _actualizandoBandeja = false);
+                if (eraActualizacion) {
+                  await _volverAListaBandejeros();
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Bandeja actualizada correctamente',
+                        style: GoogleFonts.poppins(),
+                      ),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else {
+                  _siguientePaso();
+                }
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -207,7 +715,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
           _PasoResumenRonda(
             productosBandeja: _productosBandeja,
             valorTotal: _calcularValorTotal(),
-            onFinalizar: _siguientePaso,
+            onVolverLista: _volverAListaBandejeros,
           ),
           _PasoRendicion(
             productosBandeja: _productosBandeja,
@@ -232,7 +740,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
               try {
                 await _confirmarVenta();
                 if (mounted) {
-                  Navigator.of(context).pop(true); // Retornar éxito
+                  _irAListaTrasRendirRonda();
                 }
               } catch (e) {
                 setState(() {
@@ -254,9 +762,21 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
           ),
         ],
       ),
+    ),
     );
   }
 
+  DocumentReference<Map<String, dynamic>> _stockRef(String productoId) {
+    return FirebaseFirestore.instance
+        .collection('eventos')
+        .doc(widget.eventoId)
+        .collection('sectores')
+        .doc(widget.sectorId)
+        .collection('stock')
+        .doc(productoId);
+  }
+
+  /// Descuenta del inventario lo que se asigna a la bandeja (delta respecto a la ronda guardada).
   Future<void> _upsertRondaEnCurso() async {
     if (_bandejeroId == null) {
       throw Exception('Debes seleccionar un bandejero');
@@ -276,6 +796,13 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
 
     _rondaId ??= rondaRef.id;
 
+    final cantidadNueva = {
+      for (final p in _productosBandeja) p.productoId: p.cantidadInicial,
+    };
+    final nombresPorId = {
+      for (final p in _productosBandeja) p.productoId: p.nombre,
+    };
+
     final payload = <String, dynamic>{
       'estado': 'en_curso',
       'eventoId': widget.eventoId,
@@ -290,6 +817,8 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
           'precio': p.precio,
           'cantidadInicial': p.cantidadInicial,
           'cantidadSobrante': p.cantidadSobrante,
+          if (p.cantidadTraspasoEnBandeja > 0)
+            'cantidadTraspasoEnBandeja': p.cantidadTraspasoEnBandeja,
         };
       }).toList(),
     };
@@ -298,7 +827,67 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
       payload['fechaInicio'] = FieldValue.serverTimestamp();
     }
 
-    await rondaRef.set(payload, SetOptions(merge: true));
+    await FirebaseFirestore.instance.runTransaction((tx) async {
+      final rondaSnap = await tx.get(rondaRef);
+      final cantidadAnterior =
+          _cantidadesBandejaDesdeRonda(rondaSnap.data());
+
+      final todosLosIds = <String>{
+        ...cantidadAnterior.keys,
+        ...cantidadNueva.keys,
+      };
+
+      for (final productoId in todosLosIds) {
+        final anterior = cantidadAnterior[productoId] ?? 0;
+        final nuevo = cantidadNueva[productoId] ?? 0;
+        final delta = nuevo - anterior;
+        if (delta == 0) continue;
+
+        final stockRef = _stockRef(productoId);
+        final stockSnap = await tx.get(stockRef);
+        final nombre =
+            nombresPorId[productoId] ?? productoId;
+
+        if (delta > 0) {
+          if (!stockSnap.exists) {
+            throw Exception(
+              'El producto $nombre no existe en el inventario del sector.',
+            );
+          }
+          final stockActual =
+              _intFirestore(stockSnap.data()?['cantidad']);
+          if (stockActual < delta) {
+            throw Exception(
+              'Stock insuficiente para $nombre. '
+              'Disponible: $stockActual, necesitás: $delta más en bandeja.',
+            );
+          }
+          tx.update(stockRef, {'cantidad': stockActual - delta});
+        } else {
+          final stockActual = stockSnap.exists
+              ? _intFirestore(stockSnap.data()?['cantidad'])
+              : 0;
+          tx.set(
+            stockRef,
+            {'cantidad': stockActual - delta},
+            SetOptions(merge: true),
+          );
+        }
+      }
+
+      tx.set(rondaRef, payload, SetOptions(merge: true));
+    });
+  }
+
+  Future<void> _seleccionarBandejero(String id, String nombre) async {
+    setState(() {
+      _bandejeroId = id;
+      _bandejeroNombre = nombre;
+      _productosBandeja = [];
+      _rondaId = null;
+      _actualizandoBandeja = false;
+    });
+    await _handleSeleccionBandejero();
   }
 
   Future<void> _handleSeleccionBandejero() async {
@@ -319,8 +908,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
     if (!mounted) return;
 
     if (rondasQuery.docs.isEmpty) {
-      // No hay ronda en curso: ir directo a cargar bandeja.
-      _siguientePaso();
+      await _handleBandejeroSinRondaEnCurso();
       return;
     }
 
@@ -335,8 +923,9 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
             productoId: (p['productoId'] as String?) ?? '',
             nombre: (p['nombre'] as String?) ?? '',
             precio: (p['precio'] as num?)?.toDouble() ?? 0.0,
-            cantidadInicial: (p['cantidadInicial'] as int?) ?? 0,
-            cantidadSobrante: (p['cantidadSobrante'] as int?) ?? 0,
+            cantidadInicial: _intFirestore(p['cantidadInicial']),
+            cantidadSobrante: _intFirestore(p['cantidadSobrante']),
+            cantidadTraspasoEnBandeja: _intFirestore(p['cantidadTraspasoEnBandeja']),
           );
         })
         .where((p) => p.productoId.isNotEmpty)
@@ -348,6 +937,8 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
 
     final action = await showModalBottomSheet<_AccionRonda>(
       context: context,
+      isDismissible: true,
+      enableDrag: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -385,7 +976,11 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
               ),
               ListTile(
                 leading: const Icon(Icons.check_circle_outline),
-                title: Text('Rendir ahora', style: GoogleFonts.poppins()),
+                title: Text('Rendir ronda', style: GoogleFonts.poppins()),
+                subtitle: Text(
+                  'Cerrar la ronda y registrar ventas',
+                  style: GoogleFonts.poppins(fontSize: 12),
+                ),
                 onTap: () => Navigator.pop(context, _AccionRonda.rendir),
               ),
               const SizedBox(height: 6),
@@ -396,9 +991,10 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
     );
 
     if (!mounted) return;
+    if (action == null) return;
 
     // Navegación: 0 Selección, 1 Carga, 2 Resumen, 3 Rendición
-    switch (action ?? _AccionRonda.ver) {
+    switch (action) {
       case _AccionRonda.ver:
         await _pageController.animateToPage(
           2,
@@ -406,6 +1002,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
           curve: Curves.easeInOut,
         );
       case _AccionRonda.agregar:
+        setState(() => _actualizandoBandeja = true);
         await _pageController.animateToPage(
           1,
           duration: const Duration(milliseconds: 250),
@@ -420,51 +1017,321 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
     }
   }
 
-  /// Transacción final para actualizar stock y crear transacción
+  Future<void> _handleBandejeroSinRondaEnCurso() async {
+    if (_bandejeroId == null) return;
+
+    final rendidasQuery = await FirebaseFirestore.instance
+        .collection('eventos')
+        .doc(widget.eventoId)
+        .collection('sectores')
+        .doc(widget.sectorId)
+        .collection('bandejeros')
+        .doc(_bandejeroId)
+        .collection('rondas')
+        .where('estado', isEqualTo: 'rendida')
+        .limit(1)
+        .get();
+
+    if (!mounted) return;
+
+    if (rendidasQuery.docs.isEmpty) {
+      final cerrarSinVentas = await _mostrarMenuBandejeroSinRondas();
+      if (!mounted) return;
+      if (cerrarSinVentas == true) {
+        await _cerrarBandejeoBandejero();
+      } else if (cerrarSinVentas == false) {
+        _siguientePaso();
+      }
+      return;
+    }
+
+    final action = await _mostrarMenuBandejeroTrasRonda();
+    if (!mounted) return;
+    if (action == null) return;
+
+    switch (action) {
+      case _AccionBandejeroTrasRonda.otraRonda:
+        setState(() {
+          _rondaId = null;
+          _productosBandeja = [];
+          _actualizandoBandeja = false;
+        });
+        _siguientePaso();
+      case _AccionBandejeroTrasRonda.cerrarBandejeo:
+        await _cerrarBandejeoBandejero();
+    }
+  }
+
+  /// `true` = cerrar bandejeo sin ventas, `false` = nueva ronda, `null` = cancelar.
+  Future<bool?> _mostrarMenuBandejeroSinRondas() {
+    return showModalBottomSheet<bool>(
+      context: context,
+      isDismissible: true,
+      enableDrag: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _bandejeroNombre ?? 'Bandejero',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: _primaryColor,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Sin rondas rendidas. Podés iniciar una ronda o cerrar el bandejeo sin ventas.',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: _secondaryColor,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: Icon(Icons.add_circle_outline, color: _accentColor),
+                title: Text(
+                  'Nueva ronda',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+                onTap: () => Navigator.pop(context, false),
+              ),
+              ListTile(
+                leading: Icon(Icons.logout_rounded, color: Colors.red[700]),
+                title: Text(
+                  'Cerrar bandejeo (sin ventas)',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+                onTap: () => Navigator.pop(context, true),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<_AccionBandejeroTrasRonda?> _mostrarMenuBandejeroTrasRonda() {
+    return showModalBottomSheet<_AccionBandejeroTrasRonda>(
+      context: context,
+      isDismissible: true,
+      enableDrag: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _bandejeroNombre ?? 'Bandejero',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: _primaryColor,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Ya completó al menos una ronda. ¿Qué desea hacer?',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: _secondaryColor,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _accentColor.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.replay_rounded, color: _accentColor),
+                ),
+                title: Text(
+                  'Otra ronda',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  'Cargar una nueva bandeja y salir de nuevo',
+                  style: GoogleFonts.poppins(fontSize: 12),
+                ),
+                onTap: () =>
+                    Navigator.pop(context, _AccionBandejeroTrasRonda.otraRonda),
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.logout_rounded, color: Colors.red[700]),
+                ),
+                title: Text(
+                  'Cerrar bandejeo',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  'Finalizar el turno de este bandejero en el sector',
+                  style: GoogleFonts.poppins(fontSize: 12),
+                ),
+                onTap: () => Navigator.pop(
+                  context,
+                  _AccionBandejeroTrasRonda.cerrarBandejeo,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _cerrarBandejeoBandejero() async {
+    if (_bandejeroId == null) return;
+    final bandejeroId = _bandejeroId!;
+    final nombre = _bandejeroNombre ?? 'Bandejero';
+
+    final enCurso = await FirebaseFirestore.instance
+        .collection('eventos')
+        .doc(widget.eventoId)
+        .collection('sectores')
+        .doc(widget.sectorId)
+        .collection('bandejeros')
+        .doc(bandejeroId)
+        .collection('rondas')
+        .where('estado', isEqualTo: 'en_curso')
+        .limit(1)
+        .get();
+    if (!mounted) return;
+    if (enCurso.docs.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '$nombre tiene una ronda en curso. Rendila antes de cerrar el bandejeo.',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final resumen = await _cargarResumenRondasRendidas(bandejeroId);
+    if (!mounted) return;
+
+    final resumenFinal = resumen ??
+        const _ResumenVentasBandejero(
+          totalVendido: 0,
+          cantidadRondas: 0,
+          productos: [],
+        );
+
+    final porcentaje = await _mostrarDialogoResumenCierre(
+      nombre: nombre,
+      resumen: resumenFinal,
+    );
+    if (!mounted || porcentaje == null) return;
+
+    final cierre = resumenFinal.toCierreFirestore(porcentaje, nombreBandejero: nombre);
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(widget.eventoId)
+          .collection('sectores')
+          .doc(widget.sectorId)
+          .collection('bandejeros')
+          .doc(bandejeroId)
+          .set({
+        'activo': true,
+        'bandejeoCerrado': true,
+        'bandejeoCerradoEn': FieldValue.serverTimestamp(),
+        'cierreResumen': cierre,
+        'ultimaRondaRendida': false,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No se pudo cerrar el bandejeo: $e',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _bandejeroId = null;
+      _bandejeroNombre = null;
+      _productosBandeja = [];
+      _rondaId = null;
+    });
+    await _pageController.animateToPage(
+      0,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Bandejeo de $nombre cerrado. Comisión: \$${(cierre['comision'] as num).toStringAsFixed(0)}',
+          style: GoogleFonts.poppins(),
+        ),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  /// Al rendir: devuelve al inventario lo no vendido (sobrante). Lo cargado en bandeja ya se descontó al guardar la ronda.
   Future<void> _confirmarVenta() async {
     await FirebaseFirestore.instance.runTransaction((transaction) async {
-      // ===== FASE DE LECTURA: Obtener todos los snapshots necesarios =====
-      final Map<String, DocumentSnapshot> stockSnapshots = {};
-      final List<_ProductoBandeja> productosAVender = _productosBandeja
-          .where((p) => p.cantidadVendida > 0)
+      final Map<String, DocumentSnapshot<Map<String, dynamic>>>
+          stockSnapshots = {};
+      final conSobrante = _productosBandeja
+          .where((p) => p.cantidadSobrante > 0)
           .toList();
 
-      // Leer todos los documentos de stock necesarios
-      for (final producto in productosAVender) {
-        final stockRef = FirebaseFirestore.instance
-            .collection('eventos')
-            .doc(widget.eventoId)
-            .collection('sectores')
-            .doc(widget.sectorId)
-            .collection('stock')
-            .doc(producto.productoId);
-
-        final stockDoc = await transaction.get(stockRef);
-        stockSnapshots[producto.productoId] = stockDoc;
+      for (final producto in conSobrante) {
+        final stockRef = _stockRef(producto.productoId);
+        stockSnapshots[producto.productoId] = await transaction.get(stockRef);
       }
 
-      // ===== FASE DE ESCRITURA: Actualizar stocks y crear transacción =====
-
-      // 1. Actualizar todos los stocks
-      for (final producto in productosAVender) {
+      // 1. Devolver sobrantes al inventario del sector
+      for (final producto in conSobrante) {
         final stockDoc = stockSnapshots[producto.productoId]!;
 
         if (!stockDoc.exists) {
           throw Exception('El producto ${producto.nombre} no existe en stock');
         }
 
-        final stockData = stockDoc.data() as Map<String, dynamic>;
-        final cantidadActual = stockData['cantidad'] as int? ?? 0;
-
-        if (cantidadActual < producto.cantidadVendida) {
-          throw Exception(
-            'Stock insuficiente para ${producto.nombre}. Disponible: $cantidadActual, Vendido: ${producto.cantidadVendida}',
-          );
-        }
-
-        final stockRef = stockDoc.reference;
-        transaction.update(stockRef, {
-          'cantidad': cantidadActual - producto.cantidadVendida,
+        final stockData = stockDoc.data() ?? {};
+        final cantidadActual = _intFirestore(stockData['cantidad']);
+        transaction.update(stockDoc.reference, {
+          'cantidad': cantidadActual + producto.cantidadSobrante,
         });
       }
 
@@ -531,23 +1398,526 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
             };
           }).toList(),
         }, SetOptions(merge: true));
+
+        final bandejeroRef = FirebaseFirestore.instance
+            .collection('eventos')
+            .doc(widget.eventoId)
+            .collection('sectores')
+            .doc(widget.sectorId)
+            .collection('bandejeros')
+            .doc(_bandejeroId);
+
+        transaction.set(
+          bandejeroRef,
+          {
+            'ultimaRondaRendida': true,
+            'actualizadoEn': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
       }
     });
+  }
+
+  Future<_ResumenVentasBandejero?> _cargarResumenRondasRendidas(
+    String bandejeroId,
+  ) async {
+    final qs = await FirebaseFirestore.instance
+        .collection('eventos')
+        .doc(widget.eventoId)
+        .collection('sectores')
+        .doc(widget.sectorId)
+        .collection('bandejeros')
+        .doc(bandejeroId)
+        .collection('rondas')
+        .where('estado', isEqualTo: 'rendida')
+        .get();
+
+    if (qs.docs.isEmpty) return null;
+
+    final Map<String, _LineaVentaResumen> porProducto = {};
+    double total = 0;
+
+    for (final doc in qs.docs) {
+      final d = doc.data();
+      final totalRonda = (d['totalVendido'] as num?)?.toDouble();
+      if (totalRonda != null && totalRonda > 0) {
+        total += totalRonda;
+      }
+
+      final productos = d['productos'] as List<dynamic>? ?? const [];
+      for (final item in productos.whereType<Map<String, dynamic>>()) {
+        final key =
+            item['productoId']?.toString() ?? item['nombre']?.toString() ?? '';
+        final nombre = item['nombre']?.toString() ?? 'Producto';
+        final vendido = _intFirestore(item['cantidadVendida']);
+        final precio = (item['precio'] as num?)?.toDouble() ?? 0;
+        final subtotal =
+            (item['subtotal'] as num?)?.toDouble() ?? vendido * precio;
+
+        if (porProducto.containsKey(key)) {
+          final prev = porProducto[key]!;
+          porProducto[key] = _LineaVentaResumen(
+            nombre: prev.nombre,
+            cantidadVendida: prev.cantidadVendida + vendido,
+            subtotal: prev.subtotal + subtotal,
+          );
+        } else {
+          porProducto[key] = _LineaVentaResumen(
+            nombre: nombre,
+            cantidadVendida: vendido,
+            subtotal: subtotal,
+          );
+        }
+      }
+    }
+
+    if (total <= 0 && porProducto.isNotEmpty) {
+      total = porProducto.values.fold(0.0, (s, p) => s + p.subtotal);
+    }
+
+    final lineas = porProducto.values.toList()
+      ..sort((a, b) => a.nombre.compareTo(b.nombre));
+
+    return _ResumenVentasBandejero(
+      totalVendido: total,
+      cantidadRondas: qs.docs.length,
+      productos: lineas,
+    );
+  }
+
+  Future<double?> _mostrarDialogoResumenCierre({
+    required String nombre,
+    required _ResumenVentasBandejero resumen,
+    bool soloLectura = false,
+    Map<String, dynamic>? cierreGuardado,
+  }) {
+    final pct = (cierreGuardado?['porcentajeComision'] as num?)?.toDouble();
+    final comision = (cierreGuardado?['comision'] as num?)?.toDouble();
+    final aPagar = (cierreGuardado?['totalAPagar'] as num?)?.toDouble();
+
+    return showDialog<double>(
+      context: context,
+      barrierDismissible: soloLectura,
+      builder: (ctx) => _DialogoResumenCierreBandejeo(
+        nombreBandejero: nombre,
+        resumen: resumen,
+        soloLectura: soloLectura,
+        porcentajeInicial: pct,
+        comisionInicial: comision,
+        totalAPagarInicial: aPagar,
+      ),
+    );
+  }
+
+  Future<void> _mostrarResumenBandejeroCerrado(
+    String bandejeroId,
+    String nombre,
+    Map<String, dynamic> data,
+  ) async {
+    final cierre = data['cierreResumen'] as Map<String, dynamic>?;
+    _ResumenVentasBandejero? resumen =
+        _ResumenVentasBandejero.desdeCierreGuardado(cierre);
+
+    resumen ??= await _cargarResumenRondasRendidas(bandejeroId);
+
+    if (!mounted) return;
+    if (resumen == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No hay ventas registradas para $nombre.',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    await _mostrarDialogoResumenCierre(
+      nombre: nombre,
+      resumen: resumen,
+      soloLectura: true,
+      cierreGuardado: cierre,
+    );
   }
 }
 
 enum _AccionRonda { ver, agregar, rendir }
 
-class _PasoSeleccionBandejero extends StatelessWidget {
+enum _AccionBandejeroTrasRonda { otraRonda, cerrarBandejeo }
+
+class _LineaVentaResumen {
+  final String nombre;
+  final int cantidadVendida;
+  final double subtotal;
+
+  const _LineaVentaResumen({
+    required this.nombre,
+    required this.cantidadVendida,
+    required this.subtotal,
+  });
+}
+
+class _ResumenVentasBandejero {
+  final double totalVendido;
+  final int cantidadRondas;
+  final List<_LineaVentaResumen> productos;
+
+  const _ResumenVentasBandejero({
+    required this.totalVendido,
+    required this.cantidadRondas,
+    required this.productos,
+  });
+
+  Map<String, dynamic> toCierreFirestore(
+    double porcentajeComision, {
+    required String nombreBandejero,
+  }) {
+    final comision = totalVendido * (porcentajeComision / 100);
+    return {
+      'bandejeroNombre': nombreBandejero,
+      'totalVendido': totalVendido,
+      'porcentajeComision': porcentajeComision,
+      'comision': comision,
+      'totalAPagar': totalVendido - comision,
+      'cantidadRondas': cantidadRondas,
+      'productos': productos
+          .map(
+            (p) => {
+              'nombre': p.nombre,
+              'cantidadVendida': p.cantidadVendida,
+              'subtotal': p.subtotal,
+            },
+          )
+          .toList(),
+    };
+  }
+
+  static _ResumenVentasBandejero? desdeCierreGuardado(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    final productosRaw = data['productos'] as List<dynamic>? ?? const [];
+    final productos = productosRaw
+        .whereType<Map<String, dynamic>>()
+        .map(
+          (p) => _LineaVentaResumen(
+            nombre: p['nombre']?.toString() ?? 'Producto',
+            cantidadVendida: _intFirestore(p['cantidadVendida']),
+            subtotal: (p['subtotal'] as num?)?.toDouble() ?? 0,
+          ),
+        )
+        .toList();
+    return _ResumenVentasBandejero(
+      totalVendido: (data['totalVendido'] as num?)?.toDouble() ?? 0,
+      cantidadRondas: _intFirestore(data['cantidadRondas']),
+      productos: productos,
+    );
+  }
+}
+
+/// Diálogo de resumen de ventas y comisión al cerrar o consultar bandejero.
+class _DialogoResumenCierreBandejeo extends StatefulWidget {
+  final String nombreBandejero;
+  final _ResumenVentasBandejero resumen;
+  final bool soloLectura;
+  final double? porcentajeInicial;
+  final double? comisionInicial;
+  final double? totalAPagarInicial;
+
+  const _DialogoResumenCierreBandejeo({
+    required this.nombreBandejero,
+    required this.resumen,
+    this.soloLectura = false,
+    this.porcentajeInicial,
+    this.comisionInicial,
+    this.totalAPagarInicial,
+  });
+
+  @override
+  State<_DialogoResumenCierreBandejeo> createState() =>
+      _DialogoResumenCierreBandejeoState();
+}
+
+class _DialogoResumenCierreBandejeoState
+    extends State<_DialogoResumenCierreBandejeo> {
+  late final TextEditingController _pctController;
+  late double _porcentaje;
+
+  @override
+  void initState() {
+    super.initState();
+    _porcentaje = widget.porcentajeInicial ?? 10;
+    _pctController = TextEditingController(
+      text: _porcentaje == _porcentaje.roundToDouble()
+          ? '${_porcentaje.toInt()}'
+          : '$_porcentaje',
+    );
+  }
+
+  @override
+  void dispose() {
+    _pctController.dispose();
+    super.dispose();
+  }
+
+  double get _comision => widget.soloLectura && widget.comisionInicial != null
+      ? widget.comisionInicial!
+      : widget.resumen.totalVendido * (_porcentaje / 100);
+
+  double get _totalAPagar => widget.soloLectura && widget.totalAPagarInicial != null
+      ? widget.totalAPagarInicial!
+      : widget.resumen.totalVendido - _comision;
+
+  void _actualizarPorcentaje(String texto) {
+    final valor = double.tryParse(texto.replaceAll(',', '.'));
+    if (valor == null || valor < 0 || valor > 100) return;
+    setState(() => _porcentaje = valor);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resumen = widget.resumen;
+
+    return AlertDialog(
+      title: Text(
+        widget.soloLectura
+            ? 'Resumen · ${widget.nombreBandejero}'
+            : 'Cerrar bandejeo · ${widget.nombreBandejero}',
+        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.nombreBandejero,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: _primaryColor,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'Total vendido',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: _secondaryColor,
+                      ),
+                    ),
+                    Text(
+                      '\$${resumen.totalVendido.toStringAsFixed(0)}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[800],
+                      ),
+                    ),
+                    Text(
+                      '${resumen.cantidadRondas} ronda${resumen.cantidadRondas == 1 ? '' : 's'} rendida${resumen.cantidadRondas == 1 ? '' : 's'}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: _secondaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (resumen.productos.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Detalle',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ...resumen.productos.map(
+                  (p) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${p.nombre} (${p.cantidadVendida} u.)',
+                            style: GoogleFonts.poppins(fontSize: 12),
+                          ),
+                        ),
+                        Text(
+                          '\$${p.subtotal.toStringAsFixed(0)}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _accentColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              if (!widget.soloLectura) ...[
+                TextField(
+                  controller: _pctController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Comisión (%)',
+                    hintText: 'Ej: 10',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    suffixText: '%',
+                  ),
+                  onChanged: _actualizarPorcentaje,
+                ),
+                const SizedBox(height: 12),
+              ] else ...[
+                Text(
+                  'Comisión: ${widget.porcentajeInicial?.toStringAsFixed(0) ?? _porcentaje.toStringAsFixed(0)}%',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: _secondaryColor,
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Comisión (${_porcentaje.toStringAsFixed(_porcentaje == _porcentaje.roundToDouble() ? 0 : 1)}%)',
+                          style: GoogleFonts.poppins(),
+                        ),
+                        Text(
+                          '\$${_comision.toStringAsFixed(0)}',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold,
+                            color: _accentColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Total a pagar',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '\$${_totalAPagar.toStringAsFixed(0)}',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: _primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        if (!widget.soloLectura)
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancelar',
+              style: GoogleFonts.poppins(color: _secondaryColor),
+            ),
+          ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(
+            context,
+            widget.soloLectura ? null : _porcentaje,
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _accentColor,
+            foregroundColor: _primaryColor,
+          ),
+          child: Text(
+            widget.soloLectura ? 'Cerrar' : 'Confirmar cierre',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PasoSeleccionBandejero extends StatefulWidget {
   final String eventoId;
   final String sectorId;
-  final void Function(String bandejeroId, String nombre) onSeleccionado;
+  final Future<void> Function(String bandejeroId, String nombre) onSeleccionado;
+  final Future<void> Function(
+    String bandejeroId,
+    String nombre,
+    Map<String, dynamic> data,
+  ) onVerResumenCierre;
 
   const _PasoSeleccionBandejero({
+    super.key,
     required this.eventoId,
     required this.sectorId,
     required this.onSeleccionado,
+    required this.onVerResumenCierre,
   });
+
+  @override
+  State<_PasoSeleccionBandejero> createState() =>
+      _PasoSeleccionBandejeroState();
+}
+
+class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
+    with AutomaticKeepAliveClientMixin {
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _bandejerosStream;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _bandejerosStream = FirebaseFirestore.instance
+        .collection('eventos')
+        .doc(widget.eventoId)
+        .collection('sectores')
+        .doc(widget.sectorId)
+        .collection('bandejeros')
+        .snapshots();
+  }
 
   Future<void> _crearBandejero(BuildContext context) async {
     final controller = TextEditingController();
@@ -583,9 +1953,9 @@ class _PasoSeleccionBandejero extends StatelessWidget {
 
     final bandejerosRef = FirebaseFirestore.instance
         .collection('eventos')
-        .doc(eventoId)
+        .doc(widget.eventoId)
         .collection('sectores')
-        .doc(sectorId)
+        .doc(widget.sectorId)
         .collection('bandejeros');
 
     final docRef = bandejerosRef.doc();
@@ -596,21 +1966,13 @@ class _PasoSeleccionBandejero extends StatelessWidget {
     });
 
     if (context.mounted) {
-      onSeleccionado(docRef.id, nombre);
+      await widget.onSeleccionado(docRef.id, nombre);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Sin orderBy para no requerir índice compuesto; ordenamos por nombre en memoria
-    final bandejerosStream = FirebaseFirestore.instance
-        .collection('eventos')
-        .doc(eventoId)
-        .collection('sectores')
-        .doc(sectorId)
-        .collection('bandejeros')
-        .where('activo', isEqualTo: true)
-        .snapshots();
+    super.build(context);
 
     return Column(
       children: [
@@ -634,10 +1996,11 @@ class _PasoSeleccionBandejero extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: bandejerosStream,
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: _bandejerosStream,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
                 return Center(
                   child: CircularProgressIndicator(color: _accentColor),
                 );
@@ -656,19 +2019,25 @@ class _PasoSeleccionBandejero extends StatelessWidget {
               }
 
               final rawDocs = snapshot.data?.docs ?? const [];
-              final docs = List<QueryDocumentSnapshot>.from(rawDocs)
-                ..sort((a, b) {
-                  final na =
-                      (a.data() as Map<String, dynamic>)['nombre']
-                          ?.toString() ??
-                      '';
-                  final nb =
-                      (b.data() as Map<String, dynamic>)['nombre']
-                          ?.toString() ??
-                      '';
-                  return na.toLowerCase().compareTo(nb.toLowerCase());
-                });
-              if (docs.isEmpty) {
+              int cmpNombre(
+                QueryDocumentSnapshot<Map<String, dynamic>> a,
+                QueryDocumentSnapshot<Map<String, dynamic>> b,
+              ) {
+                final na = a.data()['nombre']?.toString() ?? '';
+                final nb = b.data()['nombre']?.toString() ?? '';
+                return na.toLowerCase().compareTo(nb.toLowerCase());
+              }
+
+              final activos = rawDocs
+                  .where((d) => !_bandejeroEstaCerrado(d.data()))
+                  .toList()
+                ..sort(cmpNombre);
+              final cerrados = rawDocs
+                  .where((d) => _bandejeroEstaCerrado(d.data()))
+                  .toList()
+                ..sort(cmpNombre);
+
+              if (activos.isEmpty && cerrados.isEmpty) {
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
@@ -701,39 +2070,119 @@ class _PasoSeleccionBandejero extends StatelessWidget {
                 );
               }
 
-              return ListView.builder(
+              Widget tileBandejero(
+                QueryDocumentSnapshot<Map<String, dynamic>> doc, {
+                required bool cerrado,
+              }) {
+                final data = doc.data();
+                final nombre = data['nombre'] as String? ?? 'Sin nombre';
+                final yaRindio =
+                    !cerrado && data['ultimaRondaRendida'] == true;
+                final cierre = data['cierreResumen'] as Map<String, dynamic>?;
+                final totalCierre =
+                    (cierre?['totalVendido'] as num?)?.toDouble();
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  elevation: cerrado ? 1 : 2,
+                  color: cerrado
+                      ? Colors.grey.withValues(alpha: 0.08)
+                      : null,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: cerrado
+                        ? BorderSide(
+                            color: _secondaryColor.withValues(alpha: 0.35),
+                          )
+                        : BorderSide.none,
+                  ),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: cerrado
+                          ? _secondaryColor.withValues(alpha: 0.15)
+                          : _accentColor.withValues(alpha: 0.2),
+                      child: Icon(
+                        cerrado ? Icons.summarize_outlined : Icons.person,
+                        color: cerrado ? _secondaryColor : _accentColor,
+                      ),
+                    ),
+                    title: Text(
+                      nombre,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        color: _primaryColor,
+                      ),
+                    ),
+                    subtitle: cerrado
+                        ? Text(
+                            totalCierre != null
+                                ? 'Cerrado · vendió \$${totalCierre.toStringAsFixed(0)} · ver comisión'
+                                : 'Cerrado · ver resumen y comisión',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: _secondaryColor,
+                            ),
+                          )
+                        : yaRindio
+                            ? Text(
+                                'Ronda rendida · otra ronda o cerrar bandejeo',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  color: _secondaryColor,
+                                ),
+                              )
+                            : Text(
+                                'Nueva ronda',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  color: _secondaryColor.withValues(
+                                    alpha: 0.8,
+                                  ),
+                                ),
+                              ),
+                    trailing: Icon(
+                      cerrado ? Icons.receipt_long : Icons.chevron_right,
+                      color: _secondaryColor,
+                    ),
+                    onTap: () {
+                      if (cerrado) {
+                        widget.onVerResumenCierre(doc.id, nombre, data);
+                      } else {
+                        widget.onSeleccionado(doc.id, nombre);
+                      }
+                    },
+                  ),
+                );
+              }
+
+              Widget encabezadoSeccion(String titulo) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8, top: 4),
+                  child: Text(
+                    titulo,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: _secondaryColor,
+                    ),
+                  ),
+                );
+              }
+
+              return ListView(
+                key: const PageStorageKey<String>('bandejeo-lista-bandejeros'),
                 padding: const EdgeInsets.all(16),
-                itemCount: docs.length,
-                itemBuilder: (context, index) {
-                  final doc = docs[index];
-                  final data = doc.data() as Map<String, dynamic>;
-                  final nombre = data['nombre'] as String? ?? 'Sin nombre';
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: _accentColor.withValues(alpha: 0.2),
-                        child: Icon(Icons.person, color: _accentColor),
-                      ),
-                      title: Text(
-                        nombre,
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w600,
-                          color: _primaryColor,
-                        ),
-                      ),
-                      trailing: Icon(
-                        Icons.chevron_right,
-                        color: _secondaryColor,
-                      ),
-                      onTap: () => onSeleccionado(doc.id, nombre),
-                    ),
-                  );
-                },
+                children: [
+                  if (activos.isNotEmpty) ...[
+                    encabezadoSeccion('En turno'),
+                    ...activos.map((d) => tileBandejero(d, cerrado: false)),
+                  ],
+                  if (cerrados.isNotEmpty) ...[
+                    if (activos.isNotEmpty) const SizedBox(height: 8),
+                    encabezadoSeccion('Cerrados (solo consulta)'),
+                    ...cerrados.map((d) => tileBandejero(d, cerrado: true)),
+                  ],
+                ],
               );
             },
           ),
@@ -777,10 +2226,11 @@ class _PasoSeleccionBandejero extends StatelessWidget {
 }
 
 /// Paso 1: Carga de Bandeja
-class _PasoCargaBandeja extends StatelessWidget {
+class _PasoCargaBandeja extends StatefulWidget {
   final String eventoId;
   final String sectorId;
   final List<_ProductoBandeja> productosBandeja;
+  final bool esActualizacionRonda;
   final Function(List<_ProductoBandeja>) onProductosChanged;
   final VoidCallback onSiguiente;
 
@@ -788,40 +2238,124 @@ class _PasoCargaBandeja extends StatelessWidget {
     required this.eventoId,
     required this.sectorId,
     required this.productosBandeja,
+    this.esActualizacionRonda = false,
     required this.onProductosChanged,
     required this.onSiguiente,
   });
 
-  void _agregarProducto(_ProductoBandeja producto) {
-    final nuevaLista = List<_ProductoBandeja>.from(productosBandeja);
-    nuevaLista.add(producto);
-    onProductosChanged(nuevaLista);
+  @override
+  State<_PasoCargaBandeja> createState() => _PasoCargaBandejaState();
+}
+
+class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _stockStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stockStream = FirebaseFirestore.instance
+        .collection('eventos')
+        .doc(widget.eventoId)
+        .collection('sectores')
+        .doc(widget.sectorId)
+        .collection('stock')
+        .orderBy('nombre')
+        .snapshots();
   }
 
-  void _actualizarCantidad(String productoId, int nuevaCantidad) {
-    final nuevaLista = productosBandeja.map((p) {
-      if (p.productoId == productoId) {
-        return _ProductoBandeja(
-          productoId: p.productoId,
-          nombre: p.nombre,
-          precio: p.precio,
-          cantidadInicial: nuevaCantidad,
+  void _agregarProducto(_ProductoBandeja producto) {
+    final nuevaLista = List<_ProductoBandeja>.from(widget.productosBandeja);
+    nuevaLista.add(producto);
+    widget.onProductosChanged(nuevaLista);
+  }
+
+  void _aplicarCargaEnBandeja({
+    required String productoId,
+    required String nombre,
+    required double precio,
+    required int cantidadPropio,
+    required int traspasoFijo,
+    required int maxTotal,
+    required bool yaEnBandeja,
+    bool esSumaAdicional = false,
+  }) {
+    if (esSumaAdicional && yaEnBandeja && cantidadPropio <= 0) return;
+
+    int total;
+    if (yaEnBandeja && esSumaAdicional) {
+      final actual = widget.productosBandeja
+          .firstWhere((p) => p.productoId == productoId);
+      if (traspasoFijo > 0) {
+        final propioNuevo =
+            actual.cantidadPropioEnBandeja + cantidadPropio;
+        total = _totalBandejaDesdePropio(
+          propioNuevo,
+          traspasoFijo,
+          maxTotal,
+        );
+      } else {
+        total = _intClamp(
+          actual.cantidadInicial + cantidadPropio,
+          1,
+          maxTotal,
         );
       }
-      return p;
-    }).toList();
-    onProductosChanged(nuevaLista);
+    } else if (traspasoFijo > 0) {
+      total = _totalBandejaDesdePropio(
+        cantidadPropio,
+        traspasoFijo,
+        maxTotal,
+      );
+    } else {
+      total = _intClamp(cantidadPropio, 1, maxTotal);
+    }
+    if (yaEnBandeja) {
+      final nuevaLista = widget.productosBandeja.map((p) {
+        if (p.productoId == productoId) {
+          return _ProductoBandeja(
+            productoId: p.productoId,
+            nombre: p.nombre,
+            precio: p.precio,
+            cantidadInicial: total,
+            cantidadSobrante: p.cantidadSobrante,
+            cantidadTraspasoEnBandeja: traspasoFijo,
+          );
+        }
+        return p;
+      }).toList();
+      widget.onProductosChanged(nuevaLista);
+    } else {
+      _agregarProducto(
+        _ProductoBandeja(
+          productoId: productoId,
+          nombre: nombre,
+          precio: precio,
+          cantidadInicial: total,
+          cantidadTraspasoEnBandeja: traspasoFijo,
+        ),
+      );
+    }
+  }
+
+  int _traspasoFijoParaProducto(
+    _ProductoBandeja? enBandeja,
+    int porTraspasoStock,
+  ) {
+    if (enBandeja != null && enBandeja.cantidadTraspasoEnBandeja > 0) {
+      return enBandeja.cantidadTraspasoEnBandeja;
+    }
+    return porTraspasoStock;
   }
 
   void _eliminarProducto(String productoId) {
-    final nuevaLista = productosBandeja
+    final nuevaLista = widget.productosBandeja
         .where((p) => p.productoId != productoId)
         .toList();
-    onProductosChanged(nuevaLista);
+    widget.onProductosChanged(nuevaLista);
   }
 
   int _obtenerCantidadEnBandeja(String productoId) {
-    final producto = productosBandeja.firstWhere(
+    final producto = widget.productosBandeja.firstWhere(
       (p) => p.productoId == productoId,
       orElse: () => _ProductoBandeja(
         productoId: productoId,
@@ -834,11 +2368,12 @@ class _PasoCargaBandeja extends StatelessWidget {
   }
 
   bool _estaEnBandeja(String productoId) {
-    return productosBandeja.any((p) => p.productoId == productoId);
+    return widget.productosBandeja.any((p) => p.productoId == productoId);
   }
 
   @override
   Widget build(BuildContext context) {
+    final productosBandeja = widget.productosBandeja;
     return Column(
       children: [
         // Resumen de bandeja
@@ -848,45 +2383,47 @@ class _PasoCargaBandeja extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             color: _accentColor.withValues(alpha: 0.1),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Productos en Bandeja: ${productosBandeja.length}',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: _primaryColor,
-                      ),
+                if (widget.esActualizacionRonda) ...[
+                  Text(
+                    'Sumá unidades a lo que ya llevás. '
+                    'Con traspaso, solo cargás lo tuyo y el traspaso se suma solo.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: _secondaryColor,
+                      height: 1.35,
                     ),
-                    Text(
-                      'Total: \$${productosBandeja.fold(0.0, (sum, p) => sum + (p.cantidadInicial * p.precio)).toStringAsFixed(0)}',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        color: _accentColor,
-                      ),
-                    ),
-                  ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Text(
+                  'Productos en bandeja: ${productosBandeja.length}',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: _primaryColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Total: \$${productosBandeja.fold(0.0, (total, p) => total + (p.cantidadInicial * p.precio)).toStringAsFixed(0)}',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                    color: _accentColor,
+                  ),
                 ),
               ],
             ),
           ),
         // Lista de productos disponibles
         Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('eventos')
-                .doc(eventoId)
-                .collection('sectores')
-                .doc(sectorId)
-                .collection('stock')
-                .orderBy('nombre')
-                .snapshots(),
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: _stockStream,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
                 return Center(
                   child: CircularProgressIndicator(color: _accentColor),
                 );
@@ -930,9 +2467,8 @@ class _PasoCargaBandeja extends StatelessWidget {
 
               final productos =
                   snapshot.data!.docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final cantidad = data['cantidad'] as int? ?? 0;
-                    return cantidad > 0;
+                    final data = doc.data();
+                    return _intFirestore(data['cantidad']) > 0;
                   }).toList()..sort((a, b) {
                     final aData = a.data() as Map<String, dynamic>;
                     final bData = b.data() as Map<String, dynamic>;
@@ -942,6 +2478,7 @@ class _PasoCargaBandeja extends StatelessWidget {
                   });
 
               return ListView.builder(
+                key: const PageStorageKey<String>('bandejeo-stock-list'),
                 padding: const EdgeInsets.all(16),
                 itemCount: productos.length,
                 itemBuilder: (context, index) {
@@ -949,14 +2486,52 @@ class _PasoCargaBandeja extends StatelessWidget {
                   final data = productoDoc.data() as Map<String, dynamic>;
                   final nombre = data['nombre'] as String? ?? 'Sin nombre';
                   final precio = (data['precio'] as num?)?.toDouble() ?? 0.0;
-                  final cantidadDisponible = data['cantidad'] as int? ?? 0;
+                  final cantidadDisponible = _intFirestore(data['cantidad']);
+                  final porTraspasoStock = _unidadesPorTraspasoEnStock(data);
+                  final propioStock = _unidadesPropioEnStock(data);
                   final productoId = productoDoc.id;
                   final enBandeja = _estaEnBandeja(productoId);
+                  final productoEnBandeja = enBandeja
+                      ? widget.productosBandeja
+                          .firstWhere((p) => p.productoId == productoId)
+                      : null;
+                  final traspasoFijo = _traspasoFijoParaProducto(
+                    productoEnBandeja,
+                    porTraspasoStock,
+                  );
+                  final modoTraspaso = traspasoFijo > 0;
+                  final maxPropio = modoTraspaso
+                      ? _intClamp(
+                          cantidadDisponible - traspasoFijo,
+                          0,
+                          cantidadDisponible,
+                        )
+                      : cantidadDisponible;
                   final cantidadEnBandeja = enBandeja
                       ? _obtenerCantidadEnBandeja(productoId)
                       : 0;
+                  final propioEnBandeja = enBandeja
+                      ? (productoEnBandeja!.cantidadTraspasoEnBandeja > 0
+                          ? productoEnBandeja.cantidadPropioEnBandeja
+                          : modoTraspaso
+                              ? _intClamp(
+                                  cantidadEnBandeja - traspasoFijo,
+                                  0,
+                                  cantidadEnBandeja,
+                                )
+                              : cantidadEnBandeja)
+                      : 0;
+                  final maxAgregar = enBandeja
+                      ? _intClamp(
+                          cantidadDisponible - cantidadEnBandeja,
+                          0,
+                          cantidadDisponible,
+                        )
+                      : cantidadDisponible;
+                  final esSumaAdicional = widget.esActualizacionRonda;
 
                   return Card(
+                    key: ValueKey('bandejeo-$productoId'),
                     margin: const EdgeInsets.only(bottom: 12),
                     elevation: enBandeja ? 4 : 2,
                     shape: RoundedRectangleBorder(
@@ -965,114 +2540,178 @@ class _PasoCargaBandeja extends StatelessWidget {
                           ? BorderSide(color: _accentColor, width: 2)
                           : BorderSide.none,
                     ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      leading: Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: enBandeja
-                              ? _accentColor.withValues(alpha: 0.2)
-                              : Colors.grey.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.fastfood,
-                          color: enBandeja ? _accentColor : _secondaryColor,
-                          size: 28,
-                        ),
-                      ),
-                      title: Text(
-                        nombre,
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: _primaryColor,
-                        ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const SizedBox(height: 4),
-                          Text(
-                            'Precio: \$${precio.toStringAsFixed(0)} | Stock: $cantidadDisponible',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: _secondaryColor,
-                            ),
-                          ),
-                          if (enBandeja)
-                            Container(
-                              margin: const EdgeInsets.only(top: 4),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _accentColor.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                'En bandeja: $cantidadEnBandeja',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: _accentColor,
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 46,
+                                height: 46,
+                                decoration: BoxDecoration(
+                                  color: enBandeja
+                                      ? _accentColor.withValues(alpha: 0.2)
+                                      : Colors.grey.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.fastfood,
+                                  color:
+                                      enBandeja ? _accentColor : _secondaryColor,
+                                  size: 26,
                                 ),
                               ),
-                            ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      nombre,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.poppins(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                        color: _primaryColor,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      modoTraspaso
+                                          ? 'Precio: \$${precio.toStringAsFixed(0)} · '
+                                              'Stock: $cantidadDisponible '
+                                              '($propioStock + $porTraspasoStock traspaso)'
+                                          : 'Precio: \$${precio.toStringAsFixed(0)} · '
+                                              'Stock: $cantidadDisponible',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 12,
+                                        color: _secondaryColor,
+                                      ),
+                                    ),
+                                    if (modoTraspaso) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Cargá solo lo que tenés; '
+                                        '$traspasoFijo u. de traspaso se suman solas.',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 10,
+                                          color: Colors.orange[900],
+                                          height: 1.25,
+                                        ),
+                                      ),
+                                    ],
+                                    if (enBandeja) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        modoTraspaso
+                                            ? 'En bandeja: $cantidadEnBandeja u. '
+                                                '($propioEnBandeja + $traspasoFijo traspaso)'
+                                            : 'En bandeja: $cantidadEnBandeja u.',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: _accentColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          _ControlesCargaBandeja(
+                            modoTraspaso: modoTraspaso,
+                            esSumaAdicional: esSumaAdicional,
+                            traspasoFijo: traspasoFijo,
+                            propioActual: propioEnBandeja,
+                            totalActual: cantidadEnBandeja,
+                            maxPropio: maxPropio,
+                            maxTotal: cantidadDisponible,
+                            maxAgregar: maxAgregar,
+                            enBandeja: enBandeja,
+                            onQuitarDeBandeja: enBandeja
+                                ? () {
+                                    if (esSumaAdicional) {
+                                      if (cantidadEnBandeja <= 1) {
+                                        _eliminarProducto(productoId);
+                                      } else if (modoTraspaso) {
+                                        if (cantidadEnBandeja <= traspasoFijo) {
+                                          _eliminarProducto(productoId);
+                                        } else {
+                                          _aplicarCargaEnBandeja(
+                                            productoId: productoId,
+                                            nombre: nombre,
+                                            precio: precio,
+                                            cantidadPropio: propioEnBandeja > 0
+                                                ? propioEnBandeja - 1
+                                                : 0,
+                                            traspasoFijo: traspasoFijo,
+                                            maxTotal: cantidadDisponible,
+                                            yaEnBandeja: true,
+                                          );
+                                        }
+                                      } else {
+                                        _aplicarCargaEnBandeja(
+                                          productoId: productoId,
+                                          nombre: nombre,
+                                          precio: precio,
+                                          cantidadPropio:
+                                              cantidadEnBandeja - 1,
+                                          traspasoFijo: 0,
+                                          maxTotal: cantidadDisponible,
+                                          yaEnBandeja: true,
+                                        );
+                                      }
+                                    } else if (!modoTraspaso &&
+                                        cantidadEnBandeja > 1) {
+                                      _aplicarCargaEnBandeja(
+                                        productoId: productoId,
+                                        nombre: nombre,
+                                        precio: precio,
+                                        cantidadPropio: cantidadEnBandeja - 1,
+                                        traspasoFijo: 0,
+                                        maxTotal: cantidadDisponible,
+                                        yaEnBandeja: true,
+                                      );
+                                    } else {
+                                      _eliminarProducto(productoId);
+                                    }
+                                  }
+                                : null,
+                            onPropioChanged: (valor) {
+                              _aplicarCargaEnBandeja(
+                                productoId: productoId,
+                                nombre: nombre,
+                                precio: precio,
+                                cantidadPropio: valor,
+                                traspasoFijo: traspasoFijo,
+                                maxTotal: cantidadDisponible,
+                                yaEnBandeja: enBandeja,
+                                esSumaAdicional:
+                                    esSumaAdicional && enBandeja,
+                              );
+                            },
+                            onAgregarPrimero: () {
+                              _aplicarCargaEnBandeja(
+                                productoId: productoId,
+                                nombre: nombre,
+                                precio: precio,
+                                cantidadPropio: modoTraspaso && maxPropio == 0
+                                    ? 0
+                                    : 1,
+                                traspasoFijo: traspasoFijo,
+                                maxTotal: cantidadDisponible,
+                                yaEnBandeja: false,
+                              );
+                            },
+                          ),
                         ],
                       ),
-                      trailing: enBandeja
-                          ? Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove_circle),
-                                  color: Colors.red,
-                                  onPressed: cantidadEnBandeja > 1
-                                      ? () => _actualizarCantidad(
-                                          productoId,
-                                          cantidadEnBandeja - 1,
-                                        )
-                                      : () => _eliminarProducto(productoId),
-                                ),
-                                Text(
-                                  '$cantidadEnBandeja',
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.add_circle),
-                                  color: _accentColor,
-                                  onPressed:
-                                      cantidadEnBandeja < cantidadDisponible
-                                      ? () => _actualizarCantidad(
-                                          productoId,
-                                          cantidadEnBandeja + 1,
-                                        )
-                                      : null,
-                                ),
-                              ],
-                            )
-                          : IconButton(
-                              icon: Icon(Icons.add_circle, color: _accentColor),
-                              onPressed: () {
-                                _agregarProducto(
-                                  _ProductoBandeja(
-                                    productoId: productoId,
-                                    nombre: nombre,
-                                    precio: precio,
-                                    cantidadInicial: 1,
-                                  ),
-                                );
-                              },
-                            ),
                     ),
                   );
                 },
@@ -1080,7 +2719,6 @@ class _PasoCargaBandeja extends StatelessWidget {
             },
           ),
         ),
-        // Botón Iniciar Ronda
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
@@ -1095,7 +2733,14 @@ class _PasoCargaBandeja extends StatelessWidget {
             ],
           ),
           child: ElevatedButton(
-            onPressed: productosBandeja.isNotEmpty ? onSiguiente : null,
+            onPressed: productosBandeja.isEmpty
+                ? null
+                : () {
+                    FocusScope.of(context).unfocus();
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) widget.onSiguiente();
+                    });
+                  },
             style: ElevatedButton.styleFrom(
               backgroundColor: _accentColor,
               foregroundColor: _primaryColor,
@@ -1106,7 +2751,9 @@ class _PasoCargaBandeja extends StatelessWidget {
               disabledBackgroundColor: Colors.grey,
             ),
             child: Text(
-              'Iniciar Ronda',
+              widget.esActualizacionRonda
+                  ? 'Actualizar bandeja'
+                  : 'Iniciar ronda',
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
@@ -1123,12 +2770,12 @@ class _PasoCargaBandeja extends StatelessWidget {
 class _PasoResumenRonda extends StatelessWidget {
   final List<_ProductoBandeja> productosBandeja;
   final double valorTotal;
-  final VoidCallback onFinalizar;
+  final VoidCallback onVolverLista;
 
   const _PasoResumenRonda({
     required this.productosBandeja,
     required this.valorTotal,
-    required this.onFinalizar,
+    required this.onVolverLista,
   });
 
   @override
@@ -1226,7 +2873,6 @@ class _PasoResumenRonda extends StatelessWidget {
             },
           ),
         ),
-        // Botón Finalizar Ronda
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
@@ -1241,10 +2887,10 @@ class _PasoResumenRonda extends StatelessWidget {
             ],
           ),
           child: ElevatedButton(
-            onPressed: onFinalizar,
+            onPressed: onVolverLista,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
+              backgroundColor: _accentColor,
+              foregroundColor: _primaryColor,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -1253,13 +2899,16 @@ class _PasoResumenRonda extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.check_circle, size: 24),
+                const Icon(Icons.people_outline, size: 24),
                 const SizedBox(width: 8),
-                Text(
-                  'Finalizar Ronda y Rendir',
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
+                Flexible(
+                  child: Text(
+                    'Volver a lista de bandejeros',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 17,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ],
@@ -1401,100 +3050,86 @@ class _PasoRendicion extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Llevó: ${producto.cantidadInicial}',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: _secondaryColor,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Vendió: ${producto.cantidadVendida}',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.green[700],
-                                ),
-                              ),
-                            ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                'Sobrante',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  color: _secondaryColor,
-                                ),
-                              ),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.remove_circle),
-                                    color: Colors.red,
-                                    onPressed: producto.cantidadSobrante > 0
-                                        ? () => onSobrantesChanged(
-                                            producto.productoId,
-                                            producto.cantidadSobrante - 1,
-                                          )
-                                        : null,
-                                  ),
-                                  Container(
-                                    width: 50,
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      '${producto.cantidadSobrante}',
-                                      style: GoogleFonts.poppins(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.add_circle),
-                                    color: _accentColor,
-                                    onPressed:
-                                        producto.cantidadSobrante <
-                                            producto.cantidadInicial
-                                        ? () => onSobrantesChanged(
-                                            producto.productoId,
-                                            producto.cantidadSobrante + 1,
-                                          )
-                                        : null,
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ],
+                      Text(
+                        'Llevó: ${producto.cantidadInicial}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: _secondaryColor,
+                        ),
                       ),
-                      const Divider(),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Vendió: ${producto.cantidadVendida} u.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Total vendido: \$${producto.totalVendido.toStringAsFixed(0)}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: _accentColor,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           Text(
-                            'Subtotal',
+                            'Sobrante',
                             style: GoogleFonts.poppins(
-                              fontSize: 14,
+                              fontSize: 12,
                               color: _secondaryColor,
                             ),
                           ),
-                          Text(
-                            '\$${producto.totalVendido.toStringAsFixed(0)}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: _accentColor,
+                          const SizedBox(width: 8),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 36,
+                              minHeight: 36,
                             ),
+                            icon: const Icon(Icons.remove_circle),
+                            color: Colors.red,
+                            onPressed: producto.cantidadSobrante > 0
+                                ? () => onSobrantesChanged(
+                                    producto.productoId,
+                                    producto.cantidadSobrante - 1,
+                                  )
+                                : null,
+                          ),
+                          SizedBox(
+                            width: 40,
+                            child: Text(
+                              '${producto.cantidadSobrante}',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 36,
+                              minHeight: 36,
+                            ),
+                            icon: const Icon(Icons.add_circle),
+                            color: _accentColor,
+                            onPressed: producto.cantidadSobrante <
+                                    producto.cantidadInicial
+                                ? () => onSobrantesChanged(
+                                    producto.productoId,
+                                    producto.cantidadSobrante + 1,
+                                  )
+                                : null,
                           ),
                         ],
                       ),

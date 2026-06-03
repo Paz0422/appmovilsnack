@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
 
 // Paleta de colores basada en el logo "Fusión"
@@ -9,14 +12,35 @@ const Color _accentColor = Color(0xFFDABF41);
 const Color _secondaryColor = Color(0xFF6B4D2F);
 const Color _backgroundColor = Color(0xFFFDFBF7);
 
-/// Item de stock en memoria (hasta que se pulse Guardar)
-Map<String, dynamic> _stockItem(String productoId, String nombre, double precio, int cantidad, [String categoria = 'Otros']) => {
-  'productoId': productoId,
-  'nombre': nombre,
-  'precio': precio,
-  'cantidad': cantidad,
-  'categoria': categoria,
-};
+/// Item de stock en memoria (hasta que se pulse Guardar).
+/// [cantidadPropio]: unidades que el sector ya tenía.
+/// [cantidadPorTraspaso]: unidades recibidas por traspaso (se suman solas).
+/// [cantidad]: total = propio + traspaso.
+Map<String, dynamic> _stockItem(
+  String productoId,
+  String nombre,
+  double precio,
+  int cantidadPropio, [
+  String categoria = 'Otros',
+  int cantidadPorTraspaso = 0,
+]) {
+  final traspaso = cantidadPorTraspaso < 0 ? 0 : cantidadPorTraspaso;
+  final propio = cantidadPropio < 0 ? 0 : cantidadPropio;
+  return {
+    'productoId': productoId,
+    'nombre': nombre,
+    'precio': precio,
+    'cantidadPropio': propio,
+    'cantidadPorTraspaso': traspaso,
+    'cantidad': propio + traspaso,
+    'categoria': categoria,
+  };
+}
+
+int _cantidadPropioDe(Map<String, dynamic> item) =>
+    item['cantidadPropio'] as int? ??
+    ((item['cantidad'] as int? ?? 0) - (item['cantidadPorTraspaso'] as int? ?? 0))
+        .clamp(0, 1 << 30);
 
 /// Widget reutilizable para gestionar el stock de un sector
 /// Los cambios se guardan en Firestore solo al pulsar "Guardar".
@@ -47,8 +71,18 @@ class GestionStock extends StatefulWidget {
 
 class _GestionStockState extends State<GestionStock> {
   List<Map<String, dynamic>> _items = [];
+  final Map<String, TextEditingController> _cantidadControllers = {};
   bool _dirty = false;
   bool _loading = true;
+  Timer? _debounceBorrador;
+  bool _mostroAvisoBorrador = false;
+
+  DocumentReference<Map<String, dynamic>> get _sectorRef =>
+      FirebaseFirestore.instance
+          .collection('eventos')
+          .doc(widget.eventoId)
+          .collection('sectores')
+          .doc(widget.sectorId);
 
   @override
   void initState() {
@@ -56,8 +90,228 @@ class _GestionStockState extends State<GestionStock> {
     _cargarStock();
   }
 
+  @override
+  void dispose() {
+    _debounceBorrador?.cancel();
+    if (widget.esIngresoInicial && !widget.soloLectura) {
+      _guardarBorradorStockInicial();
+    }
+    for (final c in _cantidadControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _aplicarBorradorStock(
+    Map<String, dynamic> borrador,
+    List<Map<String, dynamic>> items,
+  ) {
+    final raw = borrador['productos'] as List<dynamic>? ?? const [];
+    for (final p in raw.whereType<Map<String, dynamic>>()) {
+      final id = p['productoId']?.toString();
+      if (id == null || id.isEmpty) continue;
+
+      final traspaso = (p['cantidadPorTraspaso'] as num?)?.toInt() ?? 0;
+      final propio = (p['cantidadPropio'] as num?)?.toInt() ??
+          ((p['cantidad'] as num?)?.toInt() ?? 0) - traspaso;
+      final propioClamped = propio < 0 ? 0 : propio;
+      final cat = p['categoria']?.toString() ?? categoriaDefault;
+
+      final idx = items.indexWhere((i) => i['productoId'] == id);
+      if (idx >= 0) {
+        items[idx]['cantidadPropio'] = propioClamped;
+        items[idx]['cantidadPorTraspaso'] = traspaso;
+        items[idx]['cantidad'] = propioClamped + traspaso;
+      } else {
+        items.add(
+          _stockItem(
+            id,
+            p['nombre']?.toString() ?? 'Sin nombre',
+            (p['precio'] as num?)?.toDouble() ?? 0.0,
+            propioClamped,
+            categoriasProducto.contains(cat) ? cat : categoriaDefault,
+            traspaso,
+          ),
+        );
+      }
+    }
+  }
+
+  void _programarGuardadoBorrador() {
+    if (widget.soloLectura || !widget.esIngresoInicial) return;
+    _debounceBorrador?.cancel();
+    _debounceBorrador = Timer(const Duration(milliseconds: 800), () {
+      _guardarBorradorStockInicial();
+    });
+  }
+
+  Future<void> _guardarBorradorStockInicial() async {
+    if (widget.soloLectura || !widget.esIngresoInicial) return;
+    _leerCantidadesDesdeControllers();
+    try {
+      if (_items.isEmpty) {
+        await _sectorRef.set(
+          {'borradorStockInicial': FieldValue.delete()},
+          SetOptions(merge: true),
+        );
+        return;
+      }
+      await _sectorRef.set(
+        {
+          'borradorStockInicial': {
+            'actualizadoEn': FieldValue.serverTimestamp(),
+            'productos': _items
+                .map(
+                  (item) => {
+                    'productoId': item['productoId'],
+                    'nombre': item['nombre'],
+                    'precio': item['precio'],
+                    'categoria': item['categoria'] ?? categoriaDefault,
+                    'cantidadPropio': _cantidadPropioDe(item),
+                    'cantidadPorTraspaso':
+                        item['cantidadPorTraspaso'] as int? ?? 0,
+                    'cantidad': item['cantidad'],
+                  },
+                )
+                .toList(),
+          },
+        },
+        SetOptions(merge: true),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _retrocederPantalla() async {
+    if (widget.soloLectura) {
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+    if (widget.esIngresoInicial) {
+      await _guardarBorradorStockInicial();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _items.isEmpty
+                ? 'Saliste del ingreso. Para activar traspasos, mermas y bandejeo, '
+                    'cargá el stock y usá Guardar y salir.'
+                : 'Borrador guardado. Es solo un borrador: para activar las acciones '
+                    'del punto, revisá las cantidades y tocá Guardar y salir.',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+      Navigator.of(context).pop();
+      return;
+    }
+    if (!_dirty) {
+      Navigator.of(context).pop();
+      return;
+    }
+    final salir = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Sin guardar',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Si sale ahora no se guardará el stock. ¿Salir sin guardar?',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancelar',
+              style: GoogleFonts.poppins(color: _secondaryColor),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Salir sin guardar',
+              style: GoogleFonts.poppins(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (salir == true && mounted) Navigator.of(context).pop();
+  }
+
+  void _vincularControllers() {
+    final ids = <String>{};
+    for (final item in _items) {
+      final id = item['productoId'] as String;
+      ids.add(id);
+      final conTraspaso = widget.esIngresoInicial &&
+          (item['cantidadPorTraspaso'] as int? ?? 0) > 0;
+      final valor =
+          conTraspaso ? _cantidadPropioDe(item) : (item['cantidad'] as int? ?? 0);
+      final ctrl = _cantidadControllers.putIfAbsent(
+        id,
+        () => TextEditingController(text: '$valor'),
+      );
+      if (ctrl.text != '$valor') {
+        ctrl.text = '$valor';
+      }
+    }
+    for (final id in _cantidadControllers.keys.toList()) {
+      if (!ids.contains(id)) {
+        _cantidadControllers.remove(id)?.dispose();
+      }
+    }
+  }
+
+  void _leerCantidadesDesdeControllers() {
+    for (final item in _items) {
+      final id = item['productoId'] as String;
+      final ctrl = _cantidadControllers[id];
+      if (ctrl == null) continue;
+      final n = int.tryParse(ctrl.text.trim());
+      if (n == null || n < 0) continue;
+      final traspaso = item['cantidadPorTraspaso'] as int? ?? 0;
+      if (widget.esIngresoInicial && traspaso > 0) {
+        item['cantidadPropio'] = n;
+        item['cantidad'] = n + traspaso;
+      } else {
+        item['cantidadPropio'] = n;
+        item['cantidadPorTraspaso'] = 0;
+        item['cantidad'] = n;
+      }
+    }
+  }
+
+  void _setCantidadItem(String productoId, int valor) {
+    final i = _items.indexWhere((e) => e['productoId'] == productoId);
+    if (i < 0) return;
+    final traspaso = _items[i]['cantidadPorTraspaso'] as int? ?? 0;
+    if (widget.esIngresoInicial && traspaso > 0) {
+      _actualizarCantidadPropioLocal(productoId, valor);
+    } else {
+      _actualizarCantidadLocal(productoId, valor);
+    }
+    final ctrl = _cantidadControllers[productoId];
+    final mostrar = widget.esIngresoInicial && traspaso > 0
+        ? _cantidadPropioDe(_items[i])
+        : _items[i]['cantidad'] as int;
+    if (ctrl != null && ctrl.text != '$mostrar') {
+      ctrl.text = '$mostrar';
+    }
+  }
+
   Future<void> _cargarStock() async {
     try {
+      final sectorSnap = await _sectorRef.get();
+      final sectorData = sectorSnap.data();
+      final borrador = sectorData?['borradorStockInicial'];
+      final stockInicialConfirmado =
+          sectorData?['stockInicialIngresado'] == true;
+
       final snap = await FirebaseFirestore.instance
           .collection('eventos')
           .doc(widget.eventoId)
@@ -66,29 +320,138 @@ class _GestionStockState extends State<GestionStock> {
           .collection('stock')
           .get();
       if (!mounted) return;
-      setState(() {
-        _items = snap.docs.map((d) {
+
+      final items = snap.docs.map((d) {
           final data = d.data();
           final cat = data['categoria']?.toString() ?? categoriaDefault;
+          final cantidad = data['cantidad'] as int? ?? 0;
+          final cantidadInicialDoc = data['cantidadInicial'];
+          final porTraspasoDoc = data['cantidadPorTraspaso'] as int?;
+          final propioDoc = data['cantidadPropio'] as int?;
+          final recibidoPorTraspaso = widget.esIngresoInicial &&
+              cantidad > 0 &&
+              cantidadInicialDoc == null;
+          final int porTraspaso = (porTraspasoDoc ??
+                  (recibidoPorTraspaso
+                      ? cantidad
+                      : (cantidadInicialDoc != null &&
+                              cantidad > cantidadInicialDoc
+                          ? cantidad - cantidadInicialDoc
+                          : 0)))
+              .toInt();
+          final int propio = (propioDoc ??
+                  (recibidoPorTraspaso
+                      ? 0
+                      : (cantidad - porTraspaso).clamp(0, cantidad)))
+              .toInt();
           return _stockItem(
             d.id,
             data['nombre']?.toString() ?? 'Sin nombre',
             (data['precio'] as num?)?.toDouble() ?? 0.0,
-            data['cantidad'] as int? ?? 0,
+            propio,
             categoriasProducto.contains(cat) ? cat : categoriaDefault,
+            porTraspaso,
           );
         }).toList();
-        _items.sort((a, b) {
-          final oa = ordenCategoria(a['categoria'] as String);
-          final ob = ordenCategoria(b['categoria'] as String);
-          if (oa != ob) return oa.compareTo(ob);
-          return (a['nombre'] as String).compareTo(b['nombre'] as String);
-        });
-        _loading = false;
+
+      var restauroBorrador = false;
+      if (widget.esIngresoInicial &&
+          !stockInicialConfirmado &&
+          borrador is Map<String, dynamic>) {
+        _aplicarBorradorStock(borrador, items);
+        restauroBorrador = true;
+      }
+
+      items.sort((a, b) {
+        final oa = ordenCategoria(a['categoria'] as String);
+        final ob = ordenCategoria(b['categoria'] as String);
+        if (oa != ob) return oa.compareTo(ob);
+        return (a['nombre'] as String).compareTo(b['nombre'] as String);
       });
+
+      if (!mounted) return;
+      setState(() {
+        _items = items;
+        _loading = false;
+        _dirty = restauroBorrador;
+      });
+      _vincularControllers();
+
+      if (restauroBorrador && mounted && !_mostroAvisoBorrador) {
+        _mostroAvisoBorrador = true;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Se restauró tu borrador. Para activar el punto, tocá Guardar y salir.',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: _accentColor,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  bool get _hayProductosPorTraspaso =>
+      widget.esIngresoInicial &&
+      _items.any((i) => (i['cantidadPorTraspaso'] as int? ?? 0) > 0);
+
+  String get _subtituloEncabezado {
+    if (widget.soloLectura) {
+      return 'Consultá las cantidades disponibles en tu sector';
+    }
+    if (widget.esIngresoInicial) {
+      if (_hayProductosPorTraspaso) {
+        return 'Indique la cantidad; el traspaso se suma solo. '
+            'Use "+" para agregar otros productos.';
+      }
+      return 'Tocá el recuadro, escribí la cantidad y al terminar usá Guardar y salir';
+    }
+    return 'Tocá el recuadro de cantidad, escribí el número y pulse Guardar';
+  }
+
+  String _textoListaEncabezado() {
+    if (widget.soloLectura) return _resumenStockLectura();
+    if (widget.esIngresoInicial && _hayProductosPorTraspaso) {
+      return 'Revise la cantidad de cada ítem. Use el botón "+" abajo para '
+          'agregar productos que no estén en la lista.';
+    }
+    return 'Stock inicial — agregue con "+" y pulse Guardar y salir';
+  }
+
+  String get _textoBannerTraspaso {
+    return 'Hay productos recibidos por traspaso. '
+        'Tocá el recuadro y escribí la cantidad propia: el traspaso se suma solo. '
+        'Use "+" para agregar otros productos.';
+  }
+
+  String _textoConfirmacionInicial() {
+    final traspasoItems = _items
+        .where((i) => (i['cantidadPorTraspaso'] as int? ?? 0) > 0)
+        .toList();
+    final base =
+        'Atención: esta es la ÚNICA vez que podrá ingresar stock manualmente para este sector.\n\n'
+        'Si necesita agregar stock después, debe ser mediante TRASPASO entre sectores.\n\n';
+    if (traspasoItems.isEmpty) {
+      return '$base¿Desea guardar y finalizar?';
+    }
+    final detalle = traspasoItems
+        .map((i) {
+          final nombre = i['nombre'] as String;
+          final traspaso = i['cantidadPorTraspaso'] as int;
+          final propio = _cantidadPropioDe(i);
+          final total = i['cantidad'] as int;
+          return '• $nombre: $propio + $traspaso traspaso = $total u.';
+        })
+        .join('\n');
+    return '$base'
+        'Resumen con traspaso sumado automáticamente:\n'
+        '$detalle\n\n'
+        '¿Desea guardar y finalizar?';
   }
 
   String _resumenStockLectura() {
@@ -101,6 +464,7 @@ class _GestionStockState extends State<GestionStock> {
   }
 
   Future<bool> _persistirStock() async {
+    _leerCantidadesDesdeControllers();
     try {
       final col = FirebaseFirestore.instance
           .collection('eventos')
@@ -111,12 +475,16 @@ class _GestionStockState extends State<GestionStock> {
       final batch = FirebaseFirestore.instance.batch();
       for (final item in _items) {
         final ref = col.doc(item['productoId'] as String);
+        final porTraspaso = item['cantidadPorTraspaso'] as int? ?? 0;
+        final propio = _cantidadPropioDe(item);
         batch.set(ref, {
           'productoId': item['productoId'],
           'nombre': item['nombre'],
           'precio': item['precio'],
           'cantidad': item['cantidad'],
           'cantidadInicial': item['cantidad'],
+          'cantidadPropio': propio,
+          'cantidadPorTraspaso': porTraspaso,
           'categoria': item['categoria'] ?? categoriaDefault,
         });
       }
@@ -127,12 +495,10 @@ class _GestionStockState extends State<GestionStock> {
         }
       }
       await batch.commit();
-      await FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(widget.eventoId)
-          .collection('sectores')
-          .doc(widget.sectorId)
-          .set({'stockInicialIngresado': true}, SetOptions(merge: true));
+      await _sectorRef.set({
+        'stockInicialIngresado': true,
+        'borradorStockInicial': FieldValue.delete(),
+      }, SetOptions(merge: true));
       if (!mounted) return false;
       setState(() => _dirty = false);
       return true;
@@ -172,9 +538,7 @@ class _GestionStockState extends State<GestionStock> {
             style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _primaryColor),
           ),
           content: Text(
-            'Atención: esta es la ÚNICA vez que podrá ingresar stock manualmente para este sector.\n\n'
-            'Si necesita agregar stock después, debe ser mediante TRASPASO entre sectores.\n\n'
-            '¿Desea guardar y finalizar?',
+            _textoConfirmacionInicial(),
             style: GoogleFonts.poppins(),
           ),
           actions: [
@@ -249,16 +613,202 @@ class _GestionStockState extends State<GestionStock> {
       });
       _dirty = true;
     });
+    _vincularControllers();
+    _programarGuardadoBorrador();
   }
 
-  void _actualizarCantidadLocal(String productoId, int cantidad) {
+  void _actualizarCantidadPropioLocal(String productoId, int cantidadPropio) {
+    if (cantidadPropio < 0) return;
     setState(() {
       final i = _items.indexWhere((e) => e['productoId'] == productoId);
       if (i >= 0) {
-        _items[i]['cantidad'] = cantidad;
+        final traspaso = _items[i]['cantidadPorTraspaso'] as int? ?? 0;
+        _items[i]['cantidadPropio'] = cantidadPropio;
+        _items[i]['cantidad'] = cantidadPropio + traspaso;
         _dirty = true;
       }
     });
+    _programarGuardadoBorrador();
+  }
+
+  void _actualizarCantidadLocal(String productoId, int cantidad) {
+    if (cantidad < 0) return;
+    final i = _items.indexWhere((e) => e['productoId'] == productoId);
+    if (i < 0) return;
+    final traspaso = _items[i]['cantidadPorTraspaso'] as int? ?? 0;
+    if (widget.esIngresoInicial && traspaso > 0) {
+      _actualizarCantidadPropioLocal(productoId, cantidad);
+      return;
+    }
+    setState(() {
+      _items[i]['cantidadPropio'] = cantidad;
+      _items[i]['cantidadPorTraspaso'] = 0;
+      _items[i]['cantidad'] = cantidad;
+      _dirty = true;
+    });
+    _programarGuardadoBorrador();
+  }
+
+  Widget _buildEncabezadoSector() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      color: _accentColor.withValues(alpha: 0.1),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Sector: ${widget.nombreSector}',
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: _primaryColor,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _subtituloEncabezado,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: _secondaryColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBannerTraspaso() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.swap_horiz_rounded, color: Colors.orange[800], size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _textoBannerTraspaso,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: _secondaryColor,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEstadoVacio() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.inventory_2_outlined,
+            size: 64,
+            color: _secondaryColor.withValues(alpha: 0.5),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No hay productos en stock',
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              color: _secondaryColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (!widget.soloLectura)
+            Text(
+              'Apriete "+" abajo para agregar productos al stock inicial',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: _secondaryColor.withValues(alpha: 0.8),
+              ),
+              textAlign: TextAlign.center,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductoCard(Map<String, dynamic> item) {
+    final productoId = item['productoId'] as String;
+    return _ProductoStockCard(
+      productoId: productoId,
+      nombre: item['nombre'] as String,
+      precio: (item['precio'] as num).toDouble(),
+      cantidad: item['cantidad'] as int,
+      cantidadPropio: _cantidadPropioDe(item),
+      cantidadPorTraspaso: item['cantidadPorTraspaso'] as int? ?? 0,
+      soloLectura: widget.soloLectura,
+      esIngresoInicial: widget.esIngresoInicial,
+      cantidadController: widget.soloLectura
+          ? null
+          : _cantidadControllers[productoId],
+      onCantidadChanged: widget.soloLectura
+          ? null
+          : (n) => _setCantidadItem(productoId, n),
+      onEliminar: (item['cantidadPorTraspaso'] as int? ?? 0) > 0
+          ? null
+          : () => _eliminarItemLocal(productoId),
+    );
+  }
+
+  Widget _buildCuerpoLista() {
+    if (_items.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildEncabezadoSector(),
+          if (_hayProductosPorTraspaso) _buildBannerTraspaso(),
+          Expanded(child: _buildEstadoVacio()),
+        ],
+      );
+    }
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(child: _buildEncabezadoSector()),
+        if (_hayProductosPorTraspaso)
+          SliverToBoxAdapter(child: _buildBannerTraspaso()),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Text(
+              _textoListaEncabezado(),
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: _secondaryColor.withValues(alpha: 0.8),
+              ),
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            widget.soloLectura ? 16 : 88,
+          ),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => _buildProductoCard(_items[index]),
+              childCount: _items.length,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   void _eliminarItemLocal(String productoId) {
@@ -266,39 +816,30 @@ class _GestionStockState extends State<GestionStock> {
       _items.removeWhere((e) => e['productoId'] == productoId);
       _dirty = true;
     });
+    _cantidadControllers.remove(productoId)?.dispose();
+    _programarGuardadoBorrador();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool popLibre =
+        widget.soloLectura || (!widget.esIngresoInicial && !_dirty);
+
     return PopScope(
-      canPop: widget.soloLectura || !_dirty,
-      onPopInvokedWithResult: (didPop, result) async {
+      canPop: popLibre,
+      onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        final salir = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text('Sin guardar', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-            content: Text(
-              'Si sale ahora no se guardará el stock. ¿Salir sin guardar?',
-              style: GoogleFonts.poppins(),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: Text('Cancelar', style: GoogleFonts.poppins(color: _secondaryColor)),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: Text('Salir sin guardar', style: GoogleFonts.poppins(color: Colors.red)),
-              ),
-            ],
-          ),
-        );
-        if (salir == true && context.mounted) Navigator.of(context).pop();
+        _retrocederPantalla();
       },
       child: Scaffold(
       backgroundColor: _backgroundColor,
       appBar: AppBar(
+        leading: widget.soloLectura
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: _retrocederPantalla,
+              ),
         title: Text(
           widget.soloLectura ? 'Ver stock' : 'Stock inicial del punto',
           style: GoogleFonts.poppins(
@@ -335,113 +876,9 @@ class _GestionStockState extends State<GestionStock> {
                 ),
               ),
             ),
-      body: Column(
-        children: [
-          // Información del sector
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            color: _accentColor.withValues(alpha: 0.1),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Sector: ${widget.nombreSector}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: _primaryColor,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  widget.soloLectura
-                      ? 'Consultá las cantidades disponibles en tu sector'
-                      : widget.esIngresoInicial
-                          ? 'Ingrese las cantidades y pulse Guardar y salir'
-                          : 'Ingrese las cantidades iniciales y pulse Guardar',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: _secondaryColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Lista de stock (estado local hasta Guardar)
-          Expanded(
-            child: _loading
-                ? Center(child: CircularProgressIndicator(color: _accentColor))
-                : _items.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.inventory_2_outlined,
-                              size: 64,
-                              color: _secondaryColor.withValues(alpha: 0.5),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No hay productos en stock',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                color: _secondaryColor,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            if (!widget.soloLectura)
-                              Text(
-                                'Apriete "+" para agregar productos al stock inicial',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 13,
-                                  color: _secondaryColor.withValues(alpha: 0.8),
-                                ),
-                              ),
-                          ],
-                        ),
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                            child: Text(
-                              widget.soloLectura
-                                  ? _resumenStockLectura()
-                                  : 'Stock inicial — agregue con "+" y pulse Guardar y salir',
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                color: _secondaryColor.withValues(alpha: 0.8),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: ListView.builder(
-                              padding: const EdgeInsets.all(16),
-                              itemCount: _items.length,
-                              itemBuilder: (context, index) {
-                                final item = _items[index];
-                                return _ProductoStockCard(
-                                  productoId: item['productoId'] as String,
-                                  nombre: item['nombre'] as String,
-                                  precio: (item['precio'] as num).toDouble(),
-                                  cantidad: item['cantidad'] as int,
-                                  soloLectura: widget.soloLectura,
-                                  onEditarCantidad: (nuevaCantidad) =>
-                                      _actualizarCantidadLocal(item['productoId'] as String, nuevaCantidad),
-                                  onEliminar: () =>
-                                      _eliminarItemLocal(item['productoId'] as String),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-          ),
-      ],
-    ),
+      body: _loading
+          ? Center(child: CircularProgressIndicator(color: _accentColor))
+          : _buildCuerpoLista(),
       floatingActionButton: widget.soloLectura
           ? null
           : FloatingActionButton.extended(
@@ -480,8 +917,12 @@ class _ProductoStockCard extends StatelessWidget {
   final String nombre;
   final double precio;
   final int cantidad;
+  final int cantidadPropio;
+  final int cantidadPorTraspaso;
   final bool soloLectura;
-  final void Function(int nuevaCantidad)? onEditarCantidad;
+  final bool esIngresoInicial;
+  final TextEditingController? cantidadController;
+  final void Function(int nuevaCantidad)? onCantidadChanged;
   final VoidCallback? onEliminar;
 
   const _ProductoStockCard({
@@ -489,10 +930,20 @@ class _ProductoStockCard extends StatelessWidget {
     required this.nombre,
     required this.precio,
     required this.cantidad,
+    required this.cantidadPropio,
+    this.cantidadPorTraspaso = 0,
     this.soloLectura = false,
-    this.onEditarCantidad,
+    this.esIngresoInicial = false,
+    this.cantidadController,
+    this.onCantidadChanged,
     this.onEliminar,
   });
+
+  bool get _sumaTraspaso =>
+      esIngresoInicial && cantidadPorTraspaso > 0 && !soloLectura;
+
+  int get _valorEditable =>
+      _sumaTraspaso ? cantidadPropio : cantidad;
 
   @override
   Widget build(BuildContext context) {
@@ -500,151 +951,183 @@ class _ProductoStockCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: _accentColor.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(Icons.fastfood, color: _secondaryColor, size: 28),
-        ),
-        title: Text(
-          nombre,
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: _primaryColor,
-          ),
-        ),
-        subtitle: Column(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 4),
-            Text(
-              'Precio: \$${precio.toStringAsFixed(0)}',
-              style: GoogleFonts.poppins(fontSize: 12, color: _secondaryColor),
-            ),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: cantidad > 0
-                    ? Colors.green.withValues(alpha: 0.1)
-                    : Colors.red.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                soloLectura ? 'Stock: $cantidad' : 'Stock inicial: $cantidad',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: cantidad > 0 ? Colors.green[700] : Colors.red[700],
-                ),
-              ),
-            ),
-          ],
-        ),
-        trailing: soloLectura
-            ? null
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    color: _accentColor,
-                    onPressed: () => _editarCantidad(context),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _accentColor.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  child: Icon(Icons.fastfood, color: _secondaryColor, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        nombre,
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: _primaryColor,
+                        ),
+                      ),
+                      Text(
+                        'Precio: \$${precio.toStringAsFixed(0)}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: _secondaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (onEliminar != null)
                   IconButton(
                     icon: const Icon(Icons.delete_outline),
                     color: Colors.red,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
                     onPressed: () => _eliminarProducto(context),
+                  ),
+              ],
+            ),
+            if (soloLectura) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Stock: $cantidad u.',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: cantidad > 0 ? Colors.green[700] : Colors.red[700],
+                ),
+              ),
+              if (esIngresoInicial && cantidadPorTraspaso > 0)
+                Text(
+                  'Incluye $cantidadPorTraspaso u. por traspaso',
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: _secondaryColor,
+                  ),
+                ),
+            ] else ...[
+              const SizedBox(height: 10),
+              if (_sumaTraspaso)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Traspaso: $cantidadPorTraspaso u. (se suma solo). '
+                    'Ingresá la cantidad propia del sector:',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: Colors.orange[900],
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              Row(
+                children: [
+                  Text(
+                    'Cantidad:',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 34,
+                      minHeight: 34,
+                    ),
+                    iconSize: 22,
+                    icon: const Icon(Icons.remove_circle_outline),
+                    color: _primaryColor,
+                    onPressed: _valorEditable > 0
+                        ? () => onCantidadChanged?.call(_valorEditable - 1)
+                        : null,
+                  ),
+                  SizedBox(
+                    width: 56,
+                    child: TextField(
+                      controller: cantidadController,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: _primaryColor,
+                      ),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 8,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onChanged: (v) {
+                        final n = int.tryParse(v.trim());
+                        if (n != null && n >= 0) {
+                          onCantidadChanged?.call(n);
+                        }
+                      },
+                    ),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 34,
+                      minHeight: 34,
+                    ),
+                    iconSize: 22,
+                    icon: const Icon(Icons.add_circle_outline),
+                    color: _accentColor,
+                    onPressed: () =>
+                        onCantidadChanged?.call(_valorEditable + 1),
                   ),
                 ],
               ),
-      ),
-    );
-  }
-
-  void _editarCantidad(BuildContext context) {
-    final cantidadController = TextEditingController(text: cantidad.toString());
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Editar Cantidad',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              nombre,
-              style: GoogleFonts.poppins(fontSize: 14, color: _secondaryColor),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: cantidadController,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Cantidad',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
+              if (_sumaTraspaso) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Total inicial: $cantidad u. '
+                  '($_valorEditable + $cantidadPorTraspaso traspaso)',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green[800],
+                  ),
                 ),
-                prefixIcon: const Icon(Icons.inventory_2),
-              ),
-            ),
+              ] else
+                Text(
+                  'Stock inicial: $cantidad u.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: cantidad > 0 ? Colors.green[700] : Colors.red[700],
+                  ),
+                ),
+            ],
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Cancelar',
-              style: GoogleFonts.poppins(color: _secondaryColor),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final nuevaCantidad = int.tryParse(cantidadController.text);
-              if (nuevaCantidad == null || nuevaCantidad < 0) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Ingresa una cantidad válida',
-                      style: GoogleFonts.poppins(),
-                    ),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-              Navigator.of(context).pop();
-              onEditarCantidad?.call(nuevaCantidad);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Cantidad actualizada. No olvide Guardar.',
-                    style: GoogleFonts.poppins(),
-                  ),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _accentColor,
-              foregroundColor: _primaryColor,
-            ),
-            child: Text(
-              'Guardar',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -718,15 +1201,17 @@ class _ModalBuscarProducto extends StatefulWidget {
 
 class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
   final TextEditingController _searchController = TextEditingController();
-  List<DocumentSnapshot> _productos = [];
-  List<DocumentSnapshot> _productosFiltrados = [];
-  bool _isLoading = true;
+  final Set<String> _idsAgregadosEnSesion = {};
+
+  Set<String> get _idsExcluidos => {
+        ...widget.productIdsEnStock,
+        ..._idsAgregadosEnSesion,
+      };
 
   @override
   void initState() {
     super.initState();
-    _cargarProductos();
-    _searchController.addListener(_filtrarProductos);
+    _searchController.addListener(() => setState(() {}));
   }
 
   @override
@@ -735,158 +1220,49 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
     super.dispose();
   }
 
-  Future<void> _cargarProductos() async {
-    try {
-      final productosSnapshot = await FirebaseFirestore.instance
-          .collection('productos')
-          .get();
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _filtrarYOrdenar(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final query = _searchController.text.trim().toLowerCase();
+    final lista = docs.where((doc) {
+      if (_idsExcluidos.contains(doc.id)) return false;
+      final data = doc.data();
+      final nombre = data['nombre']?.toString();
+      if (nombre == null || nombre.isEmpty) return false;
+      if (query.isEmpty) return true;
+      return nombre.toLowerCase().contains(query);
+    }).toList();
 
-      final productosDisponibles = productosSnapshot.docs
-          .where((doc) => !widget.productIdsEnStock.contains(doc.id))
-          .toList();
-
-      setState(() {
-        _productos = productosDisponibles;
-        _productosFiltrados = _productos;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Error al cargar productos: $e',
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _filtrarProductos() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      _productosFiltrados = _productos.where((producto) {
-        final data = producto.data() as Map<String, dynamic>?;
-        if (data == null || !data.containsKey('nombre')) {
-          return false;
-        }
-        final nombre = data['nombre'].toString().toLowerCase();
-        return nombre.contains(query);
-      }).toList();
+    lista.sort((a, b) {
+      final na = a.data()['nombre']?.toString().toLowerCase() ?? '';
+      final nb = b.data()['nombre']?.toString().toLowerCase() ?? '';
+      return na.compareTo(nb);
     });
+    return lista;
   }
 
-  Future<void> _agregarProductoAlStock(DocumentSnapshot productoDoc) async {
-    final data = productoDoc.data() as Map<String, dynamic>;
+  void _agregarProductoAlStock(
+    QueryDocumentSnapshot<Map<String, dynamic>> productoDoc,
+  ) {
+    final data = productoDoc.data();
     final nombre = data['nombre'] as String? ?? 'Sin nombre';
     final precio = (data['precio'] as num?)?.toDouble() ?? 0.0;
     final categoria = data['categoria']?.toString() ?? categoriaDefault;
 
-    final cantidadController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Agregar al Stock',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              nombre,
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: _primaryColor,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Precio: \$${precio.toStringAsFixed(0)}',
-              style: GoogleFonts.poppins(fontSize: 14, color: _secondaryColor),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: cantidadController,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Cantidad inicial',
-                hintText: 'Ingresa la cantidad',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                prefixIcon: const Icon(Icons.inventory_2),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Cancelar',
-              style: GoogleFonts.poppins(color: _secondaryColor),
-            ),
+    _idsAgregadosEnSesion.add(productoDoc.id);
+    widget.onAgregarLocal(productoDoc.id, nombre, precio, 0, categoria);
+    setState(() {});
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '$nombre agregado. Tocá el recuadro y escribí la cantidad.',
+            style: GoogleFonts.poppins(),
           ),
-          ElevatedButton(
-            onPressed: () {
-              final cantidad = int.tryParse(cantidadController.text);
-              if (cantidad == null || cantidad < 0) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Ingresa una cantidad válida',
-                      style: GoogleFonts.poppins(),
-                    ),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-              Navigator.of(context).pop();
-              widget.onAgregarLocal(productoDoc.id, nombre, precio, cantidad, categoria);
-              setState(() {
-                _productos = _productos.where((d) => d.id != productoDoc.id).toList();
-                _productosFiltrados = _productos.where((producto) {
-                  final data = producto.data() as Map<String, dynamic>?;
-                  if (data == null || !data.containsKey('nombre')) return false;
-                  final nombreP = data['nombre'].toString().toLowerCase();
-                  return nombreP.contains(_searchController.text.toLowerCase());
-                }).toList();
-              });
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Producto agregado. No olvide Guardar. Puede seguir agregando más.',
-                      style: GoogleFonts.poppins(),
-                    ),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _accentColor,
-              foregroundColor: _primaryColor,
-            ),
-            child: Text(
-              'Agregar',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   @override
@@ -917,7 +1293,17 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
               color: _primaryColor,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 6),
+          Text(
+            'La lista se actualiza sola si el admin agrega un producto nuevo.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: _secondaryColor,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 16),
           TextField(
             controller: _searchController,
             decoration: InputDecoration(
@@ -933,45 +1319,74 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: _accentColor))
-                : _productosFiltrados.isEmpty
-                ? Center(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirestoreHelpers.streamProductosCatalogo(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        'Error al cargar productos: ${snapshot.error}',
+                        style: GoogleFonts.poppins(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                }
+
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
+                  return Center(
+                    child: CircularProgressIndicator(color: _accentColor),
+                  );
+                }
+
+                final docs = snapshot.data?.docs ?? [];
+                final filtrados = _filtrarYOrdenar(docs);
+
+                if (filtrados.isEmpty) {
+                  return Center(
                     child: Text(
                       _searchController.text.isEmpty
-                          ? 'No hay productos disponibles'
+                          ? 'No hay productos disponibles para agregar'
                           : 'No se encontraron productos',
                       style: GoogleFonts.poppins(color: _secondaryColor),
+                      textAlign: TextAlign.center,
                     ),
-                  )
-                : ListView.builder(
-                    itemCount: _productosFiltrados.length,
-                    itemBuilder: (context, index) {
-                      final producto = _productosFiltrados[index];
-                      final data = producto.data() as Map<String, dynamic>;
-                      final nombre = data['nombre'] as String? ?? 'Sin nombre';
-                      final precio =
-                          (data['precio'] as num?)?.toDouble() ?? 0.0;
+                  );
+                }
 
-                      return ListTile(
-                        leading: Icon(Icons.fastfood, color: _secondaryColor),
-                        title: Text(
-                          nombre,
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                          ),
+                return ListView.builder(
+                  itemCount: filtrados.length,
+                  itemBuilder: (context, index) {
+                    final producto = filtrados[index];
+                    final data = producto.data();
+                    final nombre = data['nombre'] as String? ?? 'Sin nombre';
+                    final precio =
+                        (data['precio'] as num?)?.toDouble() ?? 0.0;
+
+                    return ListTile(
+                      leading: Icon(Icons.fastfood, color: _secondaryColor),
+                      title: Text(
+                        nombre,
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.bold,
                         ),
-                        subtitle: Text(
-                          'Precio: \$${precio.toStringAsFixed(0)}',
-                          style: GoogleFonts.poppins(color: _secondaryColor),
-                        ),
-                        trailing: IconButton(
-                          icon: Icon(Icons.add_circle, color: _accentColor),
-                          onPressed: () => _agregarProductoAlStock(producto),
-                        ),
-                      );
-                    },
-                  ),
+                      ),
+                      subtitle: Text(
+                        'Precio: \$${precio.toStringAsFixed(0)}',
+                        style: GoogleFonts.poppins(color: _secondaryColor),
+                      ),
+                      trailing: IconButton(
+                        icon: Icon(Icons.add_circle, color: _accentColor),
+                        onPressed: () => _agregarProductoAlStock(producto),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),

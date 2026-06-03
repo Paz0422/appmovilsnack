@@ -1,9 +1,9 @@
-// Estimación por categoría según cierres de inventario (stock inicial − stock final)
+// Ventas por categoría: cierres de turno + bandejeo (eventos activos).
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:front_appsnack/services/admin_estadisticas_service.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
 
 class VentasPorCategoria extends StatefulWidget {
@@ -37,10 +37,16 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
     _cargar();
   }
 
-  String _catKey(String? cat) {
-    final c = cat?.trim();
-    if (c == null || c.isEmpty) return categoriaDefault;
-    return categoriasProducto.contains(c) ? c : categoriaDefault;
+  String _fmtMonto(num valor) {
+    final s = valor.round().abs().toString();
+    final neg = valor < 0;
+    final buf = StringBuffer(neg ? '-' : '');
+    for (int i = 0; i < s.length; i++) {
+      buf.write(s[i]);
+      final resto = s.length - i - 1;
+      if (resto > 0 && resto % 3 == 0) buf.write('.');
+    }
+    return buf.toString();
   }
 
   Future<void> _cargar() async {
@@ -70,66 +76,24 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
       montoCat[categoriaDefault] = 0;
       cantCat[categoriaDefault] = 0;
 
-      // Cache categoría por productoId (catálogo global)
-      final productosSnap =
-          await FirebaseFirestore.instance.collection('productos').get();
-      final Map<String, String> catPorProducto = {
-        for (final doc in productosSnap.docs)
-          doc.id: _catKey(doc.data()['categoria']?.toString()),
-      };
+      final resumen =
+          await AdminEstadisticasService.cargarVentasPorCategoria(
+        soloEventosActivos: true,
+      );
 
-      double montoTotal = 0;
-      int cierres = 0;
-
-      final eventosSnap =
-          await FirebaseFirestore.instance.collection('eventos').get();
-
-      for (final eventoDoc in eventosSnap.docs) {
-        final sectoresSnap = await eventoDoc.reference
-            .collection('sectores')
-            .get();
-
-        for (final sectorDoc in sectoresSnap.docs) {
-          final sectorData = sectorDoc.data();
-          final cierre = sectorData['ultimoCierre'];
-          if (cierre is! Map<String, dynamic>) continue;
-
-          cierres++;
-          final productos = cierre['productos'] as List<dynamic>? ?? [];
-
-          for (final raw in productos) {
-            if (raw is! Map) continue;
-            final m = Map<String, dynamic>.from(raw);
-
-            final vendido = (m['cantidadVendida'] as int?) ??
-                (((m['cantidadInicial'] as int?) ?? 0) -
-                    ((m['cantidadFinal'] as int?) ?? 0));
-            if (vendido <= 0) continue;
-
-            final precio = (m['precio'] as num?)?.toDouble() ?? 0;
-            final subtotal = (m['subtotal'] as num?)?.toDouble() ??
-                (vendido * precio);
-            if (subtotal <= 0) continue;
-
-            final productoId = m['productoId']?.toString() ?? '';
-            final key = _catKey(
-              m['categoria']?.toString() ??
-                  (productoId.isNotEmpty ? catPorProducto[productoId] : null),
-            );
-
-            montoCat[key] = (montoCat[key] ?? 0) + subtotal;
-            cantCat[key] = (cantCat[key] ?? 0) + vendido;
-            montoTotal += subtotal;
-          }
-        }
+      for (final entry in resumen.montoPorCategoria.entries) {
+        montoCat[entry.key] = (montoCat[entry.key] ?? 0) + entry.value;
+      }
+      for (final entry in resumen.cantidadPorCategoria.entries) {
+        cantCat[entry.key] = (cantCat[entry.key] ?? 0) + entry.value;
       }
 
       if (mounted) {
         setState(() {
           _montoPorCategoria = montoCat;
           _cantidadPorCategoria = cantCat;
-          _totalCierres = cierres;
-          _montoTotal = montoTotal;
+          _totalCierres = resumen.totalCierres;
+          _montoTotal = resumen.montoTotal;
           _loading = false;
         });
       }
@@ -171,7 +135,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Sin cierres de inventario aún',
+              'Sin ventas registradas en eventos activos aún',
               style: GoogleFonts.poppins(
                 color: AppColors.secondary,
                 fontSize: 14,
@@ -193,103 +157,136 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
 
     int colorIndex = 0;
     final secciones = <PieChartSectionData>[];
-    final leyenda = <MapEntry<String, Color>>[];
+    final leyenda = <({String cat, Color color, double monto, double pct})>[];
     for (final cat in ordenCategorias) {
       final monto = _montoPorCategoria[cat] ?? 0;
       if (monto <= 0) continue;
       final color = _coloresGrafico[colorIndex % _coloresGrafico.length];
-      final pct = (monto / _montoTotal * 100).toStringAsFixed(1);
+      final pct = monto / _montoTotal * 100;
       secciones.add(
         PieChartSectionData(
           value: monto,
-          title: '$pct%',
           color: color,
-          radius: 72,
-          titleStyle: GoogleFonts.poppins(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-          titlePositionPercentageOffset: 0.55,
+          radius: 44,
+          showTitle: false,
         ),
       );
-      leyenda.add(MapEntry(cat, color));
+      leyenda.add((cat: cat, color: color, monto: monto, pct: pct));
       colorIndex++;
     }
+
+    leyenda.sort((a, b) => b.monto.compareTo(a.monto));
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          height: 220,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              PieChart(
-                PieChartData(
-                  sectionsSpace: 2,
-                  centerSpaceRadius: 42,
-                  sections: secciones,
+        AspectRatio(
+          aspectRatio: 1.35,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final lado = constraints.maxWidth.clamp(160.0, 280.0);
+              final hueco = lado * 0.34;
+              return Center(
+                child: SizedBox(
+                  width: lado,
+                  height: lado,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PieChart(
+                        PieChartData(
+                          sectionsSpace: 3,
+                          centerSpaceRadius: hueco,
+                          sections: secciones,
+                        ),
+                      ),
+                      SizedBox(
+                        width: hueco * 1.75,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Total estimado',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                color: AppColors.secondary,
+                                fontWeight: FontWeight.w500,
+                                height: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                '\$${_fmtMonto(_montoTotal)}',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primaryLight,
+                                  height: 1.1,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Total estimado',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: AppColors.secondary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Text(
-                    '\$${_montoTotal.toStringAsFixed(0)}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primaryLight,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              );
+            },
           ),
         ),
-        const SizedBox(height: 16),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 16,
-          runSpacing: 8,
-          children: leyenda.map((e) {
-            return Row(
-              mainAxisSize: MainAxisSize.min,
+        const SizedBox(height: 12),
+        ...leyenda.map((e) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
               children: [
                 Container(
                   width: 12,
                   height: 12,
                   decoration: BoxDecoration(
-                    color: e.value,
+                    color: e.color,
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.primaryLight.withValues(alpha: 0.3),
-                      width: 1,
-                    ),
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    e.cat,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      color: AppColors.primaryLight,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 Text(
-                  e.key,
+                  '${e.pct.toStringAsFixed(1)}%',
                   style: GoogleFonts.poppins(
                     fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.secondary,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '\$${_fmtMonto(e.monto)}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.primaryLight,
-                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
-            );
-          }).toList(),
-        ),
+            ),
+          );
+        }),
       ],
     );
   }
@@ -347,7 +344,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                                 ),
                               ),
                               Text(
-                                '\$${_montoTotal.toStringAsFixed(0)}',
+                                '\$${_fmtMonto(_montoTotal)}',
                                 style: GoogleFonts.poppins(
                                   fontSize: 28,
                                   fontWeight: FontWeight.bold,
@@ -363,7 +360,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'Calculado: stock inicial − stock final por producto',
+                                'Cierres de turno y ventas de bandejeo (eventos activos)',
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.poppins(
                                   fontSize: 11,
@@ -423,7 +420,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                               ),
                             ),
                             subtitle: Text(
-                              '\$${monto.toStringAsFixed(0)} · $cant u. · ${pct.toStringAsFixed(1)}%',
+                              '\$${_fmtMonto(monto)} · $cant u. · ${pct.toStringAsFixed(1)}%',
                               style: GoogleFonts.poppins(
                                 fontSize: 13,
                                 color: AppColors.secondary,
@@ -462,7 +459,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                               ),
                             ),
                             subtitle: Text(
-                              '\$${(_montoPorCategoria[categoriaDefault] ?? 0).toStringAsFixed(0)} · '
+                              '\$${_fmtMonto(_montoPorCategoria[categoriaDefault] ?? 0)} · '
                               '${_cantidadPorCategoria[categoriaDefault] ?? 0} u.',
                               style: GoogleFonts.poppins(
                                 fontSize: 13,

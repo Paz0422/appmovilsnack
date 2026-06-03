@@ -227,6 +227,10 @@ class _HomeVendedorState extends State<HomeVendedor> {
                               children: [
                                 _buildEncabezadoTurno(compacto: false),
                                 SizedBox(height: layout.sectionGap),
+                                if (!_stockInicialAgregado) ...[
+                                  _buildAvisoStockInicialPendiente(),
+                                  SizedBox(height: layout.sectionGap),
+                                ],
                                 _buildBannerTraspasosPendientes(),
                                 SizedBox(height: layout.sectionGap),
                                 Expanded(
@@ -250,6 +254,10 @@ class _HomeVendedorState extends State<HomeVendedor> {
                         children: [
                           _buildEncabezadoTurno(compacto: layout.compacto),
                           SizedBox(height: layout.sectionGap),
+                          if (!_stockInicialAgregado) ...[
+                            _buildAvisoStockInicialPendiente(),
+                            SizedBox(height: layout.sectionGap),
+                          ],
                           _buildBannerTraspasosPendientes(),
                           SizedBox(height: layout.sectionGap),
                           _buildStockPrincipal(compacto: layout.compacto),
@@ -355,6 +363,57 @@ class _HomeVendedorState extends State<HomeVendedor> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _mostrarAvisoStockInicial() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Debe ingresar el stock inicial antes de usar esta operación.',
+          style: GoogleFonts.poppins(),
+        ),
+        backgroundColor: Colors.orange,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _ejecutarSiHayStockInicial(VoidCallback accion) {
+    if (!_stockInicialAgregado) {
+      _mostrarAvisoStockInicial();
+      return;
+    }
+    accion();
+  }
+
+  Widget _buildAvisoStockInicialPendiente() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, color: Colors.orange[800], size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Ingresá el stock inicial para habilitar traspasos, mermas y bandejeo. '
+              'Podés recibir traspasos de otros sectores antes de cargar tu inventario.',
+              style: GoogleFonts.poppins(
+                fontSize: 12.5,
+                color: secondaryColor,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -592,7 +651,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
         descripcion: 'Enviar a otro sector',
         iconBg: AppColors.accent.withValues(alpha: 0.18),
         iconColor: secondaryColor,
-        onTap: () {
+        onTap: () => _ejecutarSiHayStockInicial(() {
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -604,7 +663,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
               ),
             ),
           );
-        },
+        }),
+        requiereStockInicial: true,
       ),
       _AccionItem(
         icon: Icons.remove_circle_outline_rounded,
@@ -612,7 +672,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
         descripcion: 'Productos perdidos',
         iconBg: AppColors.error.withValues(alpha: 0.12),
         iconColor: AppColors.error,
-        onTap: () {
+        onTap: () => _ejecutarSiHayStockInicial(() {
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -623,7 +683,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
               ),
             ),
           );
-        },
+        }),
+        requiereStockInicial: true,
       ),
       _AccionItem(
         icon: Icons.restaurant_menu_rounded,
@@ -631,7 +692,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
         descripcion: 'Armar bandejas',
         iconBg: secondaryColor.withValues(alpha: 0.14),
         iconColor: secondaryColor,
-        onTap: () {
+        onTap: () => _ejecutarSiHayStockInicial(() {
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -642,7 +703,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
               ),
             ),
           );
-        },
+        }),
+        requiereStockInicial: true,
       ),
       _AccionItem(
         icon: Icons.inventory_2_outlined,
@@ -651,6 +713,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
         iconBg: AppColors.success.withValues(alpha: 0.14),
         iconColor: AppColors.success,
         onTap: _verStock,
+        requiereStockInicial: false,
       ),
     ];
   }
@@ -666,7 +729,12 @@ class _HomeVendedorState extends State<HomeVendedor> {
         border: Border.all(color: AppColors.outline.withValues(alpha: 0.55)),
         boxShadow: AppShadows.card,
       ),
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      padding: EdgeInsets.fromLTRB(
+        14,
+        layout.compacto ? 10 : 14,
+        14,
+        layout.compacto ? 10 : 14,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -674,7 +742,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
             children: [
               Container(
                 width: 4,
-                height: 18,
+                height: layout.compacto ? 16 : 18,
                 decoration: BoxDecoration(
                   color: accentColor,
                   borderRadius: BorderRadius.circular(2),
@@ -693,7 +761,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: layout.compacto ? 8 : 12),
           Expanded(
             child: layout.gridColumns == 4
                 ? Row(
@@ -702,7 +770,12 @@ class _HomeVendedorState extends State<HomeVendedor> {
                       for (var i = 0; i < acciones.length; i++) ...[
                         if (i > 0) SizedBox(width: layout.gridSpacing),
                         Expanded(
-                          child: _buildActionTile(acciones[i]),
+                          child: _buildActionTile(
+                            acciones[i],
+                            habilitado: !acciones[i].requiereStockInicial ||
+                                _stockInicialAgregado,
+                            compacto: layout.compacto,
+                          ),
                         ),
                       ],
                     ],
@@ -713,9 +786,25 @@ class _HomeVendedorState extends State<HomeVendedor> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Expanded(child: _buildActionTile(acciones[0])),
+                            Expanded(
+                              child: _buildActionTile(
+                                acciones[0],
+                                habilitado:
+                                    !acciones[0].requiereStockInicial ||
+                                    _stockInicialAgregado,
+                                compacto: layout.compacto,
+                              ),
+                            ),
                             SizedBox(width: layout.gridSpacing),
-                            Expanded(child: _buildActionTile(acciones[1])),
+                            Expanded(
+                              child: _buildActionTile(
+                                acciones[1],
+                                habilitado:
+                                    !acciones[1].requiereStockInicial ||
+                                    _stockInicialAgregado,
+                                compacto: layout.compacto,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -724,9 +813,25 @@ class _HomeVendedorState extends State<HomeVendedor> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Expanded(child: _buildActionTile(acciones[2])),
+                            Expanded(
+                              child: _buildActionTile(
+                                acciones[2],
+                                habilitado:
+                                    !acciones[2].requiereStockInicial ||
+                                    _stockInicialAgregado,
+                                compacto: layout.compacto,
+                              ),
+                            ),
                             SizedBox(width: layout.gridSpacing),
-                            Expanded(child: _buildActionTile(acciones[3])),
+                            Expanded(
+                              child: _buildActionTile(
+                                acciones[3],
+                                habilitado:
+                                    !acciones[3].requiereStockInicial ||
+                                    _stockInicialAgregado,
+                                compacto: layout.compacto,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -738,71 +843,93 @@ class _HomeVendedorState extends State<HomeVendedor> {
     );
   }
 
-  Widget _buildActionTile(_AccionItem accion) {
+  Widget _buildActionTile(
+    _AccionItem accion, {
+    bool habilitado = true,
+    bool compacto = false,
+  }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: accion.onTap,
+        onTap: habilitado ? accion.onTap : _mostrarAvisoStockInicial,
         borderRadius: BorderRadius.circular(14),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: accion.iconBg.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: accion.iconColor.withValues(alpha: 0.14),
+        child: Opacity(
+          opacity: habilitado ? 1 : 0.42,
+          child: Ink(
+            decoration: BoxDecoration(
+              color: accion.iconBg.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: accion.iconColor.withValues(alpha: 0.14),
+              ),
             ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(13),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accion.iconColor.withValues(alpha: 0.12),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final muyApretado = constraints.maxHeight < 98;
+                final iconBox = compacto || muyApretado ? 40.0 : 46.0;
+                final iconSize = compacto || muyApretado ? 22.0 : 24.0;
+                final padV = compacto || muyApretado ? 8.0 : 12.0;
+                final padH = compacto || muyApretado ? 8.0 : 10.0;
+                final gapIcono = compacto || muyApretado ? 6.0 : 10.0;
+                final mostrarDescripcion = !muyApretado;
+
+                return Padding(
+                  padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: iconBox,
+                        height: iconBox,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(13),
+                          boxShadow: [
+                            BoxShadow(
+                              color: accion.iconColor.withValues(alpha: 0.12),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          accion.icon,
+                          color: accion.iconColor,
+                          size: iconSize,
+                        ),
                       ),
+                      SizedBox(height: gapIcono),
+                      Text(
+                        accion.label,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontSize: compacto || muyApretado ? 12.5 : 14,
+                          fontWeight: FontWeight.w600,
+                          color: primaryColor,
+                          height: 1.1,
+                        ),
+                      ),
+                      if (mostrarDescripcion) ...[
+                        SizedBox(height: compacto ? 2 : 3),
+                        Text(
+                          accion.descripcion,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: compacto ? 10 : 11,
+                            color: secondaryColor.withValues(alpha: 0.88),
+                            height: 1.15,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
-                  child: Icon(
-                    accion.icon,
-                    color: accion.iconColor,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  accion.label,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: primaryColor,
-                    height: 1.15,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  accion.descripcion,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    color: secondaryColor.withValues(alpha: 0.88),
-                    height: 1.2,
-                  ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ),
@@ -861,15 +988,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
 
   void _ingresarStockFinal() {
     if (!_stockInicialAgregado) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Debe ingresar el stock inicial antes del stock final.',
-            style: GoogleFonts.poppins(),
-          ),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      _mostrarAvisoStockInicial();
       return;
     }
 
@@ -905,6 +1024,7 @@ class _AccionItem {
   final Color iconBg;
   final Color iconColor;
   final VoidCallback onTap;
+  final bool requiereStockInicial;
 
   const _AccionItem({
     required this.icon,
@@ -913,6 +1033,7 @@ class _AccionItem {
     required this.iconBg,
     required this.iconColor,
     required this.onTap,
+    this.requiereStockInicial = true,
   });
 }
 

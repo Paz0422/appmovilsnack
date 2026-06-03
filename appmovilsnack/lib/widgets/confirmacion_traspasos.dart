@@ -149,13 +149,20 @@ void _aplicarConfirmacionLineaEnTx(
     if (linea.destinoSnap.exists) {
       final destData = linea.destinoSnap.data()!;
       final actual = _intDesdeFirestore(destData['cantidad']);
-      tx.update(linea.destinoRef, {'cantidad': actual + cantidadRecibida});
+      final traspasoActual =
+          _intDesdeFirestore(destData['cantidadPorTraspaso']);
+      tx.update(linea.destinoRef, {
+        'cantidad': actual + cantidadRecibida,
+        'cantidadPorTraspaso': traspasoActual + cantidadRecibida,
+      });
     } else {
       tx.set(linea.destinoRef, {
         'productoId': productoId,
         'nombre': tData['nombre'],
         'precio': tData['precio'],
         'cantidad': cantidadRecibida,
+        'cantidadPorTraspaso': cantidadRecibida,
+        'cantidadPropio': 0,
         'categoria': tData['categoria'] ?? categoriaDefault,
       });
     }
@@ -907,6 +914,8 @@ class BannerTraspasosPendientes extends StatefulWidget {
   final String sectorId;
   final String nombreSector;
   final ResumenPedidosPendientes resumen;
+  final bool habilitado;
+  final VoidCallback? onBloqueado;
 
   const BannerTraspasosPendientes({
     super.key,
@@ -914,6 +923,8 @@ class BannerTraspasosPendientes extends StatefulWidget {
     required this.sectorId,
     required this.nombreSector,
     required this.resumen,
+    this.habilitado = true,
+    this.onBloqueado,
   });
 
   @override
@@ -953,6 +964,10 @@ class _BannerTraspasosPendientesState extends State<BannerTraspasosPendientes> {
   }
 
   void _abrirConfirmacion() {
+    if (!widget.habilitado) {
+      widget.onBloqueado?.call();
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -971,12 +986,14 @@ class _BannerTraspasosPendientesState extends State<BannerTraspasosPendientes> {
     final origen = widget.resumen.origenReciente?.trim();
     final unidades = widget.resumen.totalUnidades;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _abrirConfirmacion,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        child: Ink(
+    return Opacity(
+      opacity: widget.habilitado ? 1 : 0.45,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _abrirConfirmacion,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          child: Ink(
           decoration: BoxDecoration(
             color: AppColors.surfaceCard,
             borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -1084,6 +1101,7 @@ class _BannerTraspasosPendientesState extends State<BannerTraspasosPendientes> {
           ),
         ),
       ),
+    ),
     )
         .animate()
         .fadeIn(duration: 300.ms, curve: Curves.easeOut)

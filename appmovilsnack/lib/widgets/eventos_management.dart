@@ -76,6 +76,22 @@ class _EventosManagementState extends State<EventosManagement> {
     });
   }
 
+  Widget _iconoAccionEvento({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onPressed,
+    String? tooltip,
+  }) {
+    return IconButton(
+      icon: Icon(icon, color: color, size: 22),
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      onPressed: onPressed,
+    );
+  }
+
   Future<void> _mostrarDialogoEvento({DocumentSnapshot? evento}) async {
     final nombreController = TextEditingController(
       text: evento?.data() != null
@@ -698,87 +714,94 @@ class _EventosManagementState extends State<EventosManagement> {
                                   width: activo ? 2 : 0,
                                 ),
                               ),
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                leading: Container(
-                                  width: 50,
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    color: activo
-                                        ? Colors.green.withValues(alpha: 0.2)
-                                        : accentColor.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    activo ? Icons.event : Icons.event_busy,
-                                    color: activo ? Colors.green : accentColor,
-                                    size: 28,
-                                  ),
-                                ),
-                                title: Row(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
+                                    Container(
+                                      width: 50,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        color: activo
+                                            ? Colors.green.withValues(alpha: 0.2)
+                                            : accentColor.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(
+                                        activo ? Icons.event : Icons.event_busy,
+                                        color: activo ? Colors.green : accentColor,
+                                        size: 28,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
                                     Expanded(
-                                      child: Text(
-                                        nombreEvento,
-                                        style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 16,
-                                          color: primaryColor,
-                                        ),
-                                      ),
-                                    ),
-                                    if (activo)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.green.withValues(alpha: 0.2),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            nombreEvento,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.poppins(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 16,
+                                              color: primaryColor,
+                                            ),
                                           ),
-                                        ),
-                                        child: Text(
-                                          'Activo',
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.green,
-                                          ),
-                                        ),
+                                          if (activo) ...[
+                                            const SizedBox(height: 6),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.green
+                                                    .withValues(alpha: 0.2),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: Text(
+                                                'Activo',
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.green,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
-                                  ],
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: Icon(
-                                        Icons.location_on,
-                                        color: accentColor,
-                                      ),
-                                      onPressed: () =>
-                                          _gestionarSectores(evento),
-                                      tooltip: 'Gestionar Sectores',
                                     ),
-                                    IconButton(
-                                      icon: Icon(
-                                        Icons.edit,
-                                        color: accentColor,
-                                      ),
-                                      onPressed: () =>
-                                          _mostrarDialogoEvento(evento: evento),
-                                    ),
-                                    IconButton(
-                                      icon: Icon(
-                                        Icons.delete,
-                                        color: Colors.red,
-                                      ),
-                                      onPressed: () => _eliminarEvento(evento),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        _iconoAccionEvento(
+                                          icon: Icons.location_on,
+                                          color: accentColor,
+                                          tooltip: 'Gestionar Sectores',
+                                          onPressed: () =>
+                                              _gestionarSectores(evento),
+                                        ),
+                                        _iconoAccionEvento(
+                                          icon: Icons.edit,
+                                          color: accentColor,
+                                          onPressed: () =>
+                                              _mostrarDialogoEvento(
+                                                evento: evento,
+                                              ),
+                                        ),
+                                        _iconoAccionEvento(
+                                          icon: Icons.delete,
+                                          color: Colors.red,
+                                          onPressed: () =>
+                                              _eliminarEvento(evento),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -1239,74 +1262,108 @@ class _GestionSectoresState extends State<_GestionSectores> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        leading: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: secondaryColor.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            turnoCerrado ? Icons.lock_outline : Icons.location_on,
-                            color: turnoCerrado ? Colors.grey : secondaryColor,
-                            size: 28,
-                          ),
-                        ),
-                        title: Row(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Text(
-                              nombreSector,
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                                color: primaryColor,
+                            Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: secondaryColor.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                turnoCerrado
+                                    ? Icons.lock_outline
+                                    : Icons.location_on,
+                                color: turnoCerrado
+                                    ? Colors.grey
+                                    : secondaryColor,
+                                size: 28,
                               ),
                             ),
-                            if (turnoCerrado) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  'Turno cerrado',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 11,
-                                    color: Colors.orange[800],
-                                    fontWeight: FontWeight.w500,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    nombreSector,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.poppins(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                      color: primaryColor,
+                                    ),
                                   ),
-                                ),
+                                  if (turnoCerrado) ...[
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange
+                                            .withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        'Turno cerrado',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 11,
+                                          color: Colors.orange[800],
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
-                            ],
-                          ],
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (turnoCerrado)
-                              TextButton.icon(
-                                icon: const Icon(Icons.lock_open, size: 18),
-                                label: Text(
-                                  'Reabrir',
-                                  style: GoogleFonts.poppins(fontSize: 12),
-                                ),
-                                onPressed: () => _reabrirSector(sector),
-                              ),
-                            IconButton(
-                              icon: Icon(Icons.edit, color: accentColor),
-                              onPressed: () =>
-                                  _mostrarDialogoSector(sector: sector),
                             ),
-                            IconButton(
-                              icon: Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _eliminarSector(sector),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (turnoCerrado)
+                                  TextButton.icon(
+                                    icon: const Icon(Icons.lock_open, size: 18),
+                                    label: Text(
+                                      'Reabrir',
+                                      style: GoogleFonts.poppins(fontSize: 12),
+                                    ),
+                                    onPressed: () => _reabrirSector(sector),
+                                    style: TextButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                      ),
+                                    ),
+                                  ),
+                                IconButton(
+                                  icon: Icon(Icons.edit, color: accentColor),
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 40,
+                                    minHeight: 40,
+                                  ),
+                                  onPressed: () =>
+                                      _mostrarDialogoSector(sector: sector),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.delete, color: Colors.red),
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 40,
+                                    minHeight: 40,
+                                  ),
+                                  onPressed: () => _eliminarSector(sector),
+                                ),
+                              ],
                             ),
                           ],
                         ),

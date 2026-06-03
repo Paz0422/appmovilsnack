@@ -119,52 +119,59 @@ class DashboardCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(borderRadius),
         onTap: onTap,
         child: Container(
+          width: double.infinity,
+          height: double.infinity,
           decoration: _decoration,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(icon, size: 22, color: _resolvedIconColor),
-              const SizedBox(width: 12),
+              Icon(icon, size: 20, color: _resolvedIconColor),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.max,
                   children: [
                     Text(
                       title,
                       style: GoogleFonts.poppins(
                         color: _titleColor,
-                        fontSize: 13,
+                        fontSize: 11,
                         fontWeight: FontWeight.w600,
+                        height: 1.15,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (subtitle != null) ...[
-                      const SizedBox(height: 2),
                       Text(
                         subtitle!,
                         style: GoogleFonts.poppins(
                           color: _subtitleColor,
-                          fontSize: 11,
+                          fontSize: 10,
+                          height: 1.1,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        value,
+                        style: GoogleFonts.poppins(
+                          color: _valueColor,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          height: 1.1,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                value,
-                style: GoogleFonts.poppins(
-                  color: _valueColor,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14.5,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -174,8 +181,71 @@ class DashboardCard extends StatelessWidget {
   }
 
   Widget _buildVertical() {
-    final valueSize = emphasis ? 28.0 : 22.0;
-    final iconSize = emphasis ? 44.0 : 40.0;
+    if (emphasis) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(borderRadius),
+          onTap: onTap,
+          child: Container(
+            width: double.infinity,
+            decoration: _decoration,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(icon, size: 36, color: _resolvedIconColor),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _titleColor,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle!,
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: _subtitleColor,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const SizedBox(height: 6),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          value,
+                          style: GoogleFonts.poppins(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: _valueColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final valueSize = 22.0;
+    const iconSize = 40.0;
 
     return Material(
       color: Colors.transparent,
@@ -184,15 +254,12 @@ class DashboardCard extends StatelessWidget {
         onTap: onTap,
         child: Container(
           decoration: _decoration,
-          padding: EdgeInsets.symmetric(
-            horizontal: emphasis ? 24 : 20,
-            vertical: emphasis ? 26 : 22,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: iconSize, color: _resolvedIconColor),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Text(
                 value,
                 style: GoogleFonts.poppins(
@@ -203,11 +270,11 @@ class DashboardCard extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 title,
                 style: GoogleFonts.poppins(
-                  fontSize: emphasis ? 15 : 14,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: _titleColor,
                 ),

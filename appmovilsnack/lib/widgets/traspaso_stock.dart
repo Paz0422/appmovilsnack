@@ -75,10 +75,35 @@ class _TraspasoStockState extends State<TraspasoStock> {
   bool _enviando = false;
   String? _error;
 
-  List<Map<String, String>> _sectores = [];
+  List<Map<String, dynamic>> _sectores = [];
   String? _sectorOrigenId;
   String? _sectorDestinoId;
   final Map<String, _LineaPedido> _pedido = {};
+
+  bool _sectorEstaCerrado(String? id) {
+    if (id == null) return false;
+    for (final s in _sectores) {
+      if (s['id'] == id) return s['turnoCerrado'] == true;
+    }
+    return false;
+  }
+
+  List<Map<String, dynamic>> _destinosDisponibles() {
+    return _sectores
+        .where(
+          (s) => s['id'] != _sectorOrigenId && s['turnoCerrado'] != true,
+        )
+        .toList();
+  }
+
+  void _syncSectorDestino() {
+    final disponibles = _destinosDisponibles();
+    if (_sectorDestinoId != null &&
+        disponibles.any((s) => s['id'] == _sectorDestinoId)) {
+      return;
+    }
+    _sectorDestinoId = disponibles.firstOrNull?['id'] as String?;
+  }
 
   int get _totalUnidadesPedido =>
       _pedido.values.fold(0, (total, l) => total + l.cantidad);
@@ -102,17 +127,16 @@ class _TraspasoStockState extends State<TraspasoStock> {
         return {
           'id': doc.id,
           'nombre': (data['nombre'] as String?) ?? 'Sin Nombre',
+          'turnoCerrado': data['turnoCerrado'] == true,
         };
       }).toList();
 
       if (mounted) {
         setState(() {
           _sectores = sectores;
-          _sectorOrigenId =
-              widget.sectorIdOrigenInicial ?? sectores.firstOrNull?['id'];
-          _sectorDestinoId = sectores
-              .where((s) => s['id'] != null && s['id'] != _sectorOrigenId)
-              .firstOrNull?['id'];
+          _sectorOrigenId = widget.sectorIdOrigenInicial ??
+              sectores.firstOrNull?['id'] as String?;
+          _syncSectorDestino();
           _isLoading = false;
           _error = null;
         });
@@ -366,6 +390,15 @@ class _TraspasoStockState extends State<TraspasoStock> {
       return;
     }
 
+    if (_sectorEstaCerrado(destinoId)) {
+      _mostrarMensaje(
+        'No podés enviar productos a un sector con turno cerrado. '
+        'Un administrador debe reabrirlo desde Gestión de eventos.',
+        esError: true,
+      );
+      return;
+    }
+
     final destinoNombre = _nombreSector(destinoId);
     final origenNombre = _nombreSector(origenId);
     final lineas = _pedido.values.toList();
@@ -436,6 +469,21 @@ class _TraspasoStockState extends State<TraspasoStock> {
         final origenNombreTx = origenNombre;
         final destinoNombreTx = destinoNombre;
         final pendientes = <_LineaEnvioTraspaso>[];
+
+        final destinoSectorRef = FirebaseFirestore.instance
+            .collection('eventos')
+            .doc(widget.eventoId)
+            .collection('sectores')
+            .doc(destinoId);
+        final destinoSectorSnap = await tx.get(destinoSectorRef);
+        if (!destinoSectorSnap.exists) {
+          throw Exception('El sector destino ya no existe.');
+        }
+        if (destinoSectorSnap.data()?['turnoCerrado'] == true) {
+          throw Exception(
+            'No se puede enviar a "$destinoNombreTx": el turno está cerrado.',
+          );
+        }
 
         for (final linea in lineas) {
           final origenRef = FirebaseFirestore.instance
@@ -672,7 +720,11 @@ class _TraspasoStockState extends State<TraspasoStock> {
               ),
               const SizedBox(width: 10),
               FilledButton.icon(
-                onPressed: _enviando ? null : _enviarPedido,
+                onPressed: (_enviando ||
+                        _sectorDestinoId == null ||
+                        _sectorEstaCerrado(_sectorDestinoId))
+                    ? null
+                    : _enviarPedido,
                 icon: _enviando
                     ? SizedBox(
                         width: 18,
@@ -709,22 +761,32 @@ class _TraspasoStockState extends State<TraspasoStock> {
         (widget.nombreSectorOrigenInicial?.isNotEmpty ?? false)) {
       return widget.nombreSectorOrigenInicial!;
     }
-    return _sectores.firstWhere(
-          (s) => s['id'] == id,
-          orElse: () => {'nombre': ''},
-        )['nombre'] ??
-        '';
+    for (final s in _sectores) {
+      if (s['id'] == id) return s['nombre']?.toString() ?? '';
+    }
+    return '';
   }
 
   Widget _buildSectorDropdown({
     required String label,
     required String? value,
-    required List<Map<String, String>> options,
+    required List<Map<String, dynamic>> options,
     required ValueChanged<String?> onChanged,
     bool bloqueado = false,
+    bool marcarCerrados = false,
   }) {
     final valorValido = value != null &&
-        options.any((s) => s['id'] == value);
+        options.any(
+          (s) => s['id'] == value && (!marcarCerrados || s['turnoCerrado'] != true),
+        );
+    String etiquetaSector(Map<String, dynamic> s) {
+      final nombre = s['nombre']?.toString() ?? 'Sin nombre';
+      if (marcarCerrados && s['turnoCerrado'] == true) {
+        return '$nombre (Turno cerrado)';
+      }
+      return nombre;
+    }
+
     return DropdownButtonFormField<String>(
       initialValue: valorValido ? value : null,
       isExpanded: true,
@@ -740,12 +802,18 @@ class _TraspasoStockState extends State<TraspasoStock> {
       items: options
           .map(
             (s) => DropdownMenuItem<String>(
-              value: s['id'],
+              value: s['id']?.toString(),
+              enabled: !marcarCerrados || s['turnoCerrado'] != true,
               child: Text(
-                s['nombre'] ?? 'Sin nombre',
+                etiquetaSector(s),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.poppins(fontSize: 13),
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: marcarCerrados && s['turnoCerrado'] == true
+                      ? Colors.grey
+                      : null,
+                ),
               ),
             ),
           )
@@ -755,13 +823,15 @@ class _TraspasoStockState extends State<TraspasoStock> {
             (s) => Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                s['nombre'] ?? 'Sin nombre',
+                etiquetaSector(s),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.poppins(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: primaryColor,
+                  color: marcarCerrados && s['turnoCerrado'] == true
+                      ? Colors.grey
+                      : primaryColor,
                 ),
               ),
             ),
@@ -780,6 +850,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
         _sectores.where((s) => s['id'] != _sectorDestinoId).toList();
     final destinoOptions =
         _sectores.where((s) => s['id'] != _sectorOrigenId).toList();
+    final hayDestinoDisponible = _destinosDisponibles().isNotEmpty;
     final origenFijo = widget.sectorIdOrigenInicial != null;
 
     return Container(
@@ -851,6 +922,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
               onChanged: (v) => setState(() {
                 _sectorOrigenId = v;
                 _pedido.clear();
+                _syncSectorDestino();
               }),
             ),
             const SizedBox(height: 10),
@@ -859,14 +931,28 @@ class _TraspasoStockState extends State<TraspasoStock> {
             label: 'Sector destino (recibe y confirma)',
             value: _sectorDestinoId,
             options: destinoOptions,
+            marcarCerrados: true,
+            bloqueado: !hayDestinoDisponible,
             onChanged: (v) {
-              if (v == _sectorDestinoId) return;
+              if (v == null || v == _sectorDestinoId) return;
+              if (_sectorEstaCerrado(v)) return;
               setState(() {
                 _sectorDestinoId = v;
                 _pedido.clear();
               });
             },
           ),
+          if (!hayDestinoDisponible) ...[
+            const SizedBox(height: 8),
+            Text(
+              'No hay sectores destino disponibles: todos tienen el turno cerrado.',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: AppColors.error,
+                height: 1.35,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           Text(
             'Tocá los productos para armar el pedido. '

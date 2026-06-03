@@ -45,6 +45,11 @@ class FirestoreHelpers {
         .snapshots();
   }
 
+  /// Catálogo global de productos (tiempo real para stock inicial, etc.).
+  static Stream<QuerySnapshot<Map<String, dynamic>>> streamProductosCatalogo() {
+    return _firestore.collection('productos').snapshots();
+  }
+
   /// Documento de un sector (para leer turnoCerrado, nombre, etc.).
   static Future<DocumentSnapshot> getSector(String eventoId, String sectorId) {
     return _firestore
