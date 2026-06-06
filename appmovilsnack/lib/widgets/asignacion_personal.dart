@@ -518,6 +518,7 @@ class _AsignarYExportarTab extends StatefulWidget {
 
 class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
   final Map<String, bool> _seleccionados = {};
+  final TextEditingController _busquedaController = TextEditingController();
   bool _exportando = false;
   late Future<QuerySnapshot> _empleadosFuture;
 
@@ -530,6 +531,13 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
         .collection('empleados')
         .orderBy('nombre')
         .get();
+    _busquedaController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _busquedaController.dispose();
+    super.dispose();
   }
 
   void _refrescarLista() {
@@ -555,7 +563,7 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
           child: Row(
             children: [
               Expanded(
@@ -576,6 +584,27 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
                 ),
               ),
             ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: TextField(
+            controller: _busquedaController,
+            decoration: InputDecoration(
+              hintText: 'Buscar por nombre...',
+              prefixIcon: Icon(Icons.search, color: widget.secondaryColor),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: 0,
+                horizontal: 16,
+              ),
+            ),
+            style: GoogleFonts.poppins(),
           ),
         ),
         Expanded(
@@ -602,11 +631,32 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
                   ),
                 );
               }
+
+              final query = _busquedaController.text.trim().toLowerCase();
+              final empleadosFiltrados = query.isEmpty
+                  ? empleados
+                  : empleados.where((doc) {
+                      final nombre = (doc.data() as Map<String, dynamic>)['nombre']
+                              ?.toString()
+                              .toLowerCase() ??
+                          '';
+                      return nombre.contains(query);
+                    }).toList();
+
+              if (empleadosFiltrados.isEmpty) {
+                return Center(
+                  child: Text(
+                    'No se encontraron empleados con ese nombre.',
+                    style: GoogleFonts.poppins(color: widget.secondaryColor),
+                  ),
+                );
+              }
+
               return ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                itemCount: empleados.length,
+                itemCount: empleadosFiltrados.length,
                 itemBuilder: (context, index) {
-                  final doc = empleados[index];
+                  final doc = empleadosFiltrados[index];
                   final d = doc.data() as Map<String, dynamic>;
                   final id = doc.id;
                   final nombre = d['nombre']?.toString() ?? '';

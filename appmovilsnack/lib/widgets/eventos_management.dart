@@ -5,6 +5,217 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+const _sectoresEventoDefault = [
+  'Galeria Sur',
+  'Galeria Norte',
+  'Andes',
+  'Pacifico',
+];
+
+class _SectorEnEdicion {
+  final String? id;
+  String nombre;
+
+  _SectorEnEdicion({this.id, required this.nombre});
+}
+
+Map<String, dynamic> _datosSectorNuevo(String nombre) => {
+      'nombre': nombre,
+      'totalVendido': 0.0,
+      'productosVendidos': 0,
+      'vendedoresasignados': <dynamic>[],
+    };
+
+String _normalizarNombreSector(String nombre) => nombre.trim().toLowerCase();
+
+bool _listaContieneSector(
+  List<_SectorEnEdicion> sectores,
+  String nombre, {
+  int? exceptoIndice,
+}) {
+  final normalizado = _normalizarNombreSector(nombre);
+  for (var i = 0; i < sectores.length; i++) {
+    if (exceptoIndice != null && i == exceptoIndice) continue;
+    if (_normalizarNombreSector(sectores[i].nombre) == normalizado) return true;
+  }
+  return false;
+}
+
+Future<bool> _firestoreContieneSector(
+  String eventoId,
+  String nombre, {
+  String? exceptoSectorId,
+}) async {
+  final snapshot = await FirebaseFirestore.instance
+      .collection('eventos')
+      .doc(eventoId)
+      .collection('sectores')
+      .get();
+  final normalizado = _normalizarNombreSector(nombre);
+  for (final doc in snapshot.docs) {
+    if (exceptoSectorId != null && doc.id == exceptoSectorId) continue;
+    final existente = doc.data()['nombre']?.toString() ?? '';
+    if (_normalizarNombreSector(existente) == normalizado) return true;
+  }
+  return false;
+}
+
+void _mostrarErrorSectorDuplicado(BuildContext context) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        'Ya existe un sector con ese nombre.',
+        style: GoogleFonts.poppins(),
+      ),
+      backgroundColor: Colors.red,
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
+}
+
+String _normalizarNombreEvento(String nombre) => nombre.trim().toLowerCase();
+
+Future<bool> _existeOtroEventoActivoConNombre(
+  String nombre, {
+  String? exceptoEventoId,
+}) async {
+  final snapshot = await FirebaseFirestore.instance
+      .collection('eventos')
+      .where('activo', isEqualTo: true)
+      .get();
+  final normalizado = _normalizarNombreEvento(nombre);
+  for (final doc in snapshot.docs) {
+    if (exceptoEventoId != null && doc.id == exceptoEventoId) continue;
+    final existente =
+        doc.data()['nombre']?.toString().trim().toLowerCase() ?? '';
+    if (existente.isNotEmpty && existente == normalizado) return true;
+  }
+  return false;
+}
+
+void _mostrarErrorEventoActivoDuplicado(BuildContext context) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        'Ya hay un evento activo con ese nombre. Desactivá el otro o usá otro nombre.',
+        style: GoogleFonts.poppins(),
+      ),
+      backgroundColor: Colors.red,
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
+}
+
+const _msgEventoSinNombre = 'Por favor, ingresa un nombre para el evento.';
+const _msgEventoSinSectores = 'Por favor, agrega al menos un sector.';
+const _msgSectorDuplicado = 'Ya existe un sector con ese nombre.';
+const _msgEventoActivoDuplicado =
+    'Ya hay un evento activo con ese nombre. Desactivá el otro o usá otro nombre.';
+
+Widget _bannerDialogo({
+  required String mensaje,
+  required bool esError,
+}) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: esError ? const Color(0xFFFFEBEE) : const Color(0xFFE8F5E9),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(
+        color: esError ? Colors.red.shade300 : Colors.green.shade300,
+      ),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          esError ? Icons.error_outline : Icons.check_circle_outline,
+          color: esError ? Colors.red.shade700 : Colors.green.shade700,
+          size: 20,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            mensaje,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: esError ? Colors.red.shade900 : Colors.green.shade900,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<DocumentReference<Map<String, dynamic>>> _guardarEventoNuevo({
+  required String nombre,
+  required bool activo,
+  required List<_SectorEnEdicion> sectores,
+}) async {
+  final firestore = FirebaseFirestore.instance;
+  final eventoRef = firestore.collection('eventos').doc();
+  final batch = firestore.batch();
+
+  batch.set(eventoRef, {
+    'nombre': nombre,
+    'activo': activo,
+    'fechaCreacion': FieldValue.serverTimestamp(),
+  });
+
+  final nombresUnicos = <String>{};
+  for (final sector in sectores) {
+    final trimmed = sector.nombre.trim();
+    if (trimmed.isEmpty ||
+        !nombresUnicos.add(_normalizarNombreSector(trimmed))) {
+      continue;
+    }
+    batch.set(
+      eventoRef.collection('sectores').doc(),
+      _datosSectorNuevo(trimmed),
+    );
+  }
+
+  await batch.commit();
+  return eventoRef;
+}
+
+Future<void> _sincronizarSectoresEvento({
+  required DocumentReference<Map<String, dynamic>> eventoRef,
+  required List<_SectorEnEdicion> sectores,
+  required Set<String> idsOriginales,
+}) async {
+  final batch = FirebaseFirestore.instance.batch();
+  final idsActuales = sectores
+      .where((s) => s.id != null)
+      .map((s) => s.id!)
+      .toSet();
+
+  for (final id in idsOriginales) {
+    if (!idsActuales.contains(id)) {
+      batch.delete(eventoRef.collection('sectores').doc(id));
+    }
+  }
+
+  for (final sector in sectores) {
+    final trimmed = sector.nombre.trim();
+    if (trimmed.isEmpty) continue;
+    if (sector.id != null) {
+      batch.update(
+        eventoRef.collection('sectores').doc(sector.id),
+        {'nombre': trimmed},
+      );
+    } else {
+      batch.set(
+        eventoRef.collection('sectores').doc(),
+        _datosSectorNuevo(trimmed),
+      );
+    }
+  }
+
+  await batch.commit();
+}
+
 class EventosManagement extends StatefulWidget {
   const EventosManagement({super.key});
 
@@ -41,14 +252,21 @@ class _EventosManagementState extends State<EventosManagement> {
 
   Future<void> _cargarEventos() async {
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('eventos')
-          .orderBy('nombre')
-          .get();
+      final snapshot =
+          await FirebaseFirestore.instance.collection('eventos').get();
+
+      final docs = snapshot.docs.toList()
+        ..sort((a, b) {
+          final dataA = a.data() as Map<String, dynamic>?;
+          final dataB = b.data() as Map<String, dynamic>?;
+          final na = dataA?['nombre']?.toString().toLowerCase() ?? '';
+          final nb = dataB?['nombre']?.toString().toLowerCase() ?? '';
+          return na.compareTo(nb);
+        });
 
       setState(() {
-        _eventos = snapshot.docs;
-        _eventosFiltrados = _eventos;
+        _eventos = docs;
+        _eventosFiltrados = docs;
         _isLoading = false;
       });
     } catch (e) {
@@ -66,11 +284,9 @@ class _EventosManagementState extends State<EventosManagement> {
     final query = _searchController.text.toLowerCase();
     setState(() {
       _eventosFiltrados = _eventos.where((evento) {
+        if (query.isEmpty) return true;
         final data = evento.data() as Map<String, dynamic>?;
-        if (data == null || !data.containsKey('nombre')) {
-          return false;
-        }
-        final nombre = data['nombre'].toString().toLowerCase();
+        final nombre = data?['nombre']?.toString().toLowerCase() ?? '';
         return nombre.contains(query);
       }).toList();
     });
@@ -98,24 +314,52 @@ class _EventosManagementState extends State<EventosManagement> {
           ? (evento!.data() as Map<String, dynamic>)['nombre'] ?? ''
           : '',
     );
-    final ubicacionController = TextEditingController(
-      text: evento?.data() != null
-          ? (evento!.data() as Map<String, dynamic>)['ubicacion'] ?? ''
-          : '',
-    );
     bool activo = evento?.data() != null
         ? (evento!.data() as Map<String, dynamic>)['activo'] ?? false
-        : false;
+        : true;
 
-    // Lista de sectores para nuevos eventos
-    List<String> sectores = [];
-    if (evento != null && evento.data() != null) {
-      final data = evento.data() as Map<String, dynamic>;
-      if (data.containsKey('sectoresIniciales')) {
-        sectores = List<String>.from(data['sectoresIniciales'] ?? []);
+    List<_SectorEnEdicion> sectores = [];
+    final idsSectoresOriginales = <String>{};
+
+    if (evento == null) {
+      sectores = _sectoresEventoDefault
+          .map((n) => _SectorEnEdicion(nombre: n))
+          .toList();
+    } else {
+      try {
+        final snapshot =
+            await evento.reference.collection('sectores').get();
+        for (final doc in snapshot.docs) {
+          final data = doc.data();
+          sectores.add(
+            _SectorEnEdicion(
+              id: doc.id,
+              nombre: data['nombre']?.toString() ?? 'Sin nombre',
+            ),
+          );
+          idsSectoresOriginales.add(doc.id);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'No se pudieron cargar los sectores: $e',
+                style: GoogleFonts.poppins(),
+              ),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
       }
     }
+
     final sectorController = TextEditingController();
+    var guardando = false;
+    String? mensajeError;
+    final messenger = ScaffoldMessenger.of(context);
 
     await showDialog(
       context: context,
@@ -123,6 +367,30 @@ class _EventosManagementState extends State<EventosManagement> {
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            void mostrarError(String mensaje) {
+              setDialogState(() => mensajeError = mensaje);
+            }
+
+            void limpiarError() {
+              if (mensajeError != null) {
+                setDialogState(() => mensajeError = null);
+              }
+            }
+
+            void agregarSectorALista(String nombre) {
+              final trimmed = nombre.trim();
+              if (trimmed.isEmpty) return;
+              if (_listaContieneSector(sectores, trimmed)) {
+                mostrarError(_msgSectorDuplicado);
+                return;
+              }
+              setDialogState(() {
+                mensajeError = null;
+                sectores.add(_SectorEnEdicion(nombre: trimmed));
+                sectorController.clear();
+              });
+            }
+
             return AlertDialog(
               backgroundColor: backgroundColor,
               title: Text(
@@ -139,8 +407,13 @@ class _EventosManagementState extends State<EventosManagement> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (mensajeError != null) ...[
+                        _bannerDialogo(mensaje: mensajeError!, esError: true),
+                        const SizedBox(height: 12),
+                      ],
                       TextField(
                         controller: nombreController,
+                        onChanged: (_) => limpiarError(),
                         decoration: InputDecoration(
                           labelText: 'Nombre del Evento',
                           labelStyle: GoogleFonts.poppins(
@@ -160,128 +433,156 @@ class _EventosManagementState extends State<EventosManagement> {
                         style: GoogleFonts.poppins(),
                       ),
                       const SizedBox(height: 16),
-                      TextField(
-                        controller: ubicacionController,
-                        decoration: InputDecoration(
-                          labelText: 'Ubicación',
-                          labelStyle: GoogleFonts.poppins(
-                            color: secondaryColor,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: accentColor,
-                              width: 2,
+                      Text(
+                        'Sectores',
+                        style: GoogleFonts.poppins(
+                          color: secondaryColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: sectorController,
+                              decoration: InputDecoration(
+                                labelText: 'Nombre del Sector',
+                                labelStyle: GoogleFonts.poppins(
+                                  color: secondaryColor,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(
+                                    color: accentColor,
+                                    width: 2,
+                                  ),
+                                ),
+                              ),
+                              style: GoogleFonts.poppins(),
+                              onSubmitted: (value) => agregarSectorALista(value),
                             ),
                           ),
-                        ),
-                        style: GoogleFonts.poppins(),
-                      ),
-                      if (evento == null) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          'Sectores',
-                          style: GoogleFonts.poppins(
-                            color: secondaryColor,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: Icon(Icons.add_circle, color: accentColor),
+                            onPressed: () =>
+                                agregarSectorALista(sectorController.text),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: secondaryColor.withValues(alpha: 0.3),
+                          ),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: sectorController,
-                                decoration: InputDecoration(
-                                  labelText: 'Nombre del Sector',
-                                  labelStyle: GoogleFonts.poppins(
-                                    color: secondaryColor,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: BorderSide(
-                                      color: accentColor,
-                                      width: 2,
+                        child: sectores.isEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Text(
+                                  'Agregá al menos un sector',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    color: secondaryColor.withValues(
+                                      alpha: 0.7,
                                     ),
                                   ),
                                 ),
-                                style: GoogleFonts.poppins(),
-                                onSubmitted: (value) {
-                                  if (value.trim().isNotEmpty) {
-                                    setDialogState(() {
-                                      sectores.add(value.trim());
-                                      sectorController.clear();
-                                    });
-                                  }
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: Icon(Icons.add_circle, color: accentColor),
-                              onPressed: () {
-                                if (sectorController.text.trim().isNotEmpty) {
-                                  setDialogState(() {
-                                    sectores.add(sectorController.text.trim());
-                                    sectorController.clear();
-                                  });
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                        if (sectores.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Container(
-                            constraints: const BoxConstraints(maxHeight: 150),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: secondaryColor.withValues(alpha: 0.3),
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: SingleChildScrollView(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: sectores.asMap().entries.map((entry) {
-                                  final index = entry.key;
-                                  final sector = entry.value;
-                                  return ListTile(
-                                    dense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 4,
-                                    ),
-                                    title: Text(
-                                      sector,
-                                      style: GoogleFonts.poppins(fontSize: 14),
-                                    ),
-                                    trailing: IconButton(
-                                      icon: Icon(
-                                        Icons.delete,
-                                        color: Colors.red,
-                                        size: 20,
+                              )
+                            : SingleChildScrollView(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children:
+                                      sectores.asMap().entries.map((entry) {
+                                    final index = entry.key;
+                                    final sector = entry.value;
+                                    return ListTile(
+                                      dense: true,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
                                       ),
-                                      onPressed: () {
-                                        setDialogState(() {
-                                          sectores.removeAt(index);
-                                        });
-                                      },
-                                    ),
-                                  );
-                                }).toList(),
+                                      title: Text(
+                                        sector.nombre,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: Icon(
+                                              Icons.edit_outlined,
+                                              color: accentColor,
+                                              size: 20,
+                                            ),
+                                            tooltip: 'Renombrar',
+                                            onPressed: () async {
+                                              final nuevo =
+                                                  await showDialog<String>(
+                                                context: context,
+                                                useRootNavigator: true,
+                                                builder: (ctx) =>
+                                                    _DialogRenombrarSector(
+                                                  nombreInicial: sector.nombre,
+                                                  backgroundColor:
+                                                      backgroundColor,
+                                                  primaryColor: primaryColor,
+                                                  accentColor: accentColor,
+                                                  secondaryColor:
+                                                      secondaryColor,
+                                                ),
+                                              );
+                                              if (nuevo != null &&
+                                                  nuevo.isNotEmpty) {
+                                                if (_listaContieneSector(
+                                                  sectores,
+                                                  nuevo,
+                                                  exceptoIndice: index,
+                                                )) {
+                                                  mostrarError(
+                                                    _msgSectorDuplicado,
+                                                  );
+                                                  return;
+                                                }
+                                                setDialogState(() {
+                                                  mensajeError = null;
+                                                  sectores[index].nombre =
+                                                      nuevo.trim();
+                                                });
+                                              }
+                                            },
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                              color: Colors.red,
+                                              size: 20,
+                                            ),
+                                            tooltip: 'Eliminar',
+                                            onPressed: () {
+                                              setDialogState(() {
+                                                sectores.removeAt(index);
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
                               ),
-                            ),
-                          ),
-                        ],
-                      ],
+                      ),
                       const SizedBox(height: 16),
                       Row(
                         children: [
@@ -299,6 +600,7 @@ class _EventosManagementState extends State<EventosManagement> {
                             onChanged: (value) {
                               setDialogState(() {
                                 activo = value;
+                                mensajeError = null;
                               });
                             },
                             activeThumbColor: accentColor,
@@ -318,128 +620,98 @@ class _EventosManagementState extends State<EventosManagement> {
                   ),
                 ),
                 ElevatedButton(
-                  onPressed: () async {
+                  onPressed: guardando
+                      ? null
+                      : () async {
                     final nombre = nombreController.text.trim();
-                    final ubicacion = ubicacionController.text.trim();
 
                     if (nombre.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Por favor, ingresa un nombre para el evento.',
-                            style: GoogleFonts.poppins(),
-                          ),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
+                      mostrarError(_msgEventoSinNombre);
                       return;
                     }
 
-                    if (evento == null && ubicacion.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Por favor, ingresa una ubicación para el evento.',
-                            style: GoogleFonts.poppins(),
-                          ),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                      return;
-                    }
-
-                    if (evento == null && sectores.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Por favor, agrega al menos un sector.',
-                            style: GoogleFonts.poppins(),
-                          ),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
+                    if (sectores.isEmpty) {
+                      mostrarError(_msgEventoSinSectores);
                       return;
                     }
 
                     try {
-                      final eventoData = <String, dynamic>{
-                        'nombre': nombre,
-                        'activo': activo,
-                      };
+                      setDialogState(() {
+                        guardando = true;
+                        mensajeError = null;
+                      });
 
-                      if (ubicacion.isNotEmpty) {
-                        eventoData['ubicacion'] = ubicacion;
+                      if (activo) {
+                        final duplicado = await _existeOtroEventoActivoConNombre(
+                          nombre,
+                          exceptoEventoId: evento?.id,
+                        );
+                        if (!context.mounted) return;
+                        if (duplicado) {
+                          mostrarError(_msgEventoActivoDuplicado);
+                          return;
+                        }
                       }
 
                       if (evento == null) {
-                        // Agregar nuevo evento
-                        final docRef = await FirebaseFirestore.instance
-                            .collection('eventos')
-                            .add(eventoData);
-
-                        // Crear los sectores como subcolecciones
-                        for (final sectorNombre in sectores) {
-                          await docRef.collection('sectores').add({
-                            'nombre': sectorNombre,
-                            'totalVendido': 0.0,
-                            'productosVendidos': 0,
-                            'vendedoresasignados': <Map<String, dynamic>>[],
-                          });
-                        }
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Evento agregado exitosamente',
-                                style: GoogleFonts.poppins(),
-                              ),
-                              backgroundColor: Colors.green,
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        }
+                        await _guardarEventoNuevo(
+                          nombre: nombre,
+                          activo: activo,
+                          sectores: sectores,
+                        );
                       } else {
-                        // Editar evento existente
-                        await evento.reference.update(eventoData);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Evento actualizado exitosamente',
-                                style: GoogleFonts.poppins(),
-                              ),
-                              backgroundColor: Colors.green,
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        }
+                        await evento.reference.update({
+                          'nombre': nombre,
+                          'activo': activo,
+                        });
+                        await _sincronizarSectoresEvento(
+                          eventoRef: evento.reference
+                              as DocumentReference<Map<String, dynamic>>,
+                          sectores: sectores,
+                          idsOriginales: idsSectoresOriginales,
+                        );
                       }
 
                       await _cargarEventos();
-                      if (mounted) Navigator.of(context).pop();
-                    } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Error al guardar el evento: $e',
-                              style: GoogleFonts.poppins(),
-                            ),
-                            backgroundColor: Colors.red,
-                            behavior: SnackBarBehavior.floating,
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop();
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            evento == null
+                                ? 'Evento agregado exitosamente'
+                                : 'Evento actualizado exitosamente',
+                            style: GoogleFonts.poppins(),
                           ),
-                        );
-                      }
+                          backgroundColor: Colors.green,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    } catch (e) {
+                      mostrarError('Error al guardar el evento: $e');
+                    } finally {
+                      setDialogState(() => guardando = false);
                     }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: accentColor,
                     foregroundColor: primaryColor,
                   ),
-                  child: Text(
-                    evento == null ? 'Agregar' : 'Guardar',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-                  ),
+                  child: guardando
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: primaryColor,
+                          ),
+                        )
+                      : Text(
+                          evento == null ? 'Agregar' : 'Guardar',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ],
             );
@@ -694,13 +966,12 @@ class _EventosManagementState extends State<EventosManagement> {
                             final evento = _eventosFiltrados[index];
                             final data = evento.data() as Map<String, dynamic>?;
 
-                            if (data == null) {
-                              return const SizedBox.shrink();
-                            }
-
                             final String nombreEvento =
-                                data['nombre']?.toString() ?? 'Sin nombre';
-                            final bool activo = data['activo'] ?? false;
+                                data?['nombre']?.toString().trim().isNotEmpty ==
+                                        true
+                                    ? data!['nombre'].toString()
+                                    : 'Evento sin nombre (${evento.id.substring(0, 6)}...)';
+                            final bool activo = data?['activo'] == true;
 
                             return Card(
                               margin: const EdgeInsets.only(bottom: 12),
@@ -920,13 +1191,23 @@ class _GestionSectoresState extends State<_GestionSectores> {
                   return;
                 }
 
+                final duplicado = await _firestoreContieneSector(
+                  widget.eventoId,
+                  nombre,
+                  exceptoSectorId: sector?.id,
+                );
+                if (!context.mounted) return;
+                if (duplicado) {
+                  _mostrarErrorSectorDuplicado(context);
+                  return;
+                }
+
                 Navigator.of(context).pop();
 
                 try {
-                  final sectorData = <String, dynamic>{'nombre': nombre};
+                  final sectorData = _datosSectorNuevo(nombre);
 
                   if (sector == null) {
-                    // Agregar nuevo sector
                     await FirebaseFirestore.instance
                         .collection('eventos')
                         .doc(widget.eventoId)
@@ -945,8 +1226,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                       );
                     }
                   } else {
-                    // Editar sector existente
-                    await sector.reference.update(sectorData);
+                    await sector.reference.update({'nombre': nombre});
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -1242,13 +1522,11 @@ class _GestionSectoresState extends State<_GestionSectores> {
                     final sector = sectores[index];
                     final data = sector.data() as Map<String, dynamic>?;
 
-                    if (data == null) {
-                      return const SizedBox.shrink();
-                    }
-
                     final String nombreSector =
-                        data['nombre']?.toString() ?? 'Sin nombre';
-                    final bool turnoCerrado = data['turnoCerrado'] == true;
+                        data?['nombre']?.toString().trim().isNotEmpty == true
+                            ? data!['nombre'].toString()
+                            : 'Sector sin nombre';
+                    final bool turnoCerrado = data?['turnoCerrado'] == true;
 
                     final query = _searchController.text.toLowerCase();
                     if (query.isNotEmpty &&
@@ -1386,6 +1664,91 @@ class _GestionSectoresState extends State<_GestionSectores> {
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
       ),
+    );
+  }
+}
+
+class _DialogRenombrarSector extends StatefulWidget {
+  final String nombreInicial;
+  final Color backgroundColor;
+  final Color primaryColor;
+  final Color accentColor;
+  final Color secondaryColor;
+
+  const _DialogRenombrarSector({
+    required this.nombreInicial,
+    required this.backgroundColor,
+    required this.primaryColor,
+    required this.accentColor,
+    required this.secondaryColor,
+  });
+
+  @override
+  State<_DialogRenombrarSector> createState() => _DialogRenombrarSectorState();
+}
+
+class _DialogRenombrarSectorState extends State<_DialogRenombrarSector> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.nombreInicial);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _guardar() {
+    Navigator.of(context).pop(_controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: widget.backgroundColor,
+      title: Text(
+        'Renombrar sector',
+        style: GoogleFonts.poppins(
+          fontWeight: FontWeight.bold,
+          color: widget.primaryColor,
+        ),
+      ),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: InputDecoration(
+          labelText: 'Nombre del sector',
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        style: GoogleFonts.poppins(),
+        onSubmitted: (_) => _guardar(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            'Cancelar',
+            style: GoogleFonts.poppins(color: widget.secondaryColor),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: _guardar,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: widget.accentColor,
+            foregroundColor: widget.primaryColor,
+          ),
+          child: Text(
+            'Guardar',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
     );
   }
 }

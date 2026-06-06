@@ -4,6 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/vendedor_ventas_service.dart';
 
+/// Primer año con uso real de la app en ranking (no mostrar años anteriores).
+const int _anioInicioRanking = 2026;
+
 class RankingVendedores extends StatefulWidget {
   const RankingVendedores({super.key});
 
@@ -17,10 +20,16 @@ class _RankingVendedoresState extends State<RankingVendedores> {
   List<RankingVendedor> _ranking = [];
   late int _anioSeleccionado;
 
+  List<int> get _aniosDisponibles {
+    final actual = DateTime.now().year;
+    final inicio = _anioInicioRanking <= actual ? _anioInicioRanking : actual;
+    return List.generate(actual - inicio + 1, (i) => actual - i);
+  }
+
   @override
   void initState() {
     super.initState();
-    _anioSeleccionado = DateTime.now().year;
+    _anioSeleccionado = _aniosDisponibles.first;
     _cargar();
   }
 
@@ -111,21 +120,31 @@ class _RankingVendedoresState extends State<RankingVendedores> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          DropdownButton<int>(
-                            value: _anioSeleccionado,
-                            items: List.generate(5, (i) {
-                              final y = DateTime.now().year - i;
-                              return DropdownMenuItem(
-                                value: y,
-                                child: Text('$y'),
-                              );
-                            }),
-                            onChanged: (y) {
-                              if (y == null) return;
-                              setState(() => _anioSeleccionado = y);
-                              _cargar();
-                            },
-                          ),
+                          if (_aniosDisponibles.length == 1)
+                            Text(
+                              '$_anioSeleccionado',
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.secondary,
+                              ),
+                            )
+                          else
+                            DropdownButton<int>(
+                              value: _anioSeleccionado,
+                              items: _aniosDisponibles
+                                  .map(
+                                    (y) => DropdownMenuItem(
+                                      value: y,
+                                      child: Text('$y'),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (y) {
+                                if (y == null) return;
+                                setState(() => _anioSeleccionado = y);
+                                _cargar();
+                              },
+                            ),
                         ],
                       ),
                       const SizedBox(height: 8),

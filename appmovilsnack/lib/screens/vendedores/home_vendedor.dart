@@ -404,8 +404,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Ingresá el stock inicial para habilitar traspasos, mermas y bandejeo. '
-              'Podés recibir traspasos de otros sectores antes de cargar tu inventario.',
+              'Ingrese el stock inicial para habilitar traspasos, mermas y bandejeo. '
+              'Puede recibir traspasos de otros sectores antes de cargar su inventario.',
               style: GoogleFonts.poppins(
                 fontSize: 12.5,
                 color: secondaryColor,
@@ -938,7 +938,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
   }
 
   void _agregarStockInicial() async {
-    await Navigator.push(
+    final result = await Navigator.push<String>(
       context,
       MaterialPageRoute(
         builder: (context) => GestionStock(
@@ -952,15 +952,38 @@ class _HomeVendedorState extends State<HomeVendedor> {
     );
 
     await _verificarStockInicial();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Stock actualizado', style: GoogleFonts.poppins()),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    if (!mounted || result == null) return;
+
+    _mostrarSnackStock(result);
+  }
+
+  void _mostrarSnackStock(String result) {
+    if (!mounted) return;
+    late final String mensaje;
+    late final Color color;
+    if (result == 'saved') {
+      mensaje = 'Stock inicial guardado correctamente.';
+      color = Colors.green;
+    } else if (result == 'draft') {
+      mensaje =
+          'Borrador guardado. Para activar el punto, use Guardar y salir.';
+      color = Colors.orange;
+    } else if (result == 'exit') {
+      mensaje =
+          'Salió sin finalizar. Complete el stock y use Guardar y salir.';
+      color = Colors.orange;
+    } else {
+      return;
     }
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje, style: GoogleFonts.poppins()),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   void _cambiarEvento() {

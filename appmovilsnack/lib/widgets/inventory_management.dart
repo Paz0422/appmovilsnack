@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
+import 'package:front_appsnack/widgets/gestion_categorias.dart';
 
 class InventoryManagement extends StatefulWidget {
   const InventoryManagement({super.key});
@@ -394,6 +395,20 @@ class _InventoryManagementState extends State<InventoryManagement> {
         ),
         backgroundColor: primaryColor,
         foregroundColor: accentColor,
+        actions: [
+          IconButton(
+            tooltip: 'Categorías',
+            icon: const Icon(Icons.category_outlined),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const GestionCategorias(),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: accentColor))

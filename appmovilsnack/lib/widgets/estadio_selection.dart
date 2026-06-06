@@ -169,13 +169,17 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                             color: primaryColor,
                           ),
                         ),
-                        subtitle: Text(
-                          eventoData['ubicacion'] ?? 'Sin ubicación',
-                          style: GoogleFonts.lato(
-                            fontSize: 12,
-                            color: secondaryColor,
-                          ),
-                        ),
+                        subtitle:
+                            (eventoData['ubicacion']?.toString().trim() ?? '')
+                                    .isNotEmpty
+                                ? Text(
+                                    eventoData['ubicacion'].toString(),
+                                    style: GoogleFonts.lato(
+                                      fontSize: 12,
+                                      color: secondaryColor,
+                                    ),
+                                  )
+                                : null,
                         iconColor: accentColor,
                         children: [
                           SectoresList(

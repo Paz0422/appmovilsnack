@@ -66,7 +66,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Fusión Snacks',
+      title: 'Fusion eventos',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       home: const AuthGate(),

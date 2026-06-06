@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:front_appsnack/auth/login_screen.dart';
 import 'package:front_appsnack/widgets/dashboard_card.dart';
-import 'package:front_appsnack/widgets/gestion_screen.dart';
+import 'package:front_appsnack/widgets/inventory_management.dart';
+import 'package:front_appsnack/widgets/asignacion_personal.dart';
+import 'package:front_appsnack/widgets/eventos_management.dart';
 import 'package:front_appsnack/widgets/stock_reports.dart';
 import 'package:front_appsnack/widgets/ventas_por_categoria.dart';
 import 'package:front_appsnack/widgets/reporte_mermas.dart';
 import 'package:front_appsnack/widgets/reporte_diferencias_traspaso.dart';
-import 'package:front_appsnack/widgets/gestion_categorias.dart';
 import 'package:front_appsnack/widgets/gestion_roles_usuarios.dart';
 import 'package:front_appsnack/widgets/ranking_vendedores.dart';
 import 'package:front_appsnack/widgets/estadio_selection.dart';
@@ -326,15 +327,6 @@ class _HomeAdminState extends State<HomeAdmin> {
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Panel de Control',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.white70,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
                 ],
               ),
             ),
@@ -342,7 +334,6 @@ class _HomeAdminState extends State<HomeAdmin> {
             _buildDrawerItem(
               icon: Icons.storefront_outlined,
               title: 'Panel de vendedor',
-              subtitle: 'Elegir sector y operar como vendedor',
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -370,7 +361,6 @@ class _HomeAdminState extends State<HomeAdmin> {
             _buildDrawerItem(
               icon: Icons.pie_chart_outline,
               title: 'Ventas por categoría',
-              subtitle: 'Estimación por inventario (inicial − final)',
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -384,7 +374,6 @@ class _HomeAdminState extends State<HomeAdmin> {
             _buildDrawerItem(
               icon: Icons.remove_circle_outline,
               title: 'Reporte de mermas',
-              subtitle: 'Ver mermas y motivo',
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -398,7 +387,6 @@ class _HomeAdminState extends State<HomeAdmin> {
             _buildDrawerItem(
               icon: Icons.sync_problem_rounded,
               title: 'Diferencias en traspasos',
-              subtitle: 'Recibido menos de lo enviado',
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -413,7 +401,6 @@ class _HomeAdminState extends State<HomeAdmin> {
             _buildDrawerItem(
               icon: Icons.lock_clock_outlined,
               title: 'Cierres de partidos activos',
-              subtitle: 'Ver sectores cerrados por partido',
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -425,38 +412,12 @@ class _HomeAdminState extends State<HomeAdmin> {
               },
             ),
             const Divider(color: Colors.white24, height: 1),
-            _drawerSectionLabel('Configuración'),
-            _buildDrawerItem(
-              icon: Icons.category_outlined,
-              title: 'Categorías de productos',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const GestionCategorias(),
-                  ),
-                );
-              },
-            ),
-            _buildDrawerItem(
-              icon: Icons.settings_outlined,
-              title: 'Productos, personal y eventos',
-              subtitle: 'Inventario, empleados, eventos y sectores',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const GestionScreen(),
-                  ),
-                );
-              },
-            ),
+            _buildDrawerGestionExpansion(),
+            const Divider(color: Colors.white24, height: 1),
+            _drawerSectionLabel('Usuarios'),
             _buildDrawerItem(
               icon: Icons.badge_outlined,
               title: 'Roles de usuarios',
-              subtitle: 'Admin y vendedor por usuario',
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -470,7 +431,6 @@ class _HomeAdminState extends State<HomeAdmin> {
             _buildDrawerItem(
               icon: Icons.leaderboard_outlined,
               title: 'Ranking de vendedores',
-              subtitle: 'Ventas acumuladas por cierre de turno',
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -502,6 +462,59 @@ class _HomeAdminState extends State<HomeAdmin> {
             const SizedBox(height: 20),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDrawerGestionExpansion() {
+    final titleStyle = GoogleFonts.poppins(
+      fontSize: 16,
+      fontWeight: FontWeight.w500,
+      color: Colors.white,
+    );
+    final subItemStyle = GoogleFonts.poppins(
+      fontSize: 15,
+      fontWeight: FontWeight.w400,
+      color: Colors.white,
+    );
+
+    void irA(Widget screen) {
+      Navigator.pop(context);
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => screen),
+      );
+    }
+
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        leading: Icon(Icons.settings_outlined, color: accentColor, size: 24),
+        title: Text('Gestión', style: titleStyle),
+        iconColor: accentColor,
+        collapsedIconColor: accentColor,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+        childrenPadding: const EdgeInsets.only(left: 8, bottom: 4),
+        children: [
+          ListTile(
+            leading: Icon(Icons.inventory_2_outlined, color: accentColor, size: 22),
+            title: Text('Productos', style: subItemStyle),
+            dense: true,
+            onTap: () => irA(const InventoryManagement()),
+          ),
+          ListTile(
+            leading: Icon(Icons.people_outline_rounded, color: accentColor, size: 22),
+            title: Text('Personal', style: subItemStyle),
+            dense: true,
+            onTap: () => irA(const AsignacionPersonal()),
+          ),
+          ListTile(
+            leading: Icon(Icons.event_rounded, color: accentColor, size: 22),
+            title: Text('Eventos', style: subItemStyle),
+            dense: true,
+            onTap: () => irA(const EventosManagement()),
+          ),
+        ],
       ),
     );
   }
