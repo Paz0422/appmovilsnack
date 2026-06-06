@@ -77,14 +77,16 @@ class _ResumenBandejeroEnCierre {
   final double totalVendido;
   final double porcentajeComision;
   final double comision;
-  final double totalAPagar;
+  final double cajaVuelto;
+  final double totalARecibir;
 
   const _ResumenBandejeroEnCierre({
     required this.nombre,
     required this.totalVendido,
     required this.porcentajeComision,
     required this.comision,
-    required this.totalAPagar,
+    this.cajaVuelto = 0,
+    required this.totalARecibir,
   });
 
   Map<String, dynamic> toFirestore() => {
@@ -92,8 +94,17 @@ class _ResumenBandejeroEnCierre {
         'totalVendido': totalVendido,
         'porcentajeComision': porcentajeComision,
         'comision': comision,
-        'totalAPagar': totalAPagar,
+        'cajaVuelto': cajaVuelto,
+        'totalARecibir': totalARecibir,
       };
+
+  static double _totalARecibirDesdeCierre(Map<String, dynamic> cierre) {
+    final directo = (cierre['totalARecibir'] as num?)?.toDouble();
+    if (directo != null) return directo;
+    final vendido = (cierre['totalVendido'] as num?)?.toDouble() ?? 0;
+    final caja = (cierre['cajaVuelto'] as num?)?.toDouble() ?? 0;
+    return vendido + caja;
+  }
 
   static _ResumenBandejeroEnCierre? desdeMap(Map<String, dynamic> m) {
     final nombre = m['nombre']?.toString() ??
@@ -105,7 +116,8 @@ class _ResumenBandejeroEnCierre {
       porcentajeComision:
           (m['porcentajeComision'] as num?)?.toDouble() ?? 0,
       comision: (m['comision'] as num?)?.toDouble() ?? 0,
-      totalAPagar: (m['totalAPagar'] as num?)?.toDouble() ?? 0,
+      cajaVuelto: (m['cajaVuelto'] as num?)?.toDouble() ?? 0,
+      totalARecibir: _totalARecibirDesdeCierre(m),
     );
   }
 }
@@ -474,7 +486,8 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         porcentajeComision:
             (cierre['porcentajeComision'] as num?)?.toDouble() ?? 0,
         comision: (cierre['comision'] as num?)?.toDouble() ?? 0,
-        totalAPagar: (cierre['totalAPagar'] as num?)?.toDouble() ?? 0,
+        cajaVuelto: (cierre['cajaVuelto'] as num?)?.toDouble() ?? 0,
+        totalARecibir: _ResumenBandejeroEnCierre._totalARecibirDesdeCierre(cierre),
       );
       lista.add(item);
     }
@@ -608,8 +621,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         buffer.writeln('• ${b.nombre}');
         buffer.writeln(
           '  Vendido: \$${b.totalVendido.toStringAsFixed(0)} | '
-          'Comisión $pct%: \$${b.comision.toStringAsFixed(0)} | '
-          'A pagar: \$${b.totalAPagar.toStringAsFixed(0)}',
+          'Caja vuelto: \$${b.cajaVuelto.toStringAsFixed(0)} | '
+          'A recibir: \$${b.totalARecibir.toStringAsFixed(0)} | '
+          'Comisión al cierre $pct%: \$${b.comision.toStringAsFixed(0)}',
         );
       }
     }
@@ -1271,7 +1285,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Ventas y comisión acordada al cerrar cada bandejero.',
+            'Ventas y comisión registrada al cerrar cada bandejero.',
             style: GoogleFonts.poppins(
               fontSize: 12,
               color: AppColors.secondary,
@@ -1315,7 +1329,14 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                       ),
                     ),
                     Text(
-                      'Comisión ($pct%): \$${b.comision.toStringAsFixed(0)}',
+                      'Caja para vuelto: \$${b.cajaVuelto.toStringAsFixed(0)}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: AppColors.secondary,
+                      ),
+                    ),
+                    Text(
+                      'Comisión al cierre: \$${b.comision.toStringAsFixed(0)} ($pct%)',
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         color: AppColors.secondary,
@@ -1323,7 +1344,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Total a pagar: \$${b.totalAPagar.toStringAsFixed(0)}',
+                      'Total a recibir: \$${b.totalARecibir.toStringAsFixed(0)}',
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,

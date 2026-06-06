@@ -15,6 +15,7 @@ import 'package:front_appsnack/widgets/gestion_roles_usuarios.dart';
 import 'package:front_appsnack/widgets/ranking_vendedores.dart';
 import 'package:front_appsnack/widgets/estadio_selection.dart';
 import 'package:front_appsnack/widgets/cierres_partidos_activos.dart';
+import 'package:front_appsnack/widgets/reporte_bandejeo_admin.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/admin_estadisticas_service.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -394,6 +395,19 @@ class _HomeAdminState extends State<HomeAdmin> {
                   MaterialPageRoute(
                     builder: (context) =>
                         const ReporteDiferenciasTraspaso(),
+                  ),
+                );
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.directions_walk_outlined,
+              title: 'Bandejeo por sector',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ReporteBandejeoAdmin(),
                   ),
                 );
               },

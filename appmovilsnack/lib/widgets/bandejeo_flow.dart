@@ -275,7 +275,7 @@ class _ControlesCargaBandeja extends StatelessWidget {
         : (modoTraspaso ? maxPropio : maxTotal);
     final etiquetaCasilla = esSumaAdicional && enBandeja
         ? 'Sumar ahora'
-        : (modoTraspaso ? 'Lo que cargás' : null);
+        : (modoTraspaso ? 'Lo que carga' : null);
 
     if (!modoTraspaso) {
       return Column(
@@ -330,7 +330,7 @@ class _ControlesCargaBandeja extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
-                'Podés sumar hasta $maxAgregar u. más (llevás $totalActual)',
+                'Puede sumar hasta $maxAgregar u. más (lleva $totalActual)',
                 textAlign: TextAlign.right,
                 style: GoogleFonts.poppins(
                   fontSize: 10,
@@ -380,7 +380,7 @@ class _ControlesCargaBandeja extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  etiquetaCasilla ?? 'Lo que cargás',
+                  etiquetaCasilla ?? 'Lo que carga',
                   style: GoogleFonts.poppins(
                     fontSize: 9,
                     color: _secondaryColor,
@@ -426,7 +426,7 @@ class _ControlesCargaBandeja extends StatelessWidget {
           ),
           child: Text(
             esSumaAdicional && enBandeja
-                ? 'Llevás $totalActual u. ($propioActual + $traspasoFijo traspaso)\n'
+                ? 'Lleva $totalActual u. ($propioActual + $traspasoFijo traspaso)\n'
                     'Al sumar, el traspaso no se duplica.'
                 : enBandeja
                     ? 'Total en bandeja: $totalCalculado u.\n'
@@ -472,6 +472,8 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
   String? _bandejeroId;
   String? _bandejeroNombre;
   String? _rondaId; // ronda en curso / activa para este bandejero
+  /// Efectivo entregado para vuelto al iniciar la primera ronda del turno.
+  double _cajaVuelto = 0;
   /// true cuando se entró por "Agregar más cosas" a una ronda en curso.
   bool _actualizandoBandeja = false;
 
@@ -542,10 +544,6 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
     );
   }
 
-  double _calcularComision() {
-    return _calcularTotalVendido() * 0.10; // 10% de comisión
-  }
-
   bool get _muestraFlechaAtrasEnAppBar =>
       _currentPage == 1 || _currentPage == 3;
 
@@ -555,6 +553,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
       _bandejeroNombre = null;
       _productosBandeja = [];
       _rondaId = null;
+      _cajaVuelto = 0;
       _actualizandoBandeja = false;
       _currentPage = 0;
     });
@@ -703,7 +702,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      'Debes seleccionar al menos un producto',
+                      'Debe seleccionar al menos un producto',
                       style: GoogleFonts.poppins(),
                     ),
                     backgroundColor: Colors.red,
@@ -720,7 +719,6 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
           _PasoRendicion(
             productosBandeja: _productosBandeja,
             totalVendido: _calcularTotalVendido(),
-            comision: _calcularComision(),
             eventoId: widget.eventoId,
             sectorId: widget.sectorId,
             isGuardando: _isGuardando,
@@ -779,7 +777,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
   /// Descuenta del inventario lo que se asigna a la bandeja (delta respecto a la ronda guardada).
   Future<void> _upsertRondaEnCurso() async {
     if (_bandejeroId == null) {
-      throw Exception('Debes seleccionar un bandejero');
+      throw Exception('Debe seleccionar un bandejero');
     }
 
     final bandejeroRef = FirebaseFirestore.instance
@@ -859,7 +857,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
           if (stockActual < delta) {
             throw Exception(
               'Stock insuficiente para $nombre. '
-              'Disponible: $stockActual, necesitás: $delta más en bandeja.',
+              'Disponible: $stockActual, necesita: $delta más en bandeja.',
             );
           }
           tx.update(stockRef, {'cantidad': stockActual - delta});
@@ -885,9 +883,139 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
       _bandejeroNombre = nombre;
       _productosBandeja = [];
       _rondaId = null;
+      _cajaVuelto = 0;
       _actualizandoBandeja = false;
     });
     await _handleSeleccionBandejero();
+  }
+
+  DocumentReference<Map<String, dynamic>> get _bandejeroRef {
+    if (_bandejeroId == null) {
+      throw StateError('Bandejero no seleccionado');
+    }
+    return FirebaseFirestore.instance
+        .collection('eventos')
+        .doc(widget.eventoId)
+        .collection('sectores')
+        .doc(widget.sectorId)
+        .collection('bandejeros')
+        .doc(_bandejeroId);
+  }
+
+  Future<double?> _mostrarDialogoCajaVuelto() async {
+    final controller = TextEditingController(text: '0');
+    final focusNode = FocusNode();
+
+    final result = await showDialog<double>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(
+            'Caja para vuelto',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Indique cuánto efectivo se entrega al bandejero para vuelto. '
+                'Ese monto se sumará al total a entregar al cerrar el bandejeo.',
+                style: GoogleFonts.poppins(fontSize: 13, height: 1.35),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: controller,
+                focusNode: focusNode,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Monto de la caja',
+                  prefixText: '\$ ',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onTap: () {
+                  controller.selection = TextSelection(
+                    baseOffset: 0,
+                    extentOffset: controller.text.length,
+                  );
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                'Cancelar',
+                style: GoogleFonts.poppins(color: _secondaryColor),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final monto = double.tryParse(
+                  controller.text.trim().replaceAll(',', '.'),
+                );
+                if (monto == null || monto < 0) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Ingrese un monto válido (0 o mayor).',
+                        style: GoogleFonts.poppins(),
+                      ),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pop(ctx, monto);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accentColor,
+                foregroundColor: _primaryColor,
+              ),
+              child: Text(
+                'Continuar',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    focusNode.dispose();
+    controller.dispose();
+    return result;
+  }
+
+  Future<bool> _prepararInicioRonda({required bool esPrimeraRonda}) async {
+    if (_bandejeroId == null) return false;
+
+    final snap = await _bandejeroRef.get();
+    if (!mounted) return false;
+
+    final existente = (snap.data()?['cajaVuelto'] as num?)?.toDouble();
+    if (existente != null) {
+      setState(() => _cajaVuelto = existente);
+      return true;
+    }
+
+    if (!esPrimeraRonda) {
+      setState(() => _cajaVuelto = 0);
+      return true;
+    }
+
+    final monto = await _mostrarDialogoCajaVuelto();
+    if (!mounted || monto == null) return false;
+
+    await _bandejeroRef.set({'cajaVuelto': monto}, SetOptions(merge: true));
+    if (!mounted) return false;
+    setState(() => _cajaVuelto = monto);
+    return true;
   }
 
   Future<void> _handleSeleccionBandejero() async {
@@ -1040,6 +1168,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
       if (cerrarSinVentas == true) {
         await _cerrarBandejeoBandejero();
       } else if (cerrarSinVentas == false) {
+        if (!await _prepararInicioRonda(esPrimeraRonda: true)) return;
         _siguientePaso();
       }
       return;
@@ -1056,6 +1185,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
           _productosBandeja = [];
           _actualizandoBandeja = false;
         });
+        if (!await _prepararInicioRonda(esPrimeraRonda: false)) return;
         _siguientePaso();
       case _AccionBandejeroTrasRonda.cerrarBandejeo:
         await _cerrarBandejeoBandejero();
@@ -1089,7 +1219,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Sin rondas rendidas. Podés iniciar una ronda o cerrar el bandejeo sin ventas.',
+                'Sin rondas rendidas. Puede iniciar una ronda o cerrar el bandejeo sin ventas.',
                 style: GoogleFonts.poppins(
                   fontSize: 13,
                   color: _secondaryColor,
@@ -1224,7 +1354,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '$nombre tiene una ronda en curso. Rendila antes de cerrar el bandejeo.',
+            '$nombre tiene una ronda en curso. Rinda la ronda antes de cerrar el bandejeo.',
             style: GoogleFonts.poppins(),
           ),
           backgroundColor: Colors.orange,
@@ -1243,13 +1373,24 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
           productos: [],
         );
 
+    final bandejeroSnap = await _bandejeroRef.get();
+    if (!mounted) return;
+    final cajaVuelto =
+        (bandejeroSnap.data()?['cajaVuelto'] as num?)?.toDouble() ??
+            _cajaVuelto;
+
     final porcentaje = await _mostrarDialogoResumenCierre(
       nombre: nombre,
       resumen: resumenFinal,
+      cajaVuelto: cajaVuelto,
     );
     if (!mounted || porcentaje == null) return;
 
-    final cierre = resumenFinal.toCierreFirestore(porcentaje, nombreBandejero: nombre);
+    final cierre = resumenFinal.toCierreFirestore(
+      porcentaje,
+      nombreBandejero: nombre,
+      cajaVuelto: cajaVuelto,
+    );
 
     try {
       await FirebaseFirestore.instance
@@ -1286,6 +1427,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
       _bandejeroNombre = null;
       _productosBandeja = [];
       _rondaId = null;
+      _cajaVuelto = 0;
     });
     await _pageController.animateToPage(
       0,
@@ -1297,7 +1439,8 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Bandejeo de $nombre cerrado. Comisión: \$${(cierre['comision'] as num).toStringAsFixed(0)}',
+          'Bandejeo de $nombre cerrado. Total a recibir: '
+          '\$${(cierre['totalARecibir'] as num).toStringAsFixed(0)}',
           style: GoogleFonts.poppins(),
         ),
         backgroundColor: Colors.green,
@@ -1341,7 +1484,6 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
           .doc();
 
       final totalVendido = _calcularTotalVendido();
-      final comision = _calcularComision();
 
       transaction.set(transaccionRef, {
         'eventoId': widget.eventoId,
@@ -1352,7 +1494,6 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
         'fecha': FieldValue.serverTimestamp(),
         'metodoPago': 'Bandejeo',
         'montoTotal': totalVendido,
-        'comision': comision,
         'productos': _productosBandeja.map((p) {
           return {
             'productoId': p.productoId,
@@ -1384,8 +1525,6 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
           'actualizadoEn': FieldValue.serverTimestamp(),
           'transaccionId': transaccionRef.id,
           'totalVendido': totalVendido,
-          'comision': comision,
-          'totalAPagar': totalVendido - comision,
           'productos': _productosBandeja.map((p) {
             return {
               'productoId': p.productoId,
@@ -1489,12 +1628,15 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
   Future<double?> _mostrarDialogoResumenCierre({
     required String nombre,
     required _ResumenVentasBandejero resumen,
+    double cajaVuelto = 0,
     bool soloLectura = false,
     Map<String, dynamic>? cierreGuardado,
   }) {
     final pct = (cierreGuardado?['porcentajeComision'] as num?)?.toDouble();
     final comision = (cierreGuardado?['comision'] as num?)?.toDouble();
-    final aPagar = (cierreGuardado?['totalAPagar'] as num?)?.toDouble();
+    final aRecibir = (cierreGuardado?['totalARecibir'] as num?)?.toDouble();
+    final caja = (cierreGuardado?['cajaVuelto'] as num?)?.toDouble() ??
+        cajaVuelto;
 
     return showDialog<double>(
       context: context,
@@ -1502,10 +1644,11 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
       builder: (ctx) => _DialogoResumenCierreBandejeo(
         nombreBandejero: nombre,
         resumen: resumen,
+        cajaVuelto: caja,
         soloLectura: soloLectura,
         porcentajeInicial: pct,
         comisionInicial: comision,
-        totalAPagarInicial: aPagar,
+        totalARecibirInicial: aRecibir,
       ),
     );
   }
@@ -1574,6 +1717,7 @@ class _ResumenVentasBandejero {
   Map<String, dynamic> toCierreFirestore(
     double porcentajeComision, {
     required String nombreBandejero,
+    double cajaVuelto = 0,
   }) {
     final comision = totalVendido * (porcentajeComision / 100);
     return {
@@ -1581,7 +1725,8 @@ class _ResumenVentasBandejero {
       'totalVendido': totalVendido,
       'porcentajeComision': porcentajeComision,
       'comision': comision,
-      'totalAPagar': totalVendido - comision,
+      'cajaVuelto': cajaVuelto,
+      'totalARecibir': totalVendido + cajaVuelto,
       'cantidadRondas': cantidadRondas,
       'productos': productos
           .map(
@@ -1621,17 +1766,19 @@ class _DialogoResumenCierreBandejeo extends StatefulWidget {
   final String nombreBandejero;
   final _ResumenVentasBandejero resumen;
   final bool soloLectura;
+  final double cajaVuelto;
   final double? porcentajeInicial;
   final double? comisionInicial;
-  final double? totalAPagarInicial;
+  final double? totalARecibirInicial;
 
   const _DialogoResumenCierreBandejeo({
     required this.nombreBandejero,
     required this.resumen,
+    this.cajaVuelto = 0,
     this.soloLectura = false,
     this.porcentajeInicial,
     this.comisionInicial,
-    this.totalAPagarInicial,
+    this.totalARecibirInicial,
   });
 
   @override
@@ -1665,9 +1812,10 @@ class _DialogoResumenCierreBandejeoState
       ? widget.comisionInicial!
       : widget.resumen.totalVendido * (_porcentaje / 100);
 
-  double get _totalAPagar => widget.soloLectura && widget.totalAPagarInicial != null
-      ? widget.totalAPagarInicial!
-      : widget.resumen.totalVendido - _comision;
+  double get _totalARecibir =>
+      widget.soloLectura && widget.totalARecibirInicial != null
+          ? widget.totalARecibirInicial!
+          : widget.resumen.totalVendido + widget.cajaVuelto;
 
   void _actualizarPorcentaje(String texto) {
     final valor = double.tryParse(texto.replaceAll(',', '.'));
@@ -1778,7 +1926,7 @@ class _DialogoResumenCierreBandejeoState
                     decimal: true,
                   ),
                   decoration: InputDecoration(
-                    labelText: 'Comisión (%)',
+                    labelText: 'Comisión (%) al cerrar bandejeo',
                     hintText: 'Ej: 10',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -1801,8 +1949,9 @@ class _DialogoResumenCierreBandejeoState
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: _accentColor.withValues(alpha: 0.12),
+                  color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                 ),
                 child: Column(
                   children: [
@@ -1810,15 +1959,12 @@ class _DialogoResumenCierreBandejeoState
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Comisión (${_porcentaje.toStringAsFixed(_porcentaje == _porcentaje.roundToDouble() ? 0 : 1)}%)',
+                          'Total vendido',
                           style: GoogleFonts.poppins(),
                         ),
                         Text(
-                          '\$${_comision.toStringAsFixed(0)}',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                            color: _accentColor,
-                          ),
+                          '\$${resumen.totalVendido.toStringAsFixed(0)}',
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
@@ -1827,17 +1973,77 @@ class _DialogoResumenCierreBandejeoState
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Total a pagar',
+                          'Caja para vuelto',
+                          style: GoogleFonts.poppins(),
+                        ),
+                        Text(
+                          '\$${widget.cajaVuelto.toStringAsFixed(0)}',
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Total a recibir',
                           style: GoogleFonts.poppins(
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
-                          '\$${_totalAPagar.toStringAsFixed(0)}',
+                          '\$${_totalARecibir.toStringAsFixed(0)}',
                           style: GoogleFonts.poppins(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
-                            color: _primaryColor,
+                            color: Colors.green[800],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _accentColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Comisión (referencia para pago al finalizar)',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: _secondaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Ingrese el porcentaje al cerrar el bandejeo.',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: _secondaryColor.withValues(alpha: 0.85),
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${_porcentaje.toStringAsFixed(_porcentaje == _porcentaje.roundToDouble() ? 0 : 1)}% del vendido',
+                          style: GoogleFonts.poppins(),
+                        ),
+                        Text(
+                          '\$${_comision.toStringAsFixed(0)}',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                            color: _accentColor,
                           ),
                         ),
                       ],
@@ -2387,8 +2593,8 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
               children: [
                 if (widget.esActualizacionRonda) ...[
                   Text(
-                    'Sumá unidades a lo que ya llevás. '
-                    'Con traspaso, solo cargás lo tuyo y el traspaso se suma solo.',
+                    'Sume unidades a lo que ya lleva. '
+                    'Con traspaso, solo cargue lo propio y el traspaso se suma solo.',
                     style: GoogleFonts.poppins(
                       fontSize: 11,
                       color: _secondaryColor,
@@ -2595,7 +2801,7 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                                     if (modoTraspaso) ...[
                                       const SizedBox(height: 4),
                                       Text(
-                                        'Cargá solo lo que tenés; '
+                                        'Cargue solo lo que tiene; '
                                         '$traspasoFijo u. de traspaso se suman solas.',
                                         style: GoogleFonts.poppins(
                                           fontSize: 10,
@@ -2924,7 +3130,6 @@ class _PasoResumenRonda extends StatelessWidget {
 class _PasoRendicion extends StatelessWidget {
   final List<_ProductoBandeja> productosBandeja;
   final double totalVendido;
-  final double comision;
   final String eventoId;
   final String sectorId;
   final bool isGuardando;
@@ -2934,7 +3139,6 @@ class _PasoRendicion extends StatelessWidget {
   const _PasoRendicion({
     required this.productosBandeja,
     required this.totalVendido,
-    required this.comision,
     required this.eventoId,
     required this.sectorId,
     required this.isGuardando,
@@ -2969,49 +3173,16 @@ class _PasoRendicion extends StatelessWidget {
                   color: Colors.green[700],
                 ),
               ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Column(
-                    children: [
-                      Text(
-                        'Comisión (10%)',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: _secondaryColor,
-                        ),
-                      ),
-                      Text(
-                        '\$${comision.toStringAsFixed(0)}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: _accentColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Column(
-                    children: [
-                      Text(
-                        'Total a Pagar',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: _secondaryColor,
-                        ),
-                      ),
-                      Text(
-                        '\$${(totalVendido - comision).toStringAsFixed(0)}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: _primaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              const SizedBox(height: 12),
+              Text(
+                'La comisión se ingresa al cerrar el bandejeo del bandejero, '
+                'no en cada ronda.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: _secondaryColor,
+                  height: 1.35,
+                ),
               ),
             ],
           ),
