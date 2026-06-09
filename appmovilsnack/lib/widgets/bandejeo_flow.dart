@@ -533,32 +533,19 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
   double _calcularValorTotal() {
     return _productosBandeja.fold(
       0.0,
-      (sum, producto) => sum + (producto.cantidadInicial * producto.precio),
+      (total, producto) => total + (producto.cantidadInicial * producto.precio),
     );
   }
 
   double _calcularTotalVendido() {
     return _productosBandeja.fold(
       0.0,
-      (sum, producto) => sum + producto.totalVendido,
+      (total, producto) => total + producto.totalVendido,
     );
   }
 
   bool get _muestraFlechaAtrasEnAppBar =>
       _currentPage == 1 || _currentPage == 3;
-
-  void _irASeleccionBandejero() {
-    setState(() {
-      _bandejeroId = null;
-      _bandejeroNombre = null;
-      _productosBandeja = [];
-      _rondaId = null;
-      _cajaVuelto = 0;
-      _actualizandoBandeja = false;
-      _currentPage = 0;
-    });
-    _pageController.jumpToPage(0);
-  }
 
   void _irAListaTrasRendirRonda() {
     if (!mounted) return;
@@ -731,6 +718,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
               });
             },
             onConfirmar: () async {
+              final messenger = ScaffoldMessenger.of(context);
               setState(() {
                 _isGuardando = true;
               });
@@ -745,7 +733,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
                   _isGuardando = false;
                 });
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     SnackBar(
                       content: Text(
                         'Error al confirmar venta: $e',
@@ -2676,8 +2664,8 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                     final data = doc.data();
                     return _intFirestore(data['cantidad']) > 0;
                   }).toList()..sort((a, b) {
-                    final aData = a.data() as Map<String, dynamic>;
-                    final bData = b.data() as Map<String, dynamic>;
+                    final aData = a.data();
+                    final bData = b.data();
                     final aNombre = aData['nombre'] as String? ?? '';
                     final bNombre = bData['nombre'] as String? ?? '';
                     return aNombre.compareTo(bNombre);
@@ -2689,7 +2677,7 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                 itemCount: productos.length,
                 itemBuilder: (context, index) {
                   final productoDoc = productos[index];
-                  final data = productoDoc.data() as Map<String, dynamic>;
+                  final data = productoDoc.data();
                   final nombre = data['nombre'] as String? ?? 'Sin nombre';
                   final precio = (data['precio'] as num?)?.toDouble() ?? 0.0;
                   final cantidadDisponible = _intFirestore(data['cantidad']);

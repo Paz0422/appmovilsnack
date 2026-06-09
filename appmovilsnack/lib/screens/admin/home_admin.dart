@@ -578,37 +578,6 @@ class _HomeAdminState extends State<HomeAdmin> {
 
 // ===== Componentes UI existentes =====
 
-class _HeaderStrip extends StatelessWidget {
-  final String titleLeft;
-  final Widget? rightChild;
-  final bool darkText;
-  const _HeaderStrip({
-    required this.titleLeft,
-    this.rightChild,
-    this.darkText = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = darkText ? Colors.black : Colors.white;
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            titleLeft,
-            style: TextStyle(
-              color: color,
-              fontSize: 16.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        if (rightChild != null) rightChild!,
-      ],
-    );
-  }
-}
-
 /// Reloj y fecha en vivo; solo este widget se redibuja cada segundo.
 class _LiveReloj extends StatefulWidget {
   final bool darkText;

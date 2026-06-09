@@ -119,8 +119,9 @@ class _ReporteMermasState extends State<ReporteMermas> {
   List<Map<String, dynamic>> get _mermasFiltradas {
     return _mermas.where((m) {
       if (_eventoSeleccionadoId != null &&
-          m['eventoId'] != _eventoSeleccionadoId)
+          m['eventoId'] != _eventoSeleccionadoId) {
         return false;
+      }
       if (_sectorSeleccionadoId == null) return true;
       if (_sectorSeleccionadoId!.contains('|')) {
         final parts = _sectorSeleccionadoId!.split('|');

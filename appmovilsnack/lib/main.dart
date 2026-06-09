@@ -48,13 +48,9 @@ void main() async {
   if (kIsWeb) {
     try {
       await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
-      print('Persistencia de Auth configurada en web');
-    } catch (e) {
-      print('Error configurando persistencia en web: $e');
+    } catch (_) {
+      // En web la persistencia puede fallar si ya hay sesión activa; no es crítico.
     }
-  } else {
-    // En móvil, la persistencia se maneja automáticamente
-    print('Persistencia de Auth automática en móvil');
   }
 
   runApp(const MyApp());

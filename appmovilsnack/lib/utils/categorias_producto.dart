@@ -47,8 +47,9 @@ IconData iconoCategoria(String categoria) {
 
 /// Ícono para una categoría cargada desde Firestore (tiene campo icono)
 IconData iconoCategoriaConIcono(String? iconoName) {
-  if (iconoName != null && iconoName.isNotEmpty)
+  if (iconoName != null && iconoName.isNotEmpty) {
     return iconoDesdeNombre(iconoName);
+  }
   return Icons.restaurant;
 }
 
@@ -97,7 +98,7 @@ Future<List<Map<String, String>>> cargarCategoriasFirestore() async {
   }).toList();
 }
 
-/// Lista solo los nombres (para compatibilidad donde se usa List<String>)
+/// Lista solo los nombres, para compatibilidad donde se usa `List<String>`.
 Future<List<String>> cargarNombresCategorias() async {
   final list = await cargarCategoriasFirestore();
   return list.map((e) => e['nombre'] ?? '').where((s) => s.isNotEmpty).toList();

@@ -289,6 +289,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
     // Recargar lista y mostrar mensaje en esta pantalla (contexto estable)
     if (guardado == true && mounted) {
       await _cargarProductos();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(

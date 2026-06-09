@@ -157,6 +157,7 @@ class _StockReportsState extends State<StockReports> {
         .orderBy('nombre')
         .get();
 
+    if (!mounted) return;
     if (eventosSnapshot.docs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -219,6 +220,7 @@ class _StockReportsState extends State<StockReports> {
       ),
     );
 
+    if (!mounted) return;
     if (evento != null) {
       setState(() {
         _eventoSeleccionadoId = evento['id']?.isEmpty == true
@@ -253,6 +255,7 @@ class _StockReportsState extends State<StockReports> {
         .orderBy('nombre')
         .get();
 
+    if (!mounted) return;
     if (sectoresSnapshot.docs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -315,6 +318,7 @@ class _StockReportsState extends State<StockReports> {
       ),
     );
 
+    if (!mounted) return;
     if (sector != null) {
       setState(() {
         _sectorSeleccionadoId = sector['id']?.isEmpty == true
@@ -346,7 +350,7 @@ class _StockReportsState extends State<StockReports> {
         .length;
     int totalStock = _stockDataFiltrados.fold(
       0,
-      (sum, item) => sum + (item['stock'] as int? ?? 0),
+      (total, item) => total + (item['stock'] as int? ?? 0),
     );
 
     return {

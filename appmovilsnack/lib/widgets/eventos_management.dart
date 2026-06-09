@@ -93,19 +93,6 @@ Future<bool> _existeOtroEventoActivoConNombre(
   return false;
 }
 
-void _mostrarErrorEventoActivoDuplicado(BuildContext context) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        'Ya hay un evento activo con ese nombre. Desactivá el otro o usá otro nombre.',
-        style: GoogleFonts.poppins(),
-      ),
-      backgroundColor: Colors.red,
-      behavior: SnackBarBehavior.floating,
-    ),
-  );
-}
-
 const _msgEventoSinNombre = 'Por favor, ingresa un nombre para el evento.';
 const _msgEventoSinSectores = 'Por favor, agrega al menos un sector.';
 const _msgSectorDuplicado = 'Ya existe un sector con ese nombre.';
@@ -309,6 +296,7 @@ class _EventosManagementState extends State<EventosManagement> {
   }
 
   Future<void> _mostrarDialogoEvento({DocumentSnapshot? evento}) async {
+    final messenger = ScaffoldMessenger.of(context);
     final nombreController = TextEditingController(
       text: evento?.data() != null
           ? (evento!.data() as Map<String, dynamic>)['nombre'] ?? ''
@@ -341,7 +329,7 @@ class _EventosManagementState extends State<EventosManagement> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          messenger.showSnackBar(
             SnackBar(
               content: Text(
                 'No se pudieron cargar los sectores: $e',
@@ -356,10 +344,11 @@ class _EventosManagementState extends State<EventosManagement> {
       }
     }
 
+    if (!mounted) return;
+
     final sectorController = TextEditingController();
     var guardando = false;
     String? mensajeError;
-    final messenger = ScaffoldMessenger.of(context);
 
     await showDialog(
       context: context,
@@ -722,6 +711,7 @@ class _EventosManagementState extends State<EventosManagement> {
   }
 
   Future<void> _eliminarEvento(DocumentSnapshot evento) async {
+    final messenger = ScaffoldMessenger.of(context);
     final nombre =
         (evento.data() as Map<String, dynamic>)['nombre'] ?? 'este evento';
 
@@ -779,7 +769,7 @@ class _EventosManagementState extends State<EventosManagement> {
         // Eliminar el evento
         await evento.reference.delete();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          messenger.showSnackBar(
             SnackBar(
               content: Text(
                 'Evento eliminado exitosamente',
@@ -793,7 +783,7 @@ class _EventosManagementState extends State<EventosManagement> {
         await _cargarEventos();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          messenger.showSnackBar(
             SnackBar(
               content: Text(
                 'Error al eliminar el evento: $e',
@@ -1126,6 +1116,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
   }
 
   Future<void> _mostrarDialogoSector({DocumentSnapshot? sector}) async {
+    final messenger = ScaffoldMessenger.of(context);
     final nombreController = TextEditingController(
       text: sector?.data() != null
           ? (sector!.data() as Map<String, dynamic>)['nombre'] ?? ''
@@ -1214,7 +1205,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                         .collection('sectores')
                         .add(sectorData);
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      messenger.showSnackBar(
                         SnackBar(
                           content: Text(
                             'Sector agregado exitosamente',
@@ -1228,7 +1219,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                   } else {
                     await sector.reference.update({'nombre': nombre});
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      messenger.showSnackBar(
                         SnackBar(
                           content: Text(
                             'Sector actualizado exitosamente',
@@ -1242,7 +1233,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       SnackBar(
                         content: Text(
                           'Error al guardar el sector: $e',
@@ -1271,6 +1262,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
   }
 
   Future<void> _reabrirSector(DocumentSnapshot sector) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await sector.reference.update({
         'turnoCerrado': false,
@@ -1278,7 +1270,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
         'stockInicialIngresado': false,
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text(
               'Sector reabierto. Ya puede ser seleccionado por vendedores.',
@@ -1291,7 +1283,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Error al reabrir: $e', style: GoogleFonts.poppins()),
             backgroundColor: Colors.red,
@@ -1303,6 +1295,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
   }
 
   Future<void> _eliminarSector(DocumentSnapshot sector) async {
+    final messenger = ScaffoldMessenger.of(context);
     final nombre =
         (sector.data() as Map<String, dynamic>)['nombre'] ?? 'este sector';
 
@@ -1353,7 +1346,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
 
         await sector.reference.delete();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          messenger.showSnackBar(
             SnackBar(
               content: Text(
                 'Sector eliminado exitosamente',
@@ -1366,7 +1359,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          messenger.showSnackBar(
             SnackBar(
               content: Text(
                 'Error al eliminar el sector: $e',

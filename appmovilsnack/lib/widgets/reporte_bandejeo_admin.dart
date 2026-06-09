@@ -119,7 +119,7 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String?>(
-            value: _eventoSeleccionadoId,
+            initialValue: _eventoSeleccionadoId,
             decoration: InputDecoration(
               labelText: 'Evento',
               filled: true,

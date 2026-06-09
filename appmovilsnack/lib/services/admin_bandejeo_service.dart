@@ -53,24 +53,24 @@ class AdminBandejeoSectorResumen {
   int get bandejerosCerrados => bandejeros.where((b) => b.cerrado).length;
 
   int get rondasRendidas =>
-      bandejeros.fold(0, (sum, b) => sum + b.rondasRendidas);
+      bandejeros.fold(0, (total, b) => total + b.rondasRendidas);
 
   int get rondasEnCurso =>
       bandejeros.where((b) => b.tieneRondaEnCurso).length;
 
   double get totalVendido =>
-      bandejeros.fold(0.0, (sum, b) => sum + b.totalVendido);
+      bandejeros.fold(0.0, (total, b) => total + b.totalVendido);
 
   double get valorEnBandeja =>
-      bandejeros.fold(0.0, (sum, b) => sum + b.valorEnBandeja);
+      bandejeros.fold(0.0, (total, b) => total + b.valorEnBandeja);
 
   double get cajaVueltoActiva => bandejeros
       .where((b) => !b.cerrado)
-      .fold(0.0, (sum, b) => sum + b.cajaVuelto);
+      .fold(0.0, (total, b) => total + b.cajaVuelto);
 
   double get efectivoEstimadoSector => bandejeros.fold(
         0.0,
-        (sum, b) => sum + b.efectivoEstimadoEnCalles,
+        (total, b) => total + b.efectivoEstimadoEnCalles,
       );
 }
 

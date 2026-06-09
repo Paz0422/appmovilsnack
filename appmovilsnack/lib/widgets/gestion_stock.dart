@@ -472,7 +472,7 @@ class _GestionStockState extends State<GestionStock> {
   String _resumenStockLectura() {
     final totalUnidades = _items.fold<int>(
       0,
-      (sum, item) => sum + (item['cantidad'] as int? ?? 0),
+      (total, item) => total + (item['cantidad'] as int? ?? 0),
     );
     final n = _items.length;
     return '$n producto${n == 1 ? '' : 's'} · $totalUnidades u. en stock';

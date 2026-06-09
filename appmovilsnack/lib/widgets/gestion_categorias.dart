@@ -12,7 +12,7 @@ class GestionCategorias extends StatefulWidget {
 }
 
 class _GestionCategoriasState extends State<GestionCategorias> {
-  List<QueryDocumentSnapshot> _docs = [];
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _docs = [];
   bool _loading = true;
   String? _error;
 
@@ -54,6 +54,7 @@ class _GestionCategoriasState extends State<GestionCategorias> {
   }
 
   Future<void> _agregarCategoria() async {
+    final messenger = ScaffoldMessenger.of(context);
     String nombre = '';
     String iconoSeleccionado = 'restaurant';
 
@@ -164,9 +165,7 @@ class _GestionCategoriasState extends State<GestionCategorias> {
 
     try {
       final col = FirebaseFirestore.instance.collection('categorias');
-      final ultimo = _docs.isEmpty
-          ? null
-          : _docs.last.data() as Map<String, dynamic>?;
+      final ultimo = _docs.isEmpty ? null : _docs.last.data();
       final orden = _docs.isEmpty
           ? 0
           : (ultimo?['orden'] as num? ?? 0).toInt() + 1;
@@ -176,7 +175,7 @@ class _GestionCategoriasState extends State<GestionCategorias> {
         'orden': orden,
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text(
               'Categoría "$nombre" agregada',
@@ -189,7 +188,7 @@ class _GestionCategoriasState extends State<GestionCategorias> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Error: $e', style: GoogleFonts.poppins()),
             backgroundColor: Colors.red,
@@ -199,9 +198,12 @@ class _GestionCategoriasState extends State<GestionCategorias> {
     }
   }
 
-  Future<void> _eliminarCategoria(QueryDocumentSnapshot doc) async {
-    final data = doc.data() as Map<String, dynamic>?;
-    final nombre = data?['nombre']?.toString() ?? 'esta categoría';
+  Future<void> _eliminarCategoria(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final data = doc.data();
+    final nombre = data['nombre']?.toString() ?? 'esta categoría';
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -235,7 +237,7 @@ class _GestionCategoriasState extends State<GestionCategorias> {
     try {
       await doc.reference.delete();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Categoría eliminada', style: GoogleFonts.poppins()),
             backgroundColor: Colors.green,
@@ -245,7 +247,7 @@ class _GestionCategoriasState extends State<GestionCategorias> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Error: $e', style: GoogleFonts.poppins()),
             backgroundColor: Colors.red,
@@ -294,9 +296,9 @@ class _GestionCategoriasState extends State<GestionCategorias> {
               itemCount: _docs.length,
               itemBuilder: (context, index) {
                 final doc = _docs[index];
-                final data = doc.data() as Map<String, dynamic>?;
-                final nombre = data?['nombre']?.toString() ?? 'Sin nombre';
-                final icono = data?['icono']?.toString() ?? 'restaurant';
+                final data = doc.data();
+                final nombre = data['nombre']?.toString() ?? 'Sin nombre';
+                final icono = data['icono']?.toString() ?? 'restaurant';
                 return Card(
                   margin: const EdgeInsets.only(bottom: 10),
                   child: ListTile(
