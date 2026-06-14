@@ -18,6 +18,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
   bool _isLoading = true;
   String? _errorMessage;
   List<Map<String, dynamic>> _mermas = [];
+  List<Map<String, String>> _sectoresCatalogo = [];
   String? _eventoSeleccionadoId;
   String? _sectorSeleccionadoId;
 
@@ -32,6 +33,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
           : await FirestoreHelpers.getEventos();
 
       final List<Map<String, dynamic>> list = [];
+      final List<Map<String, String>> sectoresCatalogo = [];
 
       for (var eventoDoc in eventosSnapshot.docs) {
         final eventoId = eventoDoc.id;
@@ -48,14 +50,18 @@ class _ReporteMermasState extends State<ReporteMermas> {
                   ?.toString() ??
               'Sin sector';
 
-          final mermasSnapshot = await FirebaseFirestore.instance
-              .collection('eventos')
-              .doc(eventoId)
-              .collection('sectores')
-              .doc(sectorId)
-              .collection('mermas')
-              .orderBy('fecha', descending: true)
-              .get();
+          sectoresCatalogo.add({
+            'id': '$eventoId|$sectorId',
+            'eventoId': eventoId,
+            'sectorId': sectorId,
+            'nombre': sectorNombre,
+            'eventoNombre': eventoNombre,
+          });
+
+          final mermasSnapshot =
+              await FirestoreHelpers.refMermasSector(eventoId, sectorId)
+                  .orderBy('fecha', descending: true)
+                  .get();
 
           for (var mermaDoc in mermasSnapshot.docs) {
             final d = mermaDoc.data();
@@ -94,9 +100,15 @@ class _ReporteMermasState extends State<ReporteMermas> {
         _sectorSeleccionadoId = null;
       }
 
+      if (_sectorSeleccionadoId != null &&
+          !_sectoresCatalogo.any((s) => s['id'] == _sectorSeleccionadoId)) {
+        _sectorSeleccionadoId = null;
+      }
+
       if (mounted) {
         setState(() {
           _mermas = list;
+          _sectoresCatalogo = sectoresCatalogo;
           _isLoading = false;
         });
       }
@@ -123,8 +135,9 @@ class _ReporteMermasState extends State<ReporteMermas> {
         return false;
       }
       if (_sectorSeleccionadoId == null) return true;
-      if (_sectorSeleccionadoId!.contains('|')) {
-        final parts = _sectorSeleccionadoId!.split('|');
+
+      final parts = _sectorSeleccionadoId!.split('|');
+      if (parts.length == 2) {
         return m['eventoId'] == parts[0] && m['sectorId'] == parts[1];
       }
       return m['sectorId'] == _sectorSeleccionadoId;
@@ -149,34 +162,22 @@ class _ReporteMermasState extends State<ReporteMermas> {
   List<Map<String, String>> get _sectoresOpciones {
     final List<Map<String, String>> op = [];
     final String? eidSel = _eventoSeleccionadoId;
-    if (eidSel != null) {
-      final Set<String> sidSet = {};
-      for (var m in _mermas) {
-        if (m['eventoId'] != eidSel) continue;
-        final sid = m['sectorId'] as String? ?? '';
-        final snom = m['sectorNombre'] as String? ?? 'Sector';
-        if (sid.isNotEmpty && !sidSet.contains(sid)) {
-          sidSet.add(sid);
-          op.add({'id': sid, 'nombre': snom});
-        }
-      }
-      op.sort((a, b) => (a['nombre'] ?? '').compareTo(b['nombre'] ?? ''));
-    } else {
-      final Set<String> compSet = {};
-      for (var m in _mermas) {
-        final eid = m['eventoId'] as String? ?? '';
-        final enom = m['eventoNombre'] as String? ?? '';
-        final sid = m['sectorId'] as String? ?? '';
-        final snom = m['sectorNombre'] as String? ?? 'Sector';
-        if (eid.isEmpty || sid.isEmpty) continue;
-        final comp = '$eid|$sid';
-        if (!compSet.contains(comp)) {
-          compSet.add(comp);
-          op.add({'id': comp, 'nombre': '$snom ($enom)'});
-        }
-      }
-      op.sort((a, b) => (a['nombre'] ?? '').compareTo(b['nombre'] ?? ''));
+    final fuente = eidSel == null
+        ? _sectoresCatalogo
+        : _sectoresCatalogo.where((s) => s['eventoId'] == eidSel);
+
+    for (final sector in fuente) {
+      final id = sector['id'] ?? '';
+      if (id.isEmpty) continue;
+      final nombre = sector['nombre'] ?? 'Sector';
+      final eventoNombre = sector['eventoNombre'] ?? '';
+      op.add({
+        'id': id,
+        'nombre': eidSel == null ? '$nombre ($eventoNombre)' : nombre,
+      });
     }
+
+    op.sort((a, b) => (a['nombre'] ?? '').compareTo(b['nombre'] ?? ''));
     return op;
   }
 

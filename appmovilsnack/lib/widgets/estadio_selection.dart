@@ -294,7 +294,7 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                     return;
                   }
                   if (!mounted) return;
-                  Navigator.pushReplacement(
+                  Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => HomeVendedor(

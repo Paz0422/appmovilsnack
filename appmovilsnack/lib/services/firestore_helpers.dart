@@ -59,4 +59,40 @@ class FirestoreHelpers {
         .doc(sectorId)
         .get();
   }
+
+  static CollectionReference<Map<String, dynamic>> refStockSector(
+    String eventoId,
+    String sectorId,
+  ) {
+    return _firestore
+        .collection('eventos')
+        .doc(eventoId)
+        .collection('sectores')
+        .doc(sectorId)
+        .collection('stock');
+  }
+
+  static CollectionReference<Map<String, dynamic>> refMermasSector(
+    String eventoId,
+    String sectorId,
+  ) {
+    return _firestore
+        .collection('eventos')
+        .doc(eventoId)
+        .collection('sectores')
+        .doc(sectorId)
+        .collection('mermas');
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>> streamMermasSector(
+    String eventoId,
+    String sectorId, {
+    bool ordenarPorFecha = false,
+  }) {
+    final col = refMermasSector(eventoId, sectorId);
+    if (ordenarPorFecha) {
+      return col.orderBy('fecha', descending: true).snapshots();
+    }
+    return col.snapshots();
+  }
 }

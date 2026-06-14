@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart'
 
 import 'firebase_options.dart';
 import 'auth/auth_gate.dart';
+import 'auth/auth_manager.dart';
+import 'core/app_navigator.dart';
 import 'core/app_theme.dart';
 
 void main() async {
@@ -53,6 +55,7 @@ void main() async {
     }
   }
 
+  AuthManager().configurarPantallaRaiz(const AuthGate());
   runApp(const MyApp());
 }
 
@@ -64,6 +67,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Fusion eventos',
       debugShowCheckedModeBanner: false,
+      navigatorKey: appNavigatorKey,
       theme: AppTheme.light,
       home: const AuthGate(),
     );

@@ -782,9 +782,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         }
       }
 
-      await FirebaseAuth.instance.signOut();
-      if (!mounted) return;
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      await AuthManager().cerrarSesion();
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);

@@ -1,10 +1,10 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:front_appsnack/screens/admin/home_admin.dart';
-import 'package:front_appsnack/widgets/estadio_selection.dart';
-import 'package:front_appsnack/auth/login_screen.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
+import 'package:front_appsnack/auth/login_screen.dart';
+import 'package:front_appsnack/core/app_theme.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -14,81 +14,111 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
+  final _auth = AuthManager();
+  StreamSubscription<User?>? _authSub;
+
+  User? _user;
+  Widget? _pantalla;
+  bool _resolviendo = true;
+  String? _errorPerfil;
+
   @override
   void initState() {
     super.initState();
-    // Verificar si hay una sesión existente al iniciar la app
-    _checkExistingSession();
+    _iniciar();
   }
 
-  Future<void> _checkExistingSession() async {
+  Future<void> _iniciar() async {
+    await _auth.asegurarSesionLista();
+    _authSub = FirebaseAuth.instance.authStateChanges().listen(_onAuthChange);
+    await _onAuthChange(FirebaseAuth.instance.currentUser);
+  }
+
+  Future<void> _onAuthChange(User? user) async {
+    if (!mounted) return;
+
+    if (user == null) {
+      setState(() {
+        _user = null;
+        _pantalla = null;
+        _resolviendo = false;
+        _errorPerfil = null;
+      });
+      return;
+    }
+
+    final cache = _auth.perfilEnCache();
+    if (cache != null) {
+      setState(() {
+        _user = user;
+        _pantalla = _auth.pantallaDesdeDocumento(cache);
+        _resolviendo = false;
+        _errorPerfil = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _user = user;
+      _resolviendo = true;
+      _errorPerfil = null;
+    });
+
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        // Hay una sesión activa, verificar que sea válida
-        await user.reload();
+      final perfil = await _auth.resolverPerfil(user);
+      if (!mounted) return;
+
+      if (perfil == null) {
+        await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
+        setState(() {
+          _user = null;
+          _pantalla = null;
+          _resolviendo = false;
+          _errorPerfil =
+              'No encontramos tu perfil. Pide al administrador que verifique tu cuenta.';
+        });
+        return;
       }
-    } catch (e) {
-      // Si hay un error (por ejemplo, sesión inválida), cerrar sesión
+
+      setState(() {
+        _pantalla = _auth.pantallaDesdeDocumento(perfil);
+        _resolviendo = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
       await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      setState(() {
+        _user = null;
+        _pantalla = null;
+        _resolviendo = false;
+        _errorPerfil =
+            'No pudimos cargar tu perfil. Revisa tu conexión e intenta de nuevo.';
+      });
     }
   }
 
   @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: StreamBuilder<User?>(
-        // 1. Escuchamos el estado de autenticación de Firebase
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, authSnapshot) {
-          // Si está esperando, muestra un cargador
-          if (authSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    if (_user == null) {
+      return LoginScreen(mensajeInicial: _errorPerfil);
+    }
 
-          // Si el usuario TIENE sesión iniciada
-          if (authSnapshot.hasData) {
-            final user = authSnapshot.data!;
+    if (_resolviendo || _pantalla == null) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.accent),
+        ),
+      );
+    }
 
-            // 2. Ahora que sabemos que está logueado, buscamos sus datos en Firestore
-            return FutureBuilder<DocumentSnapshot>(
-              future: FirebaseFirestore.instance
-                  .collection('usuarios')
-                  .doc(user.uid)
-                  .get(),
-              builder: (context, userSnapshot) {
-                // Mientras busca los datos del usuario...
-                if (userSnapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (userSnapshot.hasError ||
-                    !userSnapshot.hasData ||
-                    !userSnapshot.data!.exists) {
-                  // Lo mandamos a la pantalla de login para evitar problemas.
-                  // También podrías mostrar un mensaje de error.
-                  return const LoginScreen();
-                }
-
-                // 3. ¡Tenemos los datos del vendedor! Aplicamos la misma lógica del signIn.
-                final userData =
-                    userSnapshot.data!.data() as Map<String, dynamic>;
-                final userRole = AuthManager.normalizarRol(userData['rol']?.toString());
-
-                if (userRole == 'admin') {
-                  return const HomeAdmin(); // Admin
-                } else {
-                  return const EstadioSelection(); // Vendedor sin asignar
-                }
-              },
-            );
-          }
-          // Si el usuario NO tiene sesión iniciada
-          else {
-            return const LoginScreen();
-          }
-        },
-      ),
-    );
+    return _pantalla!;
   }
 }

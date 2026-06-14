@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:front_appsnack/auth/login_screen.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:front_appsnack/widgets/gestion_stock.dart';
@@ -175,7 +174,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
                 tooltip: 'Volver al panel de administración',
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: _volverAlPanelAdmin,
               )
             : null,
         title: Row(
@@ -677,6 +676,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
             context,
             MaterialPageRoute(
               builder: (context) => RegistroMerma(
+                key: ValueKey('mermas-${widget.eventId}-$_currentSectorId'),
                 eventoId: widget.eventId,
                 sectorId: _currentSectorId,
                 nombreSector: _currentSectorNombre,
@@ -986,8 +986,12 @@ class _HomeVendedorState extends State<HomeVendedor> {
     );
   }
 
+  void _volverAlPanelAdmin() {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
   void _cambiarEvento() {
-    Navigator.pushReplacement(
+    Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => EstadioSelection(fromAdmin: widget.fromAdmin),
@@ -1030,13 +1034,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
   }
 
   Future<void> _cerrarSesion() async {
-    await FirebaseAuth.instance.signOut();
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-      (Route<dynamic> route) => false,
-    );
+    await AuthManager().cerrarSesion();
   }
 }
 

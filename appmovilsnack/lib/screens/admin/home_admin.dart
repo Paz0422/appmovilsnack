@@ -1,8 +1,7 @@
 // lib/home_admin.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:front_appsnack/auth/login_screen.dart';
+import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/widgets/dashboard_card.dart';
 import 'package:front_appsnack/widgets/inventory_management.dart';
 import 'package:front_appsnack/widgets/asignacion_personal.dart';
@@ -461,16 +460,7 @@ class _HomeAdminState extends State<HomeAdmin> {
               title: 'Cerrar Sesión',
               onTap: () async {
                 Navigator.pop(context);
-                await FirebaseAuth.instance.signOut();
-                if (mounted) {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const LoginScreen(),
-                    ),
-                    (Route<dynamic> route) => false,
-                  );
-                }
+                await AuthManager().cerrarSesion();
               },
             ),
             const SizedBox(height: 20),

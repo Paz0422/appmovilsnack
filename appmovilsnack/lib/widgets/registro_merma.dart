@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // Paleta de colores basada en el logo "Fusión"
@@ -21,19 +22,36 @@ class RegistroMerma extends StatelessWidget {
     required this.nombreSector,
   });
 
+  String get _scopeKey => '$eventoId|$sectorId';
+
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
+    return KeyedSubtree(
+      key: ValueKey('registro-merma-$_scopeKey'),
+      child: DefaultTabController(
       length: 2,
       child: Scaffold(
         backgroundColor: _backgroundColor,
         appBar: AppBar(
-          title: Text(
-            'Registro de Mermas',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.bold,
-              color: _accentColor,
-            ),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Registro de Mermas',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  color: _accentColor,
+                  fontSize: 18,
+                ),
+              ),
+              Text(
+                nombreSector,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: Colors.white70,
+                ),
+              ),
+            ],
           ),
           backgroundColor: _primaryColor,
           foregroundColor: _accentColor,
@@ -73,6 +91,7 @@ class RegistroMerma extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }
@@ -89,20 +108,27 @@ class _PerdidaTotalAcumulada extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(eventoId)
-          .collection('sectores')
-          .doc(sectorId)
-          .collection('mermas')
-          .snapshots(),
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      key: ValueKey('mermas-total-$eventoId-$sectorId'),
+      stream: FirestoreHelpers.streamMermasSector(eventoId, sectorId),
       builder: (context, snapshot) {
         double perdidaTotal = 0.0;
 
         if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
           for (var doc in snapshot.data!.docs) {
-            final data = doc.data() as Map<String, dynamic>;
+            final data = doc.data();
+            final docEvento = data['eventoId']?.toString();
+            final docSector = data['sectorId']?.toString();
+            if (docEvento != null &&
+                docEvento.isNotEmpty &&
+                docEvento != eventoId) {
+              continue;
+            }
+            if (docSector != null &&
+                docSector.isNotEmpty &&
+                docSector != sectorId) {
+              continue;
+            }
             final cantidadPerdida = data['cantidadPerdida'] as int? ?? 0;
             final precio = (data['precio'] as num?)?.toDouble() ?? 0.0;
             perdidaTotal += cantidadPerdida * precio;
@@ -567,13 +593,9 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
   Widget build(BuildContext context) {
     final tieneCarrito = _carrito.isNotEmpty;
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(widget.eventoId)
-          .collection('sectores')
-          .doc(widget.sectorId)
-          .collection('stock')
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      key: ValueKey('mermas-stock-${widget.eventoId}-${widget.sectorId}'),
+      stream: FirestoreHelpers.refStockSector(widget.eventoId, widget.sectorId)
           .orderBy('nombre')
           .snapshots(),
       builder: (context, snapshot) {
@@ -1012,12 +1034,7 @@ Future<void> _registrarMermasEnLote({
 
   await FirebaseFirestore.instance.runTransaction((transaction) async {
     for (final linea in lineas) {
-      final stockRef = FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(eventoId)
-          .collection('sectores')
-          .doc(sectorId)
-          .collection('stock')
+      final stockRef = FirestoreHelpers.refStockSector(eventoId, sectorId)
           .doc(linea.productoId);
 
       final stockDoc = await transaction.get(stockRef);
@@ -1039,15 +1056,12 @@ Future<void> _registrarMermasEnLote({
         'cantidad': cantidadActual - linea.cantidad,
       });
 
-      final mermaRef = FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(eventoId)
-          .collection('sectores')
-          .doc(sectorId)
-          .collection('mermas')
-          .doc();
+      final mermaRef =
+          FirestoreHelpers.refMermasSector(eventoId, sectorId).doc();
 
       transaction.set(mermaRef, {
+        'eventoId': eventoId,
+        'sectorId': sectorId,
         'fecha': FieldValue.serverTimestamp(),
         'loteId': loteId,
         'totalProductosLote': lineas.length,
@@ -1071,15 +1085,13 @@ class _TabHistorial extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(eventoId)
-          .collection('sectores')
-          .doc(sectorId)
-          .collection('mermas')
-          .orderBy('fecha', descending: true)
-          .snapshots(),
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      key: ValueKey('mermas-historial-$eventoId-$sectorId'),
+      stream: FirestoreHelpers.streamMermasSector(
+        eventoId,
+        sectorId,
+        ordenarPorFecha: true,
+      ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(child: CircularProgressIndicator(color: _accentColor));
@@ -1105,7 +1117,28 @@ class _TabHistorial extends StatelessWidget {
           );
         }
 
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        if (!snapshot.hasData) {
+          return Center(child: CircularProgressIndicator(color: _accentColor));
+        }
+
+        final mermas = snapshot.data!.docs.where((doc) {
+          final data = doc.data();
+          final docEvento = data['eventoId']?.toString();
+          final docSector = data['sectorId']?.toString();
+          if (docEvento != null &&
+              docEvento.isNotEmpty &&
+              docEvento != eventoId) {
+            return false;
+          }
+          if (docSector != null &&
+              docSector.isNotEmpty &&
+              docSector != sectorId) {
+            return false;
+          }
+          return true;
+        }).toList();
+
+        if (mermas.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -1125,7 +1158,7 @@ class _TabHistorial extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Las mermas registradas aparecerán aquí',
+                  'Las mermas de este sector aparecerán aquí',
                   style: GoogleFonts.poppins(
                     fontSize: 12,
                     color: _secondaryColor.withValues(alpha: 0.7),
@@ -1136,14 +1169,12 @@ class _TabHistorial extends StatelessWidget {
           );
         }
 
-        final mermas = snapshot.data!.docs;
-
         return ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: mermas.length,
           itemBuilder: (context, index) {
             final mermaDoc = mermas[index];
-            final data = mermaDoc.data() as Map<String, dynamic>;
+            final data = mermaDoc.data();
             final nombreProducto =
                 data['nombreProducto'] as String? ?? 'Sin nombre';
             final cantidadPerdida = data['cantidadPerdida'] as int? ?? 0;

@@ -1,21 +1,18 @@
 import 'dart:ui';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
-import 'package:front_appsnack/screens/admin/home_admin.dart';
-import 'package:front_appsnack/widgets/estadio_selection.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:wave/wave.dart';
 import 'package:wave/config.dart';
-import 'package:front_appsnack/auth/firebase_auth_messages.dart';
 import 'package:front_appsnack/auth/register_screen.dart';
 import 'package:front_appsnack/auth/reset_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String? mensajeInicial;
+
+  const LoginScreen({super.key, this.mensajeInicial});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -25,6 +22,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
+  bool _cargando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final mensaje = widget.mensajeInicial;
+    if (mensaje != null && mensaje.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showErrorSnackBar(mensaje);
+      });
+    }
+  }
 
   final TextStyle _inputStyle = GoogleFonts.plusJakartaSans(
     fontSize: 15,
@@ -73,82 +82,17 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> signIn() async {
-    final username = _usernameController.text.trim();
-    final password = _passwordController.text.trim();
+    if (_cargando) return;
 
-    if (username.isEmpty || password.isEmpty) {
-      _showErrorSnackBar('Por favor, completa todos los campos.');
-      return;
-    }
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: AppColors.accent, strokeWidth: 3),
-      ),
+    setState(() => _cargando = true);
+    final error = await AuthManager().iniciarSesion(
+      username: _usernameController.text,
+      password: _passwordController.text,
     );
+    if (!mounted) return;
+    setState(() => _cargando = false);
 
-    try {
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('usuarios')
-          .where('username', isEqualTo: username)
-          .limit(1)
-          .get();
-
-      if (querySnapshot.docs.isEmpty) {
-        if (mounted) Navigator.of(context).pop();
-        _showErrorSnackBar(
-          'Usuario no encontrado. Revisa el nombre o pide que te den de alta.',
-        );
-        return;
-      }
-
-      final userDocument = querySnapshot.docs.first;
-      final userData = userDocument.data();
-
-      final emailRaw = userData['email'];
-      final email = emailRaw is String
-          ? emailRaw.trim()
-          : emailRaw?.toString().trim();
-      if (email == null || email.isEmpty) {
-        if (mounted) Navigator.of(context).pop();
-        _showErrorSnackBar(
-          'Falta el correo en tu perfil. Pide al administrador que lo agregue.',
-        );
-        return;
-      }
-
-      final userRole = AuthManager.normalizarRol(userData['rol']?.toString());
-
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      AuthManager().loggedInVendor = userDocument;
-
-      if (mounted) {
-        Navigator.of(context).pop(); // Cierra el indicador de carga
-
-        // Lógica de redirección
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (context) => (userRole == 'admin')
-                ? const HomeAdmin() // Si es admin, va a su home
-                : const EstadioSelection(), // Si es vendedor, va a la selección del estadio
-          ),
-          (route) => false, // Elimina todas las rutas anteriores de la pila
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) Navigator.of(context).pop();
-      _showErrorSnackBar(mensajeInicioSesion(e));
-    } catch (e) {
-      if (mounted) Navigator.of(context).pop();
-      _showErrorSnackBar(mensajeErrorInesperado(e));
-    }
+    if (error != null) _showErrorSnackBar(error);
   }
 
   void _navigateToRegister() {
@@ -301,7 +245,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: signIn,
+                            onPressed: _cargando ? null : signIn,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.accent,
                               foregroundColor: AppColors.primary,
@@ -311,7 +255,22 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               elevation: 0,
                             ),
-                            child: Text('Ingresar', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 16)),
+                            child: _cargando
+                                ? const SizedBox(
+                                    height: 22,
+                                    width: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: AppColors.primary,
+                                    ),
+                                  )
+                                : Text(
+                                    'Ingresar',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 16,
+                                    ),
+                                  ),
                           ),
                         )
                             .animate()

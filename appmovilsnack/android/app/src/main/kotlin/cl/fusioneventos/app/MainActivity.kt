@@ -1,4 +1,4 @@
-package com.example.front_appsnack
+package cl.fusioneventos.app
 
 import io.flutter.embedding.android.FlutterActivity
 
