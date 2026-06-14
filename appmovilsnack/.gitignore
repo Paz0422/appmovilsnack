@@ -58,7 +58,32 @@ GoogleService-Info.plist
 **/android/.gradle/
 firebase-debug.log
 firestore-debug.log
+ui-debug.log
 *.apk
 *.aab
+*.ipa
 coverage/
 Thumbs.db
+desktop.ini
+
+# Android signing y rutas locales (también en android/.gitignore)
+key.properties
+**/*.keystore
+**/*.jks
+**/local.properties
+*.hprof
+
+# Configuración local de Flutter/Dart
+pubspec_overrides.yaml
+devtools_options.yaml
+
+# Claves de servicio Firebase (nunca en el repo)
+*-firebase-adminsdk-*.json
+serviceAccount*.json
+
+# Evitar artefactos Flutter duplicados en la raíz del monorepo
+/pubspec.lock
+/.metadata
+/analysis_options.yaml
+/assets/
+/firebase.json
