@@ -3,8 +3,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/core/app_theme.dart';
 
 class StockReports extends StatefulWidget {
   const StockReports({super.key});
@@ -29,10 +31,10 @@ class _StockReportsState extends State<StockReports> {
   // Umbral de stock bajo (se puede hacer configurable)
   final int _stockBajoUmbral = 10;
 
-  final Color primaryColor = const Color(0xFF2B2B2B);
-  final Color accentColor = const Color(0xFFDABF41);
-  final Color secondaryColor = const Color(0xFF6B4D2F);
-  final Color backgroundColor = const Color(0xFFFDFBF7);
+  final Color primaryColor = AppColors.primaryLight;
+  final Color accentColor = AppColors.accent;
+  final Color secondaryColor = AppColors.secondary;
+  final Color backgroundColor = AppColors.surface;
 
   @override
   void initState() {
@@ -162,11 +164,8 @@ class _StockReportsState extends State<StockReports> {
     if (eventosSnapshot.docs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'No hay eventos disponibles',
-            style: GoogleFonts.poppins(),
-          ),
-          backgroundColor: Colors.orange,
+          content: Text('No hay eventos disponibles', style: AppFonts.inter()),
+          backgroundColor: AppColors.avisoFuerte,
         ),
       );
       return;
@@ -178,7 +177,7 @@ class _StockReportsState extends State<StockReports> {
         backgroundColor: backgroundColor,
         title: Text(
           'Seleccionar Evento',
-          style: GoogleFonts.poppins(
+          style: AppFonts.inter(
             fontWeight: FontWeight.bold,
             color: primaryColor,
           ),
@@ -193,7 +192,7 @@ class _StockReportsState extends State<StockReports> {
                 return ListTile(
                   title: Text(
                     'Todos los eventos',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                    style: AppFonts.inter(fontWeight: FontWeight.bold),
                   ),
                   onTap: () {
                     Navigator.pop(context, {'id': '', 'nombre': 'Todos'});
@@ -207,7 +206,7 @@ class _StockReportsState extends State<StockReports> {
                   eventoData['nombre']?.toString() ?? 'Sin nombre';
 
               return ListTile(
-                title: Text(eventoNombre, style: GoogleFonts.poppins()),
+                title: Text(eventoNombre, style: AppFonts.inter()),
                 onTap: () {
                   Navigator.pop(context, {
                     'id': eventoDoc.id,
@@ -241,9 +240,9 @@ class _StockReportsState extends State<StockReports> {
         SnackBar(
           content: Text(
             'Primero seleccione un evento',
-            style: GoogleFonts.poppins(),
+            style: AppFonts.inter(),
           ),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppColors.avisoFuerte,
         ),
       );
       return;
@@ -260,11 +259,8 @@ class _StockReportsState extends State<StockReports> {
     if (sectoresSnapshot.docs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'No hay sectores disponibles',
-            style: GoogleFonts.poppins(),
-          ),
-          backgroundColor: Colors.orange,
+          content: Text('No hay sectores disponibles', style: AppFonts.inter()),
+          backgroundColor: AppColors.avisoFuerte,
         ),
       );
       return;
@@ -276,7 +272,7 @@ class _StockReportsState extends State<StockReports> {
         backgroundColor: backgroundColor,
         title: Text(
           'Seleccionar Sector',
-          style: GoogleFonts.poppins(
+          style: AppFonts.inter(
             fontWeight: FontWeight.bold,
             color: primaryColor,
           ),
@@ -291,7 +287,7 @@ class _StockReportsState extends State<StockReports> {
                 return ListTile(
                   title: Text(
                     'Todos los sectores',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                    style: AppFonts.inter(fontWeight: FontWeight.bold),
                   ),
                   onTap: () {
                     Navigator.pop(context, {'id': '', 'nombre': 'Todos'});
@@ -305,7 +301,7 @@ class _StockReportsState extends State<StockReports> {
                   sectorData['nombre']?.toString() ?? 'Sin nombre';
 
               return ListTile(
-                title: Text(sectorNombre, style: GoogleFonts.poppins()),
+                title: Text(sectorNombre, style: AppFonts.inter()),
                 onTap: () {
                   Navigator.pop(context, {
                     'id': sectorDoc.id,
@@ -370,14 +366,12 @@ class _StockReportsState extends State<StockReports> {
       backgroundColor: backgroundColor,
       appBar: AppBar(
         title: Text(
-          'Reportes de Stock',
-          style: GoogleFonts.poppins(
+          'Stock por sector',
+          style: AppFonts.inter(
             fontWeight: FontWeight.bold,
             color: accentColor,
           ),
         ),
-        backgroundColor: primaryColor,
-        foregroundColor: accentColor,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -387,7 +381,7 @@ class _StockReportsState extends State<StockReports> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: accentColor))
+          ? Center(child: CircularProgressIndicator())
           : _errorMessage != null
           ? Center(
               child: Padding(
@@ -395,12 +389,12 @@ class _StockReportsState extends State<StockReports> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.error_outline, size: 64, color: Colors.red),
+                    Icon(Icons.error_outline, size: 64, color: AppColors.error),
                     const SizedBox(height: 16),
                     Text(
                       _errorMessage!,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
+                      style: AppFonts.inter(
                         color: secondaryColor,
                         fontSize: 16,
                       ),
@@ -409,12 +403,12 @@ class _StockReportsState extends State<StockReports> {
                     ElevatedButton(
                       onPressed: _cargarReportesStock,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: accentColor,
-                        foregroundColor: primaryColor,
+                        backgroundColor: AppColors.dorado,
+                        foregroundColor: AppColors.negro,
                       ),
                       child: Text(
                         'Reintentar',
-                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                        style: AppFonts.inter(fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -426,7 +420,7 @@ class _StockReportsState extends State<StockReports> {
                 // Filtros y búsqueda
                 Container(
                   padding: const EdgeInsets.all(16),
-                  color: Colors.white,
+                  color: AppColors.tarjeta,
                   child: Column(
                     children: [
                       // Filtros de evento y sector
@@ -439,7 +433,7 @@ class _StockReportsState extends State<StockReports> {
                               label: Text(
                                 _eventoSeleccionadoNombre ??
                                     'Todos los eventos',
-                                style: GoogleFonts.poppins(fontSize: 12),
+                                style: AppFonts.inter(fontSize: 14),
                                 overflow: TextOverflow.ellipsis,
                               ),
                               style: ElevatedButton.styleFrom(
@@ -462,7 +456,7 @@ class _StockReportsState extends State<StockReports> {
                               label: Text(
                                 _sectorSeleccionadoNombre ??
                                     'Todos los sectores',
-                                style: GoogleFonts.poppins(fontSize: 12),
+                                style: AppFonts.inter(fontSize: 14),
                                 overflow: TextOverflow.ellipsis,
                               ),
                               style: ElevatedButton.styleFrom(
@@ -508,7 +502,7 @@ class _StockReportsState extends State<StockReports> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           filled: true,
-                          fillColor: Colors.grey[100],
+                          fillColor: AppColors.tarjetaAlta,
                         ),
                       ),
                     ],
@@ -518,7 +512,7 @@ class _StockReportsState extends State<StockReports> {
                 // Estadísticas
                 Container(
                   padding: const EdgeInsets.all(16),
-                  color: Colors.white,
+                  color: AppColors.tarjeta,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
@@ -532,13 +526,13 @@ class _StockReportsState extends State<StockReports> {
                         icon: Icons.warning_amber_rounded,
                         label: 'Stock Bajo',
                         value: estadisticas['productosConStockBajo'].toString(),
-                        color: Colors.orange,
+                        color: AppColors.aviso,
                       ),
                       _StatCard(
                         icon: Icons.error_outline,
                         label: 'Sin Stock',
                         value: estadisticas['productosSinStock'].toString(),
-                        color: Colors.red,
+                        color: AppColors.error,
                       ),
                     ],
                   ),
@@ -547,31 +541,12 @@ class _StockReportsState extends State<StockReports> {
                 // Lista de productos
                 Expanded(
                   child: _stockDataFiltrados.isEmpty
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24.0),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.inventory_2_outlined,
-                                  size: 64,
-                                  color: secondaryColor.withValues(alpha: 0.5),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No hay datos de stock disponibles',
-                                  style: GoogleFonts.poppins(
-                                    color: secondaryColor,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
+                      ? EstadoVacio(titulo: 'No hay datos de stock disponibles')
                       : ListView.builder(
-                          padding: conMargenInferior(context, const EdgeInsets.all(16)),
+                          padding: conMargenInferior(
+                            context,
+                            const EdgeInsets.all(16),
+                          ),
                           itemCount: _stockDataFiltrados.length,
                           itemBuilder: (context, index) {
                             final item = _stockDataFiltrados[index];
@@ -592,9 +567,9 @@ class _StockReportsState extends State<StockReports> {
                                 borderRadius: BorderRadius.circular(12),
                                 side: BorderSide(
                                   color: isSinStock
-                                      ? Colors.red
+                                      ? AppColors.error
                                       : isStockBajo
-                                      ? Colors.orange
+                                      ? AppColors.aviso
                                       : Colors.transparent,
                                   width: isSinStock || isStockBajo ? 2 : 0,
                                 ),
@@ -609,10 +584,10 @@ class _StockReportsState extends State<StockReports> {
                                   height: 50,
                                   decoration: BoxDecoration(
                                     color: isSinStock
-                                        ? Colors.red.withValues(alpha: 0.1)
+                                        ? AppColors.error.withValues(alpha: 0.1)
                                         : isStockBajo
-                                        ? Colors.orange.withValues(alpha: 0.1)
-                                        : Colors.green.withValues(alpha: 0.1),
+                                        ? AppColors.aviso.withValues(alpha: 0.1)
+                                        : AppColors.exito.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Icon(
@@ -622,16 +597,16 @@ class _StockReportsState extends State<StockReports> {
                                         ? Icons.warning_amber_rounded
                                         : Icons.check_circle_outline,
                                     color: isSinStock
-                                        ? Colors.red
+                                        ? AppColors.error
                                         : isStockBajo
-                                        ? Colors.orange
-                                        : Colors.green,
+                                        ? AppColors.aviso
+                                        : AppColors.exito,
                                     size: 28,
                                   ),
                                 ),
                                 title: Text(
                                   productoNombre,
-                                  style: GoogleFonts.poppins(
+                                  style: AppFonts.inter(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 16,
                                     color: primaryColor,
@@ -643,8 +618,8 @@ class _StockReportsState extends State<StockReports> {
                                     const SizedBox(height: 4),
                                     Text(
                                       '$eventoNombre - $sectorNombre',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 12,
+                                      style: AppFonts.inter(
+                                        fontSize: 14,
                                         color: secondaryColor,
                                       ),
                                     ),
@@ -652,8 +627,8 @@ class _StockReportsState extends State<StockReports> {
                                       const SizedBox(height: 2),
                                       Text(
                                         'Precio: \$${precio.toStringAsFixed(0)}',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 12,
+                                        style: AppFonts.inter(
+                                          fontSize: 14,
                                           color: secondaryColor,
                                         ),
                                       ),
@@ -666,21 +641,21 @@ class _StockReportsState extends State<StockReports> {
                                   children: [
                                     Text(
                                       'Stock',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 10,
+                                      style: AppFonts.inter(
+                                        fontSize: 14,
                                         color: secondaryColor,
                                       ),
                                     ),
                                     Text(
                                       stock.toString(),
-                                      style: GoogleFonts.poppins(
+                                      style: AppFonts.inter(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
                                         color: isSinStock
-                                            ? Colors.red
+                                            ? AppColors.error
                                             : isStockBajo
-                                            ? Colors.orange
-                                            : Colors.green,
+                                            ? AppColors.aviso
+                                            : AppColors.exito,
                                       ),
                                     ),
                                   ],
@@ -717,7 +692,7 @@ class _StatCard extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           value,
-          style: GoogleFonts.poppins(
+          style: AppFonts.inter(
             fontSize: 18,
             fontWeight: FontWeight.bold,
             color: color,
@@ -725,7 +700,7 @@ class _StatCard extends StatelessWidget {
         ),
         Text(
           label,
-          style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey[600]),
+          style: AppFonts.inter(fontSize: 14, color: AppColors.tintaSecundaria),
         ),
       ],
     );

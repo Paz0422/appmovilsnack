@@ -3,7 +3,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import '../core/app_theme.dart';
 import '../services/firestore_helpers.dart';
 import 'resumen_cierre_turno.dart';
@@ -94,15 +95,13 @@ class _CierresPartidosActivosState extends State<CierresPartidosActivos> {
       backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: Text(
-          'Cierres de partidos activos',
-          style: GoogleFonts.poppins(
+          'Cierres de turno',
+          style: AppFonts.inter(
             fontWeight: FontWeight.w600,
             color: AppColors.accent,
             fontSize: 18,
           ),
         ),
-        backgroundColor: AppColors.primaryLight,
-        foregroundColor: AppColors.accent,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -111,75 +110,36 @@ class _CierresPartidosActivosState extends State<CierresPartidosActivos> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: AppColors.accent))
+          ? Center(child: CircularProgressIndicator())
           : _errorMessage != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline, size: 48, color: AppColors.error),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Error al cargar',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _errorMessage!,
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            color: AppColors.onSurfaceVariant,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        TextButton.icon(
-                          onPressed: _cargar,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Reintentar'),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : _eventosConCierres.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          'No hay sectores cerrados en partidos activos',
-                          style: GoogleFonts.poppins(
-                            color: AppColors.onSurfaceVariant,
-                            fontSize: 14,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _cargar,
-                      color: AppColors.accent,
-                      child: ListView.builder(
-                        padding: conMargenInferior(context, const EdgeInsets.all(16)),
-                        itemCount: _eventosConCierres.length,
-                        itemBuilder: (context, index) {
-                          final evento = _eventosConCierres[index];
-                          return _buildCardEvento(evento);
-                        },
-                      ),
-                    ),
+          ? ErrorAmable(
+              titulo: 'No pudimos cargar los cierres',
+              detalle: _errorMessage,
+              onReintentar: _cargar,
+            )
+          : _eventosConCierres.isEmpty
+          ? EstadoVacio(titulo: 'No hay sectores cerrados en partidos activos')
+          : RefreshIndicator(
+              onRefresh: _cargar,
+              color: AppColors.dorado,
+              child: ListView.builder(
+                padding: conMargenInferior(context, const EdgeInsets.all(16)),
+                itemCount: _eventosConCierres.length,
+                itemBuilder: (context, index) {
+                  final evento = _eventosConCierres[index];
+                  return _buildCardEvento(evento);
+                },
+              ),
+            ),
     );
   }
 
   Widget _buildCardEvento(Map<String, dynamic> evento) {
     final eventoId = evento['eventoId'] as String? ?? '';
     final nombreEvento = evento['nombreEvento'] as String? ?? 'Sin nombre';
-    final cierres = (evento['cierres'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+    final cierres =
+        (evento['cierres'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ??
+        [];
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -195,15 +155,15 @@ class _CierresPartidosActivosState extends State<CierresPartidosActivos> {
           children: [
             Row(
               children: [
-                Icon(Icons.event, color: AppColors.accent, size: 22),
+                Icon(Icons.event, color: AppColors.dorado, size: 22),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     nombreEvento,
-                    style: GoogleFonts.poppins(
+                    style: AppFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
+                      color: AppColors.dorado,
                     ),
                   ),
                 ),
@@ -231,15 +191,22 @@ class _CierresPartidosActivosState extends State<CierresPartidosActivos> {
                 },
                 borderRadius: BorderRadius.circular(8),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 4,
+                  ),
                   child: Row(
                     children: [
-                      Icon(Icons.lock_outline, size: 18, color: AppColors.onSurfaceVariant),
+                      Icon(
+                        Icons.lock_outline,
+                        size: 18,
+                        color: AppColors.onSurfaceVariant,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           nombreSector,
-                          style: GoogleFonts.poppins(
+                          style: AppFonts.inter(
                             fontSize: 14,
                             color: AppColors.onSurface,
                           ),
@@ -247,13 +214,17 @@ class _CierresPartidosActivosState extends State<CierresPartidosActivos> {
                       ),
                       Text(
                         cerradoAt,
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
+                        style: AppFonts.inter(
+                          fontSize: 14,
                           color: AppColors.onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(width: 4),
-                      Icon(Icons.visibility_outlined, size: 18, color: AppColors.accent),
+                      Icon(
+                        Icons.visibility_outlined,
+                        size: 18,
+                        color: AppColors.dorado,
+                      ),
                     ],
                   ),
                 ),

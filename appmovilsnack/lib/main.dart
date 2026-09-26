@@ -68,7 +68,7 @@ class MyApp extends StatelessWidget {
       title: 'Fusion eventos',
       debugShowCheckedModeBanner: false,
       navigatorKey: appNavigatorKey,
-      theme: AppTheme.light,
+      theme: AppTheme.tema,
       home: const AuthGate(),
     );
   }

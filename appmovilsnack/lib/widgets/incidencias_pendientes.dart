@@ -5,7 +5,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import '../core/app_theme.dart';
 import '../services/firestore_helpers.dart';
 import '../services/incidencias_service.dart';
@@ -24,6 +25,7 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
   String? _errorMessage;
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _pendientes = [];
   Map<String, String> _nombresEventos = {};
+
   /// `null` = todos los tipos.
   String? _filtroTipo;
 
@@ -39,13 +41,19 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
       _errorMessage = null;
     });
     try {
-      final eventos = await FirestoreHelpers.getEventos();
-      final pendientes = await _service.pendientes();
+      final lecturas = await Future.wait<Object>([
+        FirestoreHelpers.getEventos(),
+        _service.pendientes(),
+      ]);
+      final eventos = lecturas[0] as QuerySnapshot;
+      final pendientes =
+          lecturas[1] as List<QueryDocumentSnapshot<Map<String, dynamic>>>;
       if (!mounted) return;
       setState(() {
         _nombresEventos = {
           for (final e in eventos.docs)
-            e.id: (e.data() as Map<String, dynamic>?)?['nombre']?.toString() ??
+            e.id:
+                (e.data() as Map<String, dynamic>?)?['nombre']?.toString() ??
                 e.id,
         };
         _pendientes = pendientes;
@@ -62,22 +70,24 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
 
   List<QueryDocumentSnapshot<Map<String, dynamic>>> get _visibles =>
       _filtroTipo == null
-          ? _pendientes
-          : _pendientes
-              .where((d) => TipoIncidencia.de(d.data()) == _filtroTipo)
-              .toList();
+      ? _pendientes
+      : _pendientes
+            .where((d) => TipoIncidencia.de(d.data()) == _filtroTipo)
+            .toList();
 
   int _cantidadDeTipo(String tipo) =>
       _pendientes.where((d) => TipoIncidencia.de(d.data()) == tipo).length;
 
-  Future<void> _resolver(QueryDocumentSnapshot<Map<String, dynamic>> doc) async {
+  Future<void> _resolver(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
     final notaController = TextEditingController();
     final confirmado = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
           'Marcar como resuelta',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+          style: AppFonts.inter(fontWeight: FontWeight.w600),
         ),
         content: TextField(
           controller: notaController,
@@ -107,7 +117,8 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await _service.resolver(
-        eventoId: doc.data()['eventoId']?.toString() ??
+        eventoId:
+            doc.data()['eventoId']?.toString() ??
             doc.reference.parent.parent!.id,
         incidenciaId: doc.id,
         adminUid: FirebaseAuth.instance.currentUser?.uid ?? '',
@@ -117,16 +128,16 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
       setState(() => _pendientes.remove(doc));
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Incidencia resuelta.', style: GoogleFonts.poppins()),
-          backgroundColor: AppColors.success,
+          content: Text('Incidencia resuelta.', style: AppFonts.inter()),
+          backgroundColor: AppColors.exitoFuerte,
           behavior: SnackBarBehavior.floating,
         ),
       );
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('No se pudo actualizar: $e', style: GoogleFonts.poppins()),
-          backgroundColor: AppColors.error,
+          content: Text('No se pudo actualizar: $e', style: AppFonts.inter()),
+          backgroundColor: AppColors.errorFuerte,
         ),
       );
     }
@@ -146,14 +157,12 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
       appBar: AppBar(
         title: Text(
           'Incidencias por resolver',
-          style: GoogleFonts.poppins(
+          style: AppFonts.inter(
             fontWeight: FontWeight.w600,
             color: AppColors.accent,
             fontSize: 18,
           ),
         ),
-        backgroundColor: AppColors.primaryLight,
-        foregroundColor: AppColors.accent,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -162,40 +171,35 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: AppColors.accent))
+          ? Center(child: CircularProgressIndicator())
           : _errorMessage != null
-              ? _buildError()
-              : Column(
-                  children: [
-                    _buildFiltros(),
-                    Expanded(
-                      child: _visibles.isEmpty
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(24),
-                                child: Text(
-                                  _filtroTipo == null
-                                      ? 'No hay incidencias pendientes.'
-                                      : 'No hay incidencias pendientes de este tipo.',
-                                  style: GoogleFonts.poppins(
-                                    color: AppColors.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : RefreshIndicator(
-                              onRefresh: _cargar,
-                              color: AppColors.accent,
-                              child: ListView.builder(
-                                padding: conMargenInferior(context, const EdgeInsets.fromLTRB(16, 4, 16, 16)),
-                                itemCount: _visibles.length,
-                                itemBuilder: (context, i) =>
-                                    _buildCard(_visibles[i]),
-                              ),
+          ? _buildError()
+          : Column(
+              children: [
+                _buildFiltros(),
+                Expanded(
+                  child: _visibles.isEmpty
+                      ? EstadoVacio(
+                          titulo: _filtroTipo == null
+                              ? 'No hay incidencias pendientes.'
+                              : 'No hay incidencias pendientes de este tipo.',
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _cargar,
+                          color: AppColors.dorado,
+                          child: ListView.builder(
+                            padding: conMargenInferior(
+                              context,
+                              const EdgeInsets.fromLTRB(16, 4, 16, 16),
                             ),
-                    ),
-                  ],
+                            itemCount: _visibles.length,
+                            itemBuilder: (context, i) =>
+                                _buildCard(_visibles[i]),
+                          ),
+                        ),
                 ),
+              ],
+            ),
     );
   }
 
@@ -210,7 +214,7 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
             const SizedBox(height: 12),
             Text(
               _errorMessage!,
-              style: GoogleFonts.poppins(fontSize: 12),
+              style: AppFonts.inter(fontSize: 14),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
@@ -227,13 +231,13 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
 
   Widget _buildFiltros() {
     Widget chip(String? tipo, String texto) => Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: ChoiceChip(
-            label: Text(texto, style: GoogleFonts.poppins(fontSize: 13)),
-            selected: _filtroTipo == tipo,
-            onSelected: (_) => setState(() => _filtroTipo = tipo),
-          ),
-        );
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(texto, style: AppFonts.inter(fontSize: 14)),
+        selected: _filtroTipo == tipo,
+        onSelected: (_) => setState(() => _filtroTipo = tipo),
+      ),
+    );
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -258,10 +262,10 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
     final evento =
         _nombresEventos[d['eventoId']] ?? d['eventoId']?.toString() ?? '';
     final comentario = d['comentario']?.toString();
-    final color = esSobrante ? Colors.blue[800]! : Colors.orange[800]!;
+    final color = esSobrante ? Colors.blue[800]! : AppColors.aviso;
 
     TextStyle detalle() =>
-        GoogleFonts.poppins(fontSize: 13, color: AppColors.onSurfaceVariant);
+        AppFonts.inter(fontSize: 14, color: AppColors.onSurfaceVariant);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -283,8 +287,8 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
               ),
               child: Text(
                 TipoIncidencia.etiqueta(tipo),
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
+                style: AppFonts.inter(
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: color,
                 ),
@@ -296,7 +300,7 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
                 Expanded(
                   child: Text(
                     d['nombreProducto']?.toString() ?? 'Producto',
-                    style: GoogleFonts.poppins(
+                    style: AppFonts.inter(
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
                       color: AppColors.primaryLight,
@@ -307,7 +311,7 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
                   esSobrante
                       ? 'Sobran ${d['diferencia'] ?? 0} u.'
                       : 'Faltan ${d['diferencia'] ?? 0} u.',
-                  style: GoogleFonts.poppins(
+                  style: AppFonts.inter(
                     fontWeight: FontWeight.bold,
                     color: color,
                   ),

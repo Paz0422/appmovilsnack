@@ -85,7 +85,14 @@ serviceAccount*.json
 /pubspec.lock
 /.metadata
 /analysis_options.yaml
-/assets/
+/assets/*
+# Recursos que la app necesita para compilar (pubspec.yaml): fuentes y mascota.
+!/assets/fuentes/
+!/assets/imagenes/
+/assets/imagenes/*
+!/assets/imagenes/logo.png
+!/assets/imagenes/app_icon.png
+!/assets/imagenes/mascota.png
 /firebase.json
 
 # Tests de reglas de Firestore

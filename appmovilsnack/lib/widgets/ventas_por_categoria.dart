@@ -1,7 +1,8 @@
 // Ventas por categoría: cierres de turno + bandejeo (eventos activos).
 import 'package:flutter/material.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/core/app_theme.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:front_appsnack/services/admin_estadisticas_service.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
@@ -23,14 +24,8 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
   int _totalCierres = 0;
   double _montoTotal = 0;
 
-  static const List<Color> _coloresGrafico = [
-    AppColors.accent,
-    AppColors.secondary,
-    Color(0xFF8B4513),
-    Color(0xFFCD853F),
-    Color(0xFFA0522D),
-    Color(0xFFBC8F8F),
-  ];
+  /// Colores de la serie de gráficos del tema (el primero, el de la marca).
+  static const List<Color> _coloresGrafico = [...AppColors.grafico, AppColors.cafe];
 
   @override
   void initState() {
@@ -77,8 +72,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
       montoCat[categoriaDefault] = 0;
       cantCat[categoriaDefault] = 0;
 
-      final resumen =
-          await AdminEstadisticasService.cargarVentasPorCategoria(
+      final resumen = await AdminEstadisticasService.cargarVentasPorCategoria(
         soloEventosActivos: true,
       );
 
@@ -137,18 +131,15 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
             const SizedBox(height: 8),
             Text(
               'Sin ventas registradas en eventos activos aún',
-              style: GoogleFonts.poppins(
-                color: AppColors.secondary,
-                fontSize: 14,
-              ),
+              style: AppFonts.inter(color: AppColors.secondary, fontSize: 14),
             ),
             const SizedBox(height: 4),
             Text(
               'Los datos aparecen al cerrar turno con stock inicial y final.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
+              style: AppFonts.inter(
                 color: AppColors.secondary.withValues(alpha: 0.85),
-                fontSize: 12,
+                fontSize: 14,
               ),
             ),
           ],
@@ -168,8 +159,10 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
         PieChartSectionData(
           value: monto,
           color: color,
-          radius: 44,
+          radius: 48,
           showTitle: false,
+          // Separa los sectores con el color de la tarjeta.
+          borderSide: const BorderSide(color: AppColors.tarjeta, width: 2),
         ),
       );
       leyenda.add((cat: cat, color: color, monto: monto, pct: pct));
@@ -209,8 +202,8 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                             Text(
                               'Total estimado',
                               textAlign: TextAlign.center,
-                              style: GoogleFonts.poppins(
-                                fontSize: 11,
+                              style: AppFonts.inter(
+                                fontSize: 14,
                                 color: AppColors.secondary,
                                 fontWeight: FontWeight.w500,
                                 height: 1.2,
@@ -222,7 +215,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                               child: Text(
                                 '\$${_fmtMonto(_montoTotal)}',
                                 textAlign: TextAlign.center,
-                                style: GoogleFonts.poppins(
+                                style: AppFonts.inter(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
                                   color: AppColors.primaryLight,
@@ -258,8 +251,8 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                 Expanded(
                   child: Text(
                     e.cat,
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
+                    style: AppFonts.inter(
+                      fontSize: 14,
                       color: AppColors.primaryLight,
                       fontWeight: FontWeight.w600,
                     ),
@@ -269,8 +262,8 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                 ),
                 Text(
                   '${e.pct.toStringAsFixed(1)}%',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
+                  style: AppFonts.inter(
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: AppColors.secondary,
                   ),
@@ -278,8 +271,8 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                 const SizedBox(width: 10),
                 Text(
                   '\$${_fmtMonto(e.monto)}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
+                  style: AppFonts.inter(
+                    fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: AppColors.primaryLight,
                   ),
@@ -299,13 +292,11 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
       appBar: AppBar(
         title: Text(
           'Ventas por categoría',
-          style: GoogleFonts.poppins(
+          style: AppFonts.inter(
             fontWeight: FontWeight.bold,
             color: AppColors.accent,
           ),
         ),
-        backgroundColor: AppColors.primaryLight,
-        foregroundColor: AppColors.accent,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -314,164 +305,158 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
         ],
       ),
       body: _loading
-          ? Center(child: CircularProgressIndicator(color: AppColors.accent))
+          ? Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      'Error: $_error',
-                      style: GoogleFonts.poppins(color: Colors.red),
-                      textAlign: TextAlign.center,
+          ? ErrorAmable(
+              titulo: 'No pudimos cargar las ventas',
+              detalle: 'Error: $_error',
+              onReintentar: _cargar,
+            )
+          : RefreshIndicator(
+              onRefresh: _cargar,
+              child: ListView(
+                padding: conMargenInferior(context, const EdgeInsets.all(16)),
+                children: [
+                  Card(
+                    color: AppColors.accent.withValues(alpha: 0.15),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Total estimado (inventario)',
+                            style: AppFonts.inter(
+                              fontSize: 14,
+                              color: AppColors.secondary,
+                            ),
+                          ),
+                          Text(
+                            '\$${_fmtMonto(_montoTotal)}',
+                            style: AppFonts.inter(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primaryLight,
+                            ),
+                          ),
+                          Text(
+                            '$_totalCierres sectores con cierre registrado',
+                            style: AppFonts.inter(
+                              fontSize: 14,
+                              color: AppColors.secondary,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Cierres de turno y ventas de bandejeo (eventos activos)',
+                            textAlign: TextAlign.center,
+                            style: AppFonts.inter(
+                              fontSize: 14,
+                              color: AppColors.secondary.withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _cargar,
-                  child: ListView(
-                    padding: conMargenInferior(context, const EdgeInsets.all(16)),
-                    children: [
-                      Card(
-                        color: AppColors.accent.withValues(alpha: 0.15),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              Text(
-                                'Total estimado (inventario)',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: AppColors.secondary,
-                                ),
-                              ),
-                              Text(
-                                '\$${_fmtMonto(_montoTotal)}',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primaryLight,
-                                ),
-                              ),
-                              Text(
-                                '$_totalCierres sectores con cierre registrado',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  color: AppColors.secondary,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Cierres de turno y ventas de bandejeo (eventos activos)',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  color: AppColors.secondary.withValues(alpha: 0.9),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Distribución por categoría',
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryLight,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildGraficoCircular(),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Detalle por categoría',
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryLight,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      ..._categorias.map((e) {
-                        final cat = e['nombre'] ?? '';
-                        if (cat.isEmpty) return const SizedBox.shrink();
-                        final monto = _montoPorCategoria[cat] ?? 0;
-                        final cant = _cantidadPorCategoria[cat] ?? 0;
-                        final pct =
-                            _montoTotal > 0 ? (monto / _montoTotal * 100) : 0.0;
-                        final icono = e['icono'] ?? '';
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor:
-                                  AppColors.accent.withValues(alpha: 0.2),
-                              child: Icon(
-                                icono.isNotEmpty
-                                    ? iconoCategoriaConIcono(icono)
-                                    : iconoCategoria(cat),
-                                color: AppColors.secondary,
-                              ),
-                            ),
-                            title: Text(
-                              cat,
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            subtitle: Text(
-                              '\$${_fmtMonto(monto)} · $cant u. · ${pct.toStringAsFixed(1)}%',
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                color: AppColors.secondary,
-                              ),
-                            ),
-                            trailing: Text(
-                              '${pct.toStringAsFixed(1)}%',
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.accent,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                      if ((_montoPorCategoria[categoriaDefault] ?? 0) > 0 &&
-                          !_categorias.any(
-                            (e) => (e['nombre'] ?? '') == categoriaDefault,
-                          ))
-                        Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor:
-                                  AppColors.accent.withValues(alpha: 0.2),
-                              child: Icon(
-                                iconoCategoria(categoriaDefault),
-                                color: AppColors.secondary,
-                              ),
-                            ),
-                            title: Text(
-                              categoriaDefault,
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            subtitle: Text(
-                              '\$${_fmtMonto(_montoPorCategoria[categoriaDefault] ?? 0)} · '
-                              '${_cantidadPorCategoria[categoriaDefault] ?? 0} u.',
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                color: AppColors.secondary,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
+                  const SizedBox(height: 24),
+                  Text(
+                    'Distribución por categoría',
+                    style: AppFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryLight,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  _buildGraficoCircular(),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Detalle por categoría',
+                    style: AppFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryLight,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._categorias.map((e) {
+                    final cat = e['nombre'] ?? '';
+                    if (cat.isEmpty) return const SizedBox.shrink();
+                    final monto = _montoPorCategoria[cat] ?? 0;
+                    final cant = _cantidadPorCategoria[cat] ?? 0;
+                    final pct = _montoTotal > 0
+                        ? (monto / _montoTotal * 100)
+                        : 0.0;
+                    final icono = e['icono'] ?? '';
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.accent.withValues(
+                            alpha: 0.2,
+                          ),
+                          child: Icon(
+                            icono.isNotEmpty
+                                ? iconoCategoriaConIcono(icono)
+                                : iconoCategoria(cat),
+                            color: AppColors.secondary,
+                          ),
+                        ),
+                        title: Text(
+                          cat,
+                          style: AppFonts.inter(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          '\$${_fmtMonto(monto)} · $cant u. · ${pct.toStringAsFixed(1)}%',
+                          style: AppFonts.inter(
+                            fontSize: 14,
+                            color: AppColors.secondary,
+                          ),
+                        ),
+                        trailing: Text(
+                          '${pct.toStringAsFixed(1)}%',
+                          style: AppFonts.inter(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primaryLight,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                  if ((_montoPorCategoria[categoriaDefault] ?? 0) > 0 &&
+                      !_categorias.any(
+                        (e) => (e['nombre'] ?? '') == categoriaDefault,
+                      ))
+                    Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.accent.withValues(
+                            alpha: 0.2,
+                          ),
+                          child: Icon(
+                            iconoCategoria(categoriaDefault),
+                            color: AppColors.secondary,
+                          ),
+                        ),
+                        title: Text(
+                          categoriaDefault,
+                          style: AppFonts.inter(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          '\$${_fmtMonto(_montoPorCategoria[categoriaDefault] ?? 0)} · '
+                          '${_cantidadPorCategoria[categoriaDefault] ?? 0} u.',
+                          style: AppFonts.inter(
+                            fontSize: 14,
+                            color: AppColors.secondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
     );
   }
 }

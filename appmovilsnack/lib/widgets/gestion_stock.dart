@@ -2,17 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:front_appsnack/services/stock_service.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/core/precio.dart';
 
 // Paleta de colores basada en el logo "Fusión"
-const Color _primaryColor = Color(0xFF2B2B2B);
-const Color _accentColor = Color(0xFFDABF41);
-const Color _secondaryColor = Color(0xFF6B4D2F);
-const Color _backgroundColor = Color(0xFFFDFBF7);
+const Color _primaryColor = AppColors.primaryLight;
+const Color _accentColor = AppColors.accent;
+const Color _secondaryColor = AppColors.secondary;
+const Color _backgroundColor = AppColors.surface;
 
 /// Item de stock en memoria (hasta que se pulse Guardar).
 /// [cantidadPropio]: unidades que el sector ya tenía.
@@ -41,7 +44,8 @@ Map<String, dynamic> _stockItem(
 
 int _cantidadPropioDe(Map<String, dynamic> item) =>
     item['cantidadPropio'] as int? ??
-    ((item['cantidad'] as int? ?? 0) - (item['cantidadPorTraspaso'] as int? ?? 0))
+    ((item['cantidad'] as int? ?? 0) -
+            (item['cantidadPorTraspaso'] as int? ?? 0))
         .clamp(0, 1 << 30);
 
 /// Widget reutilizable para gestionar el stock de un sector
@@ -52,8 +56,10 @@ class GestionStock extends StatefulWidget {
   final String sectorId;
   final String nombreSector;
   final bool soloLectura;
+
   /// Si true, al guardar muestra advertencia de ingreso único y cierra la pantalla.
   final bool esIngresoInicial;
+
   /// Si se proporciona, se llama tras guardar con éxito.
   final VoidCallback? onGuardado;
 
@@ -76,19 +82,21 @@ class _GestionStockState extends State<GestionStock> {
   final Map<String, TextEditingController> _cantidadControllers = {};
   bool _dirty = false;
   bool _loading = true;
+  String? _errorCarga;
   final _stockService = StockService();
+
   /// Motivos por los que ya no se puede cargar stock inicial (ver
   /// StockService.bloqueosStockInicial). Si hay alguno, no se muestra el editor.
   List<String> _bloqueos = const [];
   Timer? _debounceBorrador;
   bool _mostroAvisoBorrador = false;
 
-  DocumentReference<Map<String, dynamic>> get _sectorRef =>
-      FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(widget.eventoId)
-          .collection('sectores')
-          .doc(widget.sectorId);
+  DocumentReference<Map<String, dynamic>> get _sectorRef => FirebaseFirestore
+      .instance
+      .collection('eventos')
+      .doc(widget.eventoId)
+      .collection('sectores')
+      .doc(widget.sectorId);
 
   @override
   void initState() {
@@ -115,7 +123,8 @@ class _GestionStockState extends State<GestionStock> {
       if (id == null || id.isEmpty) continue;
 
       final traspaso = (p['cantidadPorTraspaso'] as num?)?.toInt() ?? 0;
-      final propio = (p['cantidadPropio'] as num?)?.toInt() ??
+      final propio =
+          (p['cantidadPropio'] as num?)?.toInt() ??
           ((p['cantidad'] as num?)?.toInt() ?? 0) - traspaso;
       final propioClamped = propio < 0 ? 0 : propio;
       final cat = p['categoria']?.toString() ?? categoriaDefault;
@@ -153,34 +162,30 @@ class _GestionStockState extends State<GestionStock> {
     _leerCantidadesDesdeControllers();
     try {
       if (_items.isEmpty) {
-        await _sectorRef.set(
-          {'borradorStockInicial': FieldValue.delete()},
-          SetOptions(merge: true),
-        );
+        await _sectorRef.set({
+          'borradorStockInicial': FieldValue.delete(),
+        }, SetOptions(merge: true));
         return;
       }
-      await _sectorRef.set(
-        {
-          'borradorStockInicial': {
-            'actualizadoEn': FieldValue.serverTimestamp(),
-            'productos': _items
-                .map(
-                  (item) => {
-                    'productoId': item['productoId'],
-                    'nombre': item['nombre'],
-                    'precio': item['precio'],
-                    'categoria': item['categoria'] ?? categoriaDefault,
-                    'cantidadPropio': _cantidadPropioDe(item),
-                    'cantidadPorTraspaso':
-                        item['cantidadPorTraspaso'] as int? ?? 0,
-                    'cantidad': item['cantidad'],
-                  },
-                )
-                .toList(),
-          },
+      await _sectorRef.set({
+        'borradorStockInicial': {
+          'actualizadoEn': FieldValue.serverTimestamp(),
+          'productos': _items
+              .map(
+                (item) => {
+                  'productoId': item['productoId'],
+                  'nombre': item['nombre'],
+                  'precio': item['precio'],
+                  'categoria': item['categoria'] ?? categoriaDefault,
+                  'cantidadPropio': _cantidadPropioDe(item),
+                  'cantidadPorTraspaso':
+                      item['cantidadPorTraspaso'] as int? ?? 0,
+                  'cantidad': item['cantidad'],
+                },
+              )
+              .toList(),
         },
-        SetOptions(merge: true),
-      );
+      }, SetOptions(merge: true));
     } catch (_) {}
   }
 
@@ -204,25 +209,25 @@ class _GestionStockState extends State<GestionStock> {
       builder: (ctx) => AlertDialog(
         title: Text(
           'Sin guardar',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          style: AppFonts.inter(fontWeight: FontWeight.bold),
         ),
         content: Text(
           'Si sale ahora no se guardará el stock. ¿Salir sin guardar?',
-          style: GoogleFonts.poppins(),
+          style: AppFonts.inter(),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Cancelar',
-              style: GoogleFonts.poppins(color: _secondaryColor),
+              style: AppFonts.inter(color: _secondaryColor),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
               'Salir sin guardar',
-              style: GoogleFonts.poppins(color: Colors.red),
+              style: AppFonts.inter(color: AppColors.error),
             ),
           ),
         ],
@@ -236,10 +241,12 @@ class _GestionStockState extends State<GestionStock> {
     for (final item in _items) {
       final id = item['productoId'] as String;
       ids.add(id);
-      final conTraspaso = widget.esIngresoInicial &&
+      final conTraspaso =
+          widget.esIngresoInicial &&
           (item['cantidadPorTraspaso'] as int? ?? 0) > 0;
-      final valor =
-          conTraspaso ? _cantidadPropioDe(item) : (item['cantidad'] as int? ?? 0);
+      final valor = conTraspaso
+          ? _cantidadPropioDe(item)
+          : (item['cantidad'] as int? ?? 0);
       final ctrl = _cantidadControllers.putIfAbsent(
         id,
         () => TextEditingController(text: '$valor'),
@@ -293,6 +300,12 @@ class _GestionStockState extends State<GestionStock> {
   }
 
   Future<void> _cargarStock() async {
+    if (_errorCarga != null) {
+      setState(() {
+        _errorCarga = null;
+        _loading = true;
+      });
+    }
     try {
       // La carga inicial escribe cantidades absolutas: con movimientos en el
       // sector borraría ventas, traspasos o mermas.
@@ -327,40 +340,46 @@ class _GestionStockState extends State<GestionStock> {
       if (!mounted) return;
 
       final items = snap.docs.map((d) {
-          final data = d.data();
-          final cat = data['categoria']?.toString() ?? categoriaDefault;
-          final cantidad = data['cantidad'] as int? ?? 0;
-          final cantidadInicialDoc = data['cantidadInicial'];
-          final porTraspasoDoc = data['cantidadPorTraspaso'] as int?;
-          final propioDoc = data['cantidadPropio'] as int?;
-          final recibidoPorTraspaso = widget.esIngresoInicial &&
-              cantidad > 0 &&
-              cantidadInicialDoc == null;
-          final int porTraspaso = (porTraspasoDoc ??
-                  (recibidoPorTraspaso
-                      ? cantidad
-                      : (cantidadInicialDoc != null &&
-                              cantidad > cantidadInicialDoc
-                          ? cantidad - cantidadInicialDoc
-                          : 0)))
-              .toInt();
-          final int propio = (propioDoc ??
-                  (recibidoPorTraspaso
-                      ? 0
-                      : (cantidad - porTraspaso).clamp(0, cantidad)))
-              .toInt();
-          return _stockItem(
-            d.id,
-            data['nombre']?.toString() ?? 'Sin nombre',
-            (data['precio'] as num?)?.toDouble() ?? 0.0,
-            propio,
-            categoriasProducto.contains(cat) ? cat : categoriaDefault,
-            porTraspaso,
-          );
-        }).toList();
+        final data = d.data();
+        final cat = data['categoria']?.toString() ?? categoriaDefault;
+        final cantidad = data['cantidad'] as int? ?? 0;
+        final cantidadInicialDoc = data['cantidadInicial'];
+        final porTraspasoDoc = data['cantidadPorTraspaso'] as int?;
+        final propioDoc = data['cantidadPropio'] as int?;
+        final recibidoPorTraspaso =
+            widget.esIngresoInicial &&
+            cantidad > 0 &&
+            cantidadInicialDoc == null;
+        final int porTraspaso =
+            (porTraspasoDoc ??
+                    (recibidoPorTraspaso
+                        ? cantidad
+                        : (cantidadInicialDoc != null &&
+                                  cantidad > cantidadInicialDoc
+                              ? cantidad - cantidadInicialDoc
+                              : 0)))
+                .toInt();
+        final int propio =
+            (propioDoc ??
+                    (recibidoPorTraspaso
+                        ? 0
+                        : (cantidad - porTraspaso).clamp(0, cantidad)))
+                .toInt();
+        return _stockItem(
+          d.id,
+          data['nombre']?.toString() ?? 'Sin nombre',
+          (data['precio'] as num?)?.toDouble() ?? 0.0,
+          propio,
+          categoriasProducto.contains(cat) ? cat : categoriaDefault,
+          porTraspaso,
+        );
+      }).toList();
 
       var restauroBorrador = false;
-      if (widget.esIngresoInicial && !stockInicialConfirmado) {
+      if (widget.soloLectura) {
+        // Los productos son globales: los que el sector no tiene salen en 0.
+        await _fusionarCatalogoEnItems(items, soloFaltantes: true);
+      } else if (widget.esIngresoInicial && !stockInicialConfirmado) {
         await _fusionarCatalogoEnItems(items);
         if (borrador is Map<String, dynamic>) {
           _aplicarBorradorStock(borrador, items);
@@ -392,9 +411,9 @@ class _GestionStockState extends State<GestionStock> {
             SnackBar(
               content: Text(
                 'Se restauró su borrador. Para activar el punto, toque Guardar y salir.',
-                style: GoogleFonts.poppins(),
+                style: AppFonts.inter(),
               ),
-              backgroundColor: _accentColor,
+              backgroundColor: AppColors.grafito,
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 3),
             ),
@@ -402,27 +421,38 @@ class _GestionStockState extends State<GestionStock> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _errorCarga = e.toString();
+        });
+      }
     }
   }
 
+  /// Suma el catálogo global a [items]. Con [soloFaltantes] no toca los que
+  /// ya están en el stock del sector (conservan su precio y nombre guardados).
   Future<void> _fusionarCatalogoEnItems(
-    List<Map<String, dynamic>> items,
-  ) async {
-    final catalogSnap =
-        await FirebaseFirestore.instance.collection('productos').get();
+    List<Map<String, dynamic>> items, {
+    bool soloFaltantes = false,
+  }) async {
+    final catalogSnap = await FirebaseFirestore.instance
+        .collection('productos')
+        .get();
     for (final doc in catalogSnap.docs) {
       final data = doc.data();
       final nombre = data['nombre']?.toString().trim();
       if (nombre == null || nombre.isEmpty) continue;
 
       final catRaw = data['categoria']?.toString() ?? categoriaDefault;
-      final cat =
-          categoriasProducto.contains(catRaw) ? catRaw : categoriaDefault;
+      final cat = categoriasProducto.contains(catRaw)
+          ? catRaw
+          : categoriaDefault;
       final precio = (data['precio'] as num?)?.toDouble() ?? 0.0;
 
       final idx = items.indexWhere((i) => i['productoId'] == doc.id);
       if (idx >= 0) {
+        if (soloFaltantes) continue;
         items[idx]['nombre'] = nombre;
         items[idx]['precio'] = precio;
         items[idx]['categoria'] = cat;
@@ -539,8 +569,8 @@ class _GestionStockState extends State<GestionStock> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al guardar: $e', style: GoogleFonts.poppins()),
-            backgroundColor: Colors.red,
+            content: Text('Error al guardar: $e', style: AppFonts.inter()),
+            backgroundColor: AppColors.errorFuerte,
           ),
         );
       }
@@ -557,9 +587,9 @@ class _GestionStockState extends State<GestionStock> {
           SnackBar(
             content: Text(
               'No hay productos en el catálogo. El administrador debe cargarlos primero.',
-              style: GoogleFonts.poppins(),
+              style: AppFonts.inter(),
             ),
-            backgroundColor: Colors.orange,
+            backgroundColor: AppColors.avisoFuerte,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 3),
           ),
@@ -571,9 +601,9 @@ class _GestionStockState extends State<GestionStock> {
         SnackBar(
           content: Text(
             'Agregue al menos un producto antes de finalizar.',
-            style: GoogleFonts.poppins(),
+            style: AppFonts.inter(),
           ),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppColors.avisoFuerte,
         ),
       );
       return;
@@ -585,26 +615,29 @@ class _GestionStockState extends State<GestionStock> {
         builder: (ctx) => AlertDialog(
           title: Text(
             'Finalizar ingreso de stock inicial',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: _primaryColor),
+            style: AppFonts.inter(
+              fontWeight: FontWeight.bold,
+              color: _primaryColor,
+            ),
           ),
-          content: Text(
-            _textoConfirmacionInicial(),
-            style: GoogleFonts.poppins(),
-          ),
+          content: Text(_textoConfirmacionInicial(), style: AppFonts.inter()),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text('Cancelar', style: GoogleFonts.poppins(color: _secondaryColor)),
+              child: Text(
+                'Cancelar',
+                style: AppFonts.inter(color: _secondaryColor),
+              ),
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(ctx).pop(true),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _accentColor,
-                foregroundColor: _primaryColor,
+                backgroundColor: AppColors.dorado,
+                foregroundColor: AppColors.negro,
               ),
               child: Text(
                 'Guardar y salir',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                style: AppFonts.inter(fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -615,23 +648,32 @@ class _GestionStockState extends State<GestionStock> {
       final confirmar = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('Guardar cambios', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+          title: Text(
+            'Guardar cambios',
+            style: AppFonts.inter(fontWeight: FontWeight.bold),
+          ),
           content: Text(
             '¿Desea guardar los cambios antes de salir?',
-            style: GoogleFonts.poppins(),
+            style: AppFonts.inter(),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text('Cancelar', style: GoogleFonts.poppins(color: _secondaryColor)),
+              child: Text(
+                'Cancelar',
+                style: AppFonts.inter(color: _secondaryColor),
+              ),
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(ctx).pop(true),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+                backgroundColor: AppColors.exito,
+                foregroundColor: AppColors.negro,
               ),
-              child: Text('Guardar y salir', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+              child: Text(
+                'Guardar y salir',
+                style: AppFonts.inter(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -659,9 +701,23 @@ class _GestionStockState extends State<GestionStock> {
     if (mounted) Navigator.of(context).pop('saved');
   }
 
-  void _agregarItemLocal(String productoId, String nombre, double precio, int cantidad, [String categoria = 'Otros']) {
+  void _agregarItemLocal(
+    String productoId,
+    String nombre,
+    double precio,
+    int cantidad, [
+    String categoria = 'Otros',
+  ]) {
     setState(() {
-      _items.add(_stockItem(productoId, nombre, precio, cantidad, categoriasProducto.contains(categoria) ? categoria : categoriaDefault));
+      _items.add(
+        _stockItem(
+          productoId,
+          nombre,
+          precio,
+          cantidad,
+          categoriasProducto.contains(categoria) ? categoria : categoriaDefault,
+        ),
+      );
       _items.sort((a, b) {
         final oa = ordenCategoria(a['categoria'] as String);
         final ob = ordenCategoria(b['categoria'] as String);
@@ -716,7 +772,7 @@ class _GestionStockState extends State<GestionStock> {
         children: [
           Text(
             'Sector: ${widget.nombreSector}',
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.bold,
               color: _primaryColor,
@@ -725,10 +781,7 @@ class _GestionStockState extends State<GestionStock> {
           const SizedBox(height: 4),
           Text(
             _subtituloEncabezado,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: _secondaryColor,
-            ),
+            style: AppFonts.inter(fontSize: 14, color: _secondaryColor),
           ),
         ],
       ),
@@ -741,20 +794,20 @@ class _GestionStockState extends State<GestionStock> {
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.12),
+        color: AppColors.aviso.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+        border: Border.all(color: AppColors.aviso.withValues(alpha: 0.4)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.swap_horiz_rounded, color: Colors.orange[800], size: 22),
+          Icon(Icons.swap_horiz_rounded, color: AppColors.aviso, size: 22),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               _textoBannerTraspaso,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
+              style: AppFonts.inter(
+                fontSize: 14,
                 color: _secondaryColor,
                 height: 1.35,
               ),
@@ -766,39 +819,13 @@ class _GestionStockState extends State<GestionStock> {
   }
 
   Widget _buildEstadoVacio() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.inventory_2_outlined,
-            size: 64,
-            color: _secondaryColor.withValues(alpha: 0.5),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            widget.esIngresoInicial
-                ? 'No hay productos en el catálogo'
-                : 'No hay productos en stock',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              color: _secondaryColor,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (!widget.soloLectura)
-            Text(
-              widget.esIngresoInicial
-                  ? 'El administrador debe cargar productos antes del evento.'
-                  : 'Apriete "+" abajo para agregar productos al stock',
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: _secondaryColor.withValues(alpha: 0.8),
-              ),
-              textAlign: TextAlign.center,
-            ),
-        ],
-      ),
+    return EstadoVacio(
+      titulo: widget.esIngresoInicial || widget.soloLectura
+          ? 'No hay productos en el catálogo'
+          : 'No hay productos en stock',
+      mensaje: widget.esIngresoInicial || widget.soloLectura
+          ? 'El administrador debe cargar productos antes del evento.'
+          : 'Apriete "+" abajo para agregar productos al stock',
     );
   }
 
@@ -821,7 +848,8 @@ class _GestionStockState extends State<GestionStock> {
           : (n) => _setCantidadItem(productoId, n),
       // Solo el admin elimina stock (reglas). En "Ver stock" no hay opción, y en
       // la carga inicial los productos quedan con cantidad 0 en vez de borrarse.
-      onEliminar: widget.soloLectura ||
+      onEliminar:
+          widget.soloLectura ||
               widget.esIngresoInicial ||
               (item['cantidadPorTraspaso'] as int? ?? 0) > 0
           ? null
@@ -851,8 +879,8 @@ class _GestionStockState extends State<GestionStock> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Text(
               _textoListaEncabezado(),
-              style: GoogleFonts.poppins(
-                fontSize: 13,
+              style: AppFonts.inter(
+                fontSize: 14,
                 color: _secondaryColor.withValues(alpha: 0.8),
               ),
             ),
@@ -891,12 +919,12 @@ class _GestionStockState extends State<GestionStock> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(Icons.lock_outline, size: 48, color: Colors.orange[800]),
+          Icon(Icons.lock_outline, size: 48, color: AppColors.aviso),
           const SizedBox(height: 12),
           Text(
             'El stock inicial ya no se puede modificar',
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontSize: 17,
               fontWeight: FontWeight.w600,
               color: _primaryColor,
@@ -906,15 +934,15 @@ class _GestionStockState extends State<GestionStock> {
           Text(
             'El sector ya tiene movimientos y la carga inicial los borraría.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(fontSize: 13, color: _secondaryColor),
+            style: AppFonts.inter(fontSize: 14, color: _secondaryColor),
           ),
           const SizedBox(height: 16),
           ..._bloqueos.map(
             (b) => Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
-                leading: Icon(Icons.info_outline, color: Colors.orange[800]),
-                title: Text(b, style: GoogleFonts.poppins(fontSize: 14)),
+                leading: Icon(Icons.info_outline, color: AppColors.aviso),
+                title: Text(b, style: AppFonts.inter(fontSize: 14)),
               ),
             ),
           ),
@@ -922,7 +950,7 @@ class _GestionStockState extends State<GestionStock> {
           Text(
             StockService.mensajeUsarAgregarStock,
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: _primaryColor,
@@ -941,7 +969,8 @@ class _GestionStockState extends State<GestionStock> {
   @override
   Widget build(BuildContext context) {
     final bloqueado = _bloqueos.isNotEmpty;
-    final bool popLibre = widget.soloLectura ||
+    final bool popLibre =
+        widget.soloLectura ||
         bloqueado ||
         (!widget.esIngresoInicial && !_dirty);
 
@@ -952,70 +981,77 @@ class _GestionStockState extends State<GestionStock> {
         _retrocederPantalla();
       },
       child: Scaffold(
-      backgroundColor: _backgroundColor,
-      appBar: AppBar(
-        leading: widget.soloLectura
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: bloqueado
-                    ? () => Navigator.of(context).pop()
-                    : _retrocederPantalla,
-              ),
-        title: Text(
-          widget.soloLectura ? 'Ver stock' : 'Stock inicial del punto',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.bold,
-            color: _accentColor,
+        backgroundColor: _backgroundColor,
+        appBar: AppBar(
+          leading: widget.soloLectura
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: bloqueado
+                      ? () => Navigator.of(context).pop()
+                      : _retrocederPantalla,
+                ),
+          title: Text(
+            widget.soloLectura ? 'Ver stock' : 'Stock inicial del punto',
+            style: AppFonts.inter(
+              fontWeight: FontWeight.bold,
+              color: _accentColor,
+            ),
           ),
         ),
-        backgroundColor: _primaryColor,
-        foregroundColor: _accentColor,
-      ),
-      bottomNavigationBar: widget.soloLectura || bloqueado
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _guardarYSalir,
-                    icon: const Icon(Icons.check_circle_outline),
-                    label: Text(
-                      'Guardar y salir',
-                      style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+        bottomNavigationBar: widget.soloLectura || bloqueado
+            ? null
+            : SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _guardarYSalir,
+                      icon: const Icon(Icons.check_circle_outline),
+                      label: Text(
+                        'Guardar y salir',
+                        style: AppFonts.inter(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.exito,
+                        foregroundColor: AppColors.negro,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-      body: _loading
-          ? Center(child: CircularProgressIndicator(color: _accentColor))
-          : bloqueado
-              ? _buildBloqueado()
-              : _buildCuerpoLista(),
-      floatingActionButton: widget.soloLectura || widget.esIngresoInicial
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _mostrarModalAgregarProducto(context),
-              backgroundColor: _accentColor,
-              foregroundColor: _primaryColor,
-              icon: const Icon(Icons.add),
-              label: Text(
-                'Agregar Producto',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        body: _loading
+            ? Center(child: CircularProgressIndicator())
+            : _errorCarga != null
+            ? ErrorAmable(
+                titulo: 'No pudimos cargar los productos',
+                detalle: _errorCarga,
+                onReintentar: _cargarStock,
+              )
+            : bloqueado
+            ? _buildBloqueado()
+            : _buildCuerpoLista(),
+        floatingActionButton: widget.soloLectura || widget.esIngresoInicial
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: () => _mostrarModalAgregarProducto(context),
+                backgroundColor: AppColors.dorado,
+                foregroundColor: AppColors.negro,
+                icon: const Icon(Icons.add),
+                label: Text(
+                  'Agregar Producto',
+                  style: AppFonts.inter(fontWeight: FontWeight.bold),
+                ),
               ),
-            ),
-    ),
+      ),
     );
   }
 
@@ -1067,8 +1103,7 @@ class _ProductoStockCard extends StatelessWidget {
   bool get _sumaTraspaso =>
       esIngresoInicial && cantidadPorTraspaso > 0 && !soloLectura;
 
-  int get _valorEditable =>
-      _sumaTraspaso ? cantidadPropio : cantidad;
+  int get _valorEditable => _sumaTraspaso ? cantidadPropio : cantidad;
 
   @override
   Widget build(BuildContext context) {
@@ -1100,16 +1135,16 @@ class _ProductoStockCard extends StatelessWidget {
                     children: [
                       Text(
                         nombre,
-                        style: GoogleFonts.poppins(
+                        style: AppFonts.inter(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                           color: _primaryColor,
                         ),
                       ),
                       Text(
-                        'Precio: \$${precio.toStringAsFixed(0)}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
+                        etiquetaPrecio(precio),
+                        style: AppFonts.inter(
+                          fontSize: 14,
                           color: _secondaryColor,
                         ),
                       ),
@@ -1119,11 +1154,11 @@ class _ProductoStockCard extends StatelessWidget {
                 if (onEliminar != null)
                   IconButton(
                     icon: const Icon(Icons.delete_outline),
-                    color: Colors.red,
+                    color: AppColors.error,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
+                      minWidth: AppTamanos.toque,
+                      minHeight: AppTamanos.toque,
                     ),
                     onPressed: () => _eliminarProducto(context),
                   ),
@@ -1133,19 +1168,16 @@ class _ProductoStockCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 'Stock: $cantidad u.',
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
+                style: AppFonts.inter(
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: cantidad > 0 ? Colors.green[700] : Colors.red[700],
+                  color: cantidad > 0 ? AppColors.exito : AppColors.error,
                 ),
               ),
               if (esIngresoInicial && cantidadPorTraspaso > 0)
                 Text(
                   'Incluye $cantidadPorTraspaso u. por traspaso',
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    color: _secondaryColor,
-                  ),
+                  style: AppFonts.inter(fontSize: 14, color: _secondaryColor),
                 ),
             ] else ...[
               const SizedBox(height: 10),
@@ -1155,9 +1187,9 @@ class _ProductoStockCard extends StatelessWidget {
                   child: Text(
                     'Traspaso: $cantidadPorTraspaso u. (se suma solo). '
                     'Ingrese la cantidad propia del sector:',
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      color: Colors.orange[900],
+                    style: AppFonts.inter(
+                      fontSize: 14,
+                      color: AppColors.avisoTexto,
                       height: 1.3,
                     ),
                   ),
@@ -1166,7 +1198,7 @@ class _ProductoStockCard extends StatelessWidget {
                 children: [
                   Text(
                     'Cantidad:',
-                    style: GoogleFonts.poppins(
+                    style: AppFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
@@ -1176,8 +1208,8 @@ class _ProductoStockCard extends StatelessWidget {
                     visualDensity: VisualDensity.compact,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
-                      minWidth: 34,
-                      minHeight: 34,
+                      minWidth: AppTamanos.toque,
+                      minHeight: AppTamanos.toque,
                     ),
                     iconSize: 22,
                     icon: const Icon(Icons.remove_circle_outline),
@@ -1197,12 +1229,12 @@ class _ProductoStockCard extends StatelessWidget {
                     visualDensity: VisualDensity.compact,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
-                      minWidth: 34,
-                      minHeight: 34,
+                      minWidth: AppTamanos.toque,
+                      minHeight: AppTamanos.toque,
                     ),
                     iconSize: 22,
                     icon: const Icon(Icons.add_circle_outline),
-                    color: _accentColor,
+                    color: AppColors.dorado,
                     onPressed: () =>
                         onCantidadChanged?.call(_valorEditable + 1),
                   ),
@@ -1213,23 +1245,23 @@ class _ProductoStockCard extends StatelessWidget {
                 Text(
                   'Total inicial: $cantidad u. '
                   '($_valorEditable + $cantidadPorTraspaso traspaso)',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
+                  style: AppFonts.inter(
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.green[800],
+                    color: AppColors.exito,
                   ),
                 ),
               ] else
                 Text(
                   'Stock inicial: $cantidad u.',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
+                  style: AppFonts.inter(
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: cantidad > 0
-                        ? Colors.green[700]
+                        ? AppColors.exito
                         : (esIngresoInicial
-                            ? _secondaryColor
-                            : Colors.red[700]),
+                              ? _secondaryColor
+                              : AppColors.error),
                   ),
                 ),
             ],
@@ -1245,18 +1277,18 @@ class _ProductoStockCard extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: Text(
           'Eliminar Producto',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          style: AppFonts.inter(fontWeight: FontWeight.bold),
         ),
         content: Text(
           '¿Está seguro de que desea eliminar "$nombre" del stock?',
-          style: GoogleFonts.poppins(),
+          style: AppFonts.inter(),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: Text(
               'Cancelar',
-              style: GoogleFonts.poppins(color: _secondaryColor),
+              style: AppFonts.inter(color: _secondaryColor),
             ),
           ),
           ElevatedButton(
@@ -1265,12 +1297,12 @@ class _ProductoStockCard extends StatelessWidget {
               onEliminar?.call();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.error,
+              foregroundColor: AppColors.negro,
             ),
             child: Text(
               'Eliminar',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              style: AppFonts.inter(fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -1332,20 +1364,15 @@ class _CampoCantidadEditableState extends State<_CampoCantidadEditable> {
       focusNode: _focusNode,
       keyboardType: TextInputType.number,
       textAlign: TextAlign.center,
-      style: GoogleFonts.poppins(
+      style: AppFonts.inter(
         fontSize: 16,
         fontWeight: FontWeight.bold,
         color: _primaryColor,
       ),
       decoration: InputDecoration(
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 4,
-          vertical: 8,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       ),
       onTap: () {
         widget.controller.selection = TextSelection(
@@ -1369,7 +1396,14 @@ class _ModalBuscarProducto extends StatefulWidget {
   final String eventoId;
   final String sectorId;
   final Set<String> productIdsEnStock;
-  final void Function(String productoId, String nombre, double precio, int cantidad, [String categoria]) onAgregarLocal;
+  final void Function(
+    String productoId,
+    String nombre,
+    double precio,
+    int cantidad, [
+    String categoria,
+  ])
+  onAgregarLocal;
 
   const _ModalBuscarProducto({
     required this.eventoId,
@@ -1387,9 +1421,9 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
   final Set<String> _idsAgregadosEnSesion = {};
 
   Set<String> get _idsExcluidos => {
-        ...widget.productIdsEnStock,
-        ..._idsAgregadosEnSesion,
-      };
+    ...widget.productIdsEnStock,
+    ..._idsAgregadosEnSesion,
+  };
 
   @override
   void initState() {
@@ -1452,14 +1486,14 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey[300],
+              color: AppColors.tintaSecundaria,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(height: 20),
           Text(
             'Buscar Producto',
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: _primaryColor,
@@ -1469,8 +1503,8 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
           Text(
             'La lista se actualiza sola si el admin agrega un producto nuevo.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
+            style: AppFonts.inter(
+              fontSize: 14,
               color: _secondaryColor,
               height: 1.3,
             ),
@@ -1482,7 +1516,7 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
               hintText: 'Buscar productos...',
               prefixIcon: Icon(Icons.search, color: _secondaryColor),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: AppColors.tarjetaAlta,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -1495,37 +1529,25 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
               stream: FirestoreHelpers.streamProductosCatalogo(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        'Error al cargar productos: ${snapshot.error}',
-                        style: GoogleFonts.poppins(color: Colors.red),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
+                  return ErrorAmable(
+                    titulo: 'No pudimos cargar los productos',
+                    detalle: 'Error al cargar productos: ${snapshot.error}',
                   );
                 }
 
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
-                  return Center(
-                    child: CircularProgressIndicator(color: _accentColor),
-                  );
+                  return Center(child: CircularProgressIndicator());
                 }
 
                 final docs = snapshot.data?.docs ?? [];
                 final filtrados = _filtrarYOrdenar(docs);
 
                 if (filtrados.isEmpty) {
-                  return Center(
-                    child: Text(
-                      _searchController.text.isEmpty
-                          ? 'No hay productos disponibles para agregar'
-                          : 'No se encontraron productos',
-                      style: GoogleFonts.poppins(color: _secondaryColor),
-                      textAlign: TextAlign.center,
-                    ),
+                  return EstadoVacio(
+                    titulo: _searchController.text.isEmpty
+                        ? 'No hay productos disponibles para agregar'
+                        : 'No se encontraron productos',
                   );
                 }
 
@@ -1535,23 +1557,20 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
                     final producto = filtrados[index];
                     final data = producto.data();
                     final nombre = data['nombre'] as String? ?? 'Sin nombre';
-                    final precio =
-                        (data['precio'] as num?)?.toDouble() ?? 0.0;
+                    final precio = (data['precio'] as num?)?.toDouble() ?? 0.0;
 
                     return ListTile(
                       leading: Icon(Icons.fastfood, color: _secondaryColor),
                       title: Text(
                         nombre,
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: AppFonts.inter(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(
-                        'Precio: \$${precio.toStringAsFixed(0)}',
-                        style: GoogleFonts.poppins(color: _secondaryColor),
+                        etiquetaPrecio(precio),
+                        style: AppFonts.inter(color: _secondaryColor),
                       ),
                       trailing: IconButton(
-                        icon: Icon(Icons.add_circle, color: _accentColor),
+                        icon: Icon(Icons.add_circle, color: AppColors.dorado),
                         onPressed: () => _agregarProductoAlStock(producto),
                       ),
                     );

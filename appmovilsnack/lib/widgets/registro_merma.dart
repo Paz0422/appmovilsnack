@@ -1,15 +1,18 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/core/precio.dart';
 
 // Paleta de colores basada en el logo "Fusión"
-const Color _primaryColor = Color(0xFF2B2B2B);
-const Color _accentColor = Color(0xFFDABF41);
-const Color _secondaryColor = Color(0xFF6B4D2F);
-const Color _backgroundColor = Color(0xFFFDFBF7);
+const Color _primaryColor = AppColors.primaryLight;
+const Color _accentColor = AppColors.accent;
+const Color _secondaryColor = AppColors.secondary;
+const Color _backgroundColor = AppColors.surface;
 
 /// Widget para registrar mermas (pérdidas) de productos en stock
 class RegistroMerma extends StatelessWidget {
@@ -31,70 +34,65 @@ class RegistroMerma extends StatelessWidget {
     return KeyedSubtree(
       key: ValueKey('registro-merma-$_scopeKey'),
       child: DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: _backgroundColor,
-        appBar: AppBar(
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Registro de Mermas',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.bold,
-                  color: _accentColor,
-                  fontSize: 18,
+        length: 2,
+        child: Scaffold(
+          backgroundColor: _backgroundColor,
+          appBar: AppBar(
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Registro de Mermas',
+                  style: AppFonts.inter(
+                    fontWeight: FontWeight.bold,
+                    color: _accentColor,
+                    fontSize: 18,
+                  ),
                 ),
-              ),
-              Text(
-                nombreSector,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: Colors.white70,
+                Text(
+                  nombreSector,
+                  style: AppFonts.inter(fontSize: 14, color: Colors.white70),
                 ),
-              ),
-            ],
-          ),
-          backgroundColor: _primaryColor,
-          foregroundColor: _accentColor,
-          bottom: TabBar(
-            labelColor: _accentColor,
-            unselectedLabelColor: Colors.white70,
-            indicatorColor: _accentColor,
-            tabs: [
-              Tab(
-                child: Text(
-                  'Nueva Merma',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-                ),
-              ),
-              Tab(
-                child: Text(
-                  'Historial',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-        ),
-        body: Column(
-          children: [
-            // Pérdida total acumulada: solo para el admin.
-            if (AuthManager().sesionEsAdmin)
-              _PerdidaTotalAcumulada(eventoId: eventoId, sectorId: sectorId),
-            // Tabs content
-            Expanded(
-              child: TabBarView(
-                children: [
-                  _TabNuevaMerma(eventoId: eventoId, sectorId: sectorId),
-                  _TabHistorial(eventoId: eventoId, sectorId: sectorId),
-                ],
-              ),
+              ],
             ),
-          ],
+            bottom: TabBar(
+              labelColor: _accentColor,
+              unselectedLabelColor: Colors.white70,
+              indicatorColor: _accentColor,
+              tabs: [
+                Tab(
+                  child: Text(
+                    'Nueva Merma',
+                    style: AppFonts.inter(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Tab(
+                  child: Text(
+                    'Historial',
+                    style: AppFonts.inter(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          body: Column(
+            children: [
+              // Pérdida total acumulada: solo para el admin.
+              if (AuthManager().sesionEsAdmin)
+                _PerdidaTotalAcumulada(eventoId: eventoId, sectorId: sectorId),
+              // Tabs content
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _TabNuevaMerma(eventoId: eventoId, sectorId: sectorId),
+                    _TabHistorial(eventoId: eventoId, sectorId: sectorId),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }
@@ -143,10 +141,10 @@ class _PerdidaTotalAcumulada extends StatelessWidget {
           margin: const EdgeInsets.all(16),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.red.withValues(alpha: 0.1),
+            color: AppColors.error.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: Colors.red.withValues(alpha: 0.3),
+              color: AppColors.error.withValues(alpha: 0.3),
               width: 1,
             ),
           ),
@@ -154,17 +152,14 @@ class _PerdidaTotalAcumulada extends StatelessWidget {
             children: [
               Icon(
                 Icons.warning_amber_rounded,
-                color: Colors.red[700],
+                color: AppColors.error,
                 size: 24,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Pérdida total acumulada',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: _secondaryColor,
-                  ),
+                  style: AppFonts.inter(fontSize: 14, color: _secondaryColor),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -172,10 +167,10 @@ class _PerdidaTotalAcumulada extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 '\$${perdidaTotal.toStringAsFixed(0)}',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Colors.red[700],
+                  color: AppColors.error,
                 ),
               ),
             ],
@@ -243,8 +238,8 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg, style: GoogleFonts.poppins()),
-        backgroundColor: esError ? Colors.red : Colors.green,
+        content: Text(msg, style: AppFonts.inter()),
+        backgroundColor: esError ? AppColors.errorFuerte : AppColors.exitoFuerte,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -262,7 +257,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           existente != null ? 'Actualizar en el carrito' : 'Agregar al carrito',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          style: AppFonts.inter(fontWeight: FontWeight.bold),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -270,7 +265,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
           children: [
             Text(
               producto.nombre,
-              style: GoogleFonts.poppins(
+              style: AppFonts.inter(
                 fontWeight: FontWeight.w600,
                 fontSize: 16,
                 color: _primaryColor,
@@ -286,7 +281,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
               ),
               child: Text(
                 'Disponible: ${producto.cantidad} u.',
-                style: GoogleFonts.poppins(fontSize: 13, color: _secondaryColor),
+                style: AppFonts.inter(fontSize: 14, color: _secondaryColor),
               ),
             ),
             const SizedBox(height: 14),
@@ -315,12 +310,12 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
               onPressed: () => Navigator.of(dialogContext).pop(-1),
               child: Text(
                 'Quitar',
-                style: GoogleFonts.poppins(color: Colors.red),
+                style: AppFonts.inter(color: AppColors.error),
               ),
             ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(null),
-            child: Text('Cancelar', style: GoogleFonts.poppins()),
+            child: Text('Cancelar', style: AppFonts.inter()),
           ),
           ElevatedButton.icon(
             onPressed: () {
@@ -330,7 +325,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
             icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
             label: Text(
               existente != null ? 'Actualizar' : 'Agregar',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              style: AppFonts.inter(fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: _accentColor,
@@ -395,7 +390,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: AppColors.tintaSecundaria,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -403,7 +398,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
               const SizedBox(height: 16),
               Text(
                 'Carrito de mermas',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                   color: _primaryColor,
@@ -421,12 +416,12 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                       contentPadding: EdgeInsets.zero,
                       title: Text(
                         l.nombre,
-                        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                        style: AppFonts.inter(fontWeight: FontWeight.w600),
                       ),
                       subtitle: Text(
                         '${l.cantidad} u.',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
+                        style: AppFonts.inter(
+                          fontSize: 14,
                           color: _secondaryColor,
                         ),
                       ),
@@ -451,7 +446,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
               const SizedBox(height: 8),
               Text(
                 '${lineas.length} productos · $_totalUnidades unidades',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontWeight: FontWeight.w600,
                   color: _primaryColor,
                 ),
@@ -484,18 +479,18 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
             ),
             title: Text(
               'Registrar mermas',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              style: AppFonts.inter(fontWeight: FontWeight.bold),
             ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(resumen, style: GoogleFonts.poppins(height: 1.45)),
+                  Text(resumen, style: AppFonts.inter(height: 1.45)),
                   const SizedBox(height: 8),
                   Text(
                     'Total: ${lineas.length} productos · $_totalUnidades u.',
-                    style: GoogleFonts.poppins(
+                    style: AppFonts.inter(
                       fontWeight: FontWeight.w600,
                       color: _primaryColor,
                     ),
@@ -518,14 +513,17 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: _accentColor, width: 2),
+                        borderSide: BorderSide(
+                          color: AppColors.dorado,
+                          width: 2,
+                        ),
                       ),
                       errorBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Colors.red),
+                        borderSide: const BorderSide(color: AppColors.error),
                       ),
                     ),
-                    style: GoogleFonts.poppins(),
+                    style: AppFonts.inter(),
                   ),
                 ],
               ),
@@ -533,7 +531,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: Text('Cancelar', style: GoogleFonts.poppins()),
+                child: Text('Cancelar', style: AppFonts.inter()),
               ),
               ElevatedButton.icon(
                 onPressed: () {
@@ -548,7 +546,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                 icon: const Icon(Icons.check_rounded, size: 18),
                 label: Text(
                   'Confirmar',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                  style: AppFonts.inter(fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _accentColor,
@@ -599,31 +597,20 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       key: ValueKey('mermas-stock-${widget.eventoId}-${widget.sectorId}'),
-      stream: FirestoreHelpers.refStockSector(widget.eventoId, widget.sectorId)
-          .orderBy('nombre')
-          .snapshots(),
+      stream: FirestoreHelpers.refStockSector(
+        widget.eventoId,
+        widget.sectorId,
+      ).orderBy('nombre').snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator(color: _accentColor));
+          return Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error al cargar productos: ${snapshot.error}',
-                    style: GoogleFonts.poppins(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
+          return ErrorAmable(
+            titulo: 'No pudimos cargar los productos',
+            detalle: '${snapshot.error}',
+            onReintentar: () => setState(() {}),
           );
         }
 
@@ -656,7 +643,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                   Expanded(
                     child: Text(
                       'Seleccione los productos a registrar',
-                      style: GoogleFonts.poppins(
+                      style: AppFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: _primaryColor,
@@ -672,8 +659,8 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   'Toque cada producto para agregarlo al carrito. Puede registrar uno o varios juntos.',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
+                  style: AppFonts.inter(
+                    fontSize: 14,
                     color: _secondaryColor.withValues(alpha: 0.9),
                     height: 1.35,
                   ),
@@ -708,38 +695,9 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
   }
 
   Widget _buildSinStock() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.inventory_2_outlined,
-              size: 64,
-              color: _secondaryColor.withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No hay productos con stock disponible',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                color: _secondaryColor,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'No se pueden registrar mermas sin stock en este sector.',
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: _secondaryColor.withValues(alpha: 0.7),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return const EstadoVacio(
+      titulo: 'No hay productos con stock disponible',
+      mensaje: 'No se pueden registrar mermas sin stock en este sector.',
     );
   }
 
@@ -755,12 +713,12 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
             Icon(
               Icons.remove_circle_outline,
               size: 64,
-              color: Colors.red.withValues(alpha: 0.55),
+              color: AppColors.error.withValues(alpha: 0.55),
             ),
             const SizedBox(height: 20),
             Text(
               'Registrar merma de productos',
-              style: GoogleFonts.poppins(
+              style: AppFonts.inter(
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
                 color: _primaryColor,
@@ -772,8 +730,8 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
               tieneCarrito
                   ? 'Tiene ${_carrito.length} producto(s) pendientes en el carrito.'
                   : 'Puede cargar una o varias pérdidas en un solo registro.',
-              style: GoogleFonts.poppins(
-                fontSize: 13,
+              style: AppFonts.inter(
+                fontSize: 14,
                 color: _secondaryColor.withValues(alpha: 0.85),
                 height: 1.4,
               ),
@@ -785,7 +743,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
               icon: const Icon(Icons.add_rounded),
               label: Text(
                 tieneCarrito ? 'Continuar merma' : 'Agregar merma',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                style: AppFonts.inter(fontWeight: FontWeight.bold),
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: _accentColor,
@@ -808,7 +766,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
   Widget _buildBarraCarrito() {
     return Material(
       elevation: 8,
-      color: Colors.white,
+      color: AppColors.tarjeta,
       child: SafeArea(
         top: false,
         child: Padding(
@@ -827,16 +785,16 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                       children: [
                         Text(
                           '${_carrito.length} productos en el carrito',
-                          style: GoogleFonts.poppins(
+                          style: AppFonts.inter(
                             fontWeight: FontWeight.w600,
-                            fontSize: 13,
+                            fontSize: 14,
                             color: _primaryColor,
                           ),
                         ),
                         Text(
                           '$_totalUnidades u. · Toque para ver',
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
+                          style: AppFonts.inter(
+                            fontSize: 14,
                             color: _secondaryColor,
                           ),
                         ),
@@ -849,10 +807,10 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                 onPressed: _registrando ? null : _limpiarCarrito,
                 child: Text(
                   'Vaciar',
-                  style: GoogleFonts.poppins(
-                    color: Colors.red[700],
+                  style: AppFonts.inter(
+                    color: AppColors.error,
                     fontWeight: FontWeight.w600,
-                    fontSize: 12,
+                    fontSize: 14,
                   ),
                 ),
               ),
@@ -871,7 +829,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                     : const Icon(Icons.check_rounded, size: 18),
                 label: Text(
                   'Registrar',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                  style: AppFonts.inter(fontWeight: FontWeight.bold),
                 ),
                 style: FilledButton.styleFrom(
                   backgroundColor: _accentColor,
@@ -925,7 +883,10 @@ class _ProductoMermaCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: enCarrito
-            ? BorderSide(color: _accentColor.withValues(alpha: 0.7), width: 1.5)
+            ? BorderSide(
+                color: AppColors.dorado.withValues(alpha: 0.7),
+                width: 1.5,
+              )
             : BorderSide.none,
       ),
       child: InkWell(
@@ -942,18 +903,18 @@ class _ProductoMermaCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: enCarrito
                   ? _accentColor.withValues(alpha: 0.25)
-                  : Colors.orange.withValues(alpha: 0.2),
+                  : AppColors.aviso.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
               enCarrito ? Icons.shopping_cart_rounded : Icons.inventory_2,
-              color: enCarrito ? _primaryColor : Colors.orange[700],
+              color: enCarrito ? _primaryColor : AppColors.aviso,
               size: 26,
             ),
           ),
           title: Text(
             producto.nombre,
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontWeight: FontWeight.bold,
               fontSize: 16,
               color: _primaryColor,
@@ -964,11 +925,8 @@ class _ProductoMermaCard extends StatelessWidget {
             children: [
               const SizedBox(height: 4),
               Text(
-                'Precio: \$${producto.precio.toStringAsFixed(0)}',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: _secondaryColor,
-                ),
+                etiquetaPrecio(producto.precio),
+                style: AppFonts.inter(fontSize: 14, color: _secondaryColor),
               ),
               const SizedBox(height: 4),
               Row(
@@ -979,15 +937,15 @@ class _ProductoMermaCard extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.1),
+                      color: AppColors.exito.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       'Stock: ${producto.cantidad}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
+                      style: AppFonts.inter(
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: Colors.green[700],
+                        color: AppColors.exito,
                       ),
                     ),
                   ),
@@ -999,15 +957,15 @@ class _ProductoMermaCard extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.12),
+                        color: AppColors.error.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         'Carrito: $cantidadEnCarrito u.',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
+                        style: AppFonts.inter(
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Colors.red[700],
+                          color: AppColors.error,
                         ),
                       ),
                     ),
@@ -1018,7 +976,7 @@ class _ProductoMermaCard extends StatelessWidget {
           ),
           trailing: Icon(
             enCarrito ? Icons.edit_outlined : Icons.add_circle_outline,
-            color: enCarrito ? _secondaryColor : Colors.red[700],
+            color: enCarrito ? _secondaryColor : AppColors.error,
             size: 22,
           ),
         ),
@@ -1038,8 +996,10 @@ Future<void> _registrarMermasEnLote({
 
   await FirebaseFirestore.instance.runTransaction((transaction) async {
     for (final linea in lineas) {
-      final stockRef = FirestoreHelpers.refStockSector(eventoId, sectorId)
-          .doc(linea.productoId);
+      final stockRef = FirestoreHelpers.refStockSector(
+        eventoId,
+        sectorId,
+      ).doc(linea.productoId);
 
       final stockDoc = await transaction.get(stockRef);
 
@@ -1060,8 +1020,10 @@ Future<void> _registrarMermasEnLote({
         'cantidad': cantidadActual - linea.cantidad,
       });
 
-      final mermaRef =
-          FirestoreHelpers.refMermasSector(eventoId, sectorId).doc();
+      final mermaRef = FirestoreHelpers.refMermasSector(
+        eventoId,
+        sectorId,
+      ).doc();
 
       transaction.set(mermaRef, {
         'eventoId': eventoId,
@@ -1098,31 +1060,18 @@ class _TabHistorial extends StatelessWidget {
       ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator(color: _accentColor));
+          return Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error al cargar historial: ${snapshot.error}',
-                    style: GoogleFonts.poppins(color: Colors.red),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
+          return ErrorAmable(
+            titulo: 'No pudimos cargar el historial',
+            detalle: '${snapshot.error}',
           );
         }
 
         if (!snapshot.hasData) {
-          return Center(child: CircularProgressIndicator(color: _accentColor));
+          return Center(child: CircularProgressIndicator());
         }
 
         final mermas = snapshot.data!.docs.where((doc) {
@@ -1143,33 +1092,9 @@ class _TabHistorial extends StatelessWidget {
         }).toList();
 
         if (mermas.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.history,
-                  size: 64,
-                  color: _secondaryColor.withValues(alpha: 0.5),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No hay mermas registradas',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    color: _secondaryColor,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Las mermas de este sector aparecerán aquí',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: _secondaryColor.withValues(alpha: 0.7),
-                  ),
-                ),
-              ],
-            ),
+          return const EstadoVacio(
+            titulo: 'No hay mermas registradas',
+            mensaje: 'Las mermas de este sector aparecerán aquí. ¡Así se hace!',
           );
         }
 
@@ -1207,12 +1132,12 @@ class _TabHistorial extends StatelessWidget {
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
+                    color: AppColors.error.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     Icons.delete_outline,
-                    color: Colors.red[700],
+                    color: AppColors.error,
                     size: 28,
                   ),
                 ),
@@ -1222,7 +1147,7 @@ class _TabHistorial extends StatelessWidget {
                     Expanded(
                       child: Text(
                         nombreProducto,
-                        style: GoogleFonts.poppins(
+                        style: AppFonts.inter(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                           color: _primaryColor,
@@ -1235,15 +1160,15 @@ class _TabHistorial extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.1),
+                        color: AppColors.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         '-$cantidadPerdida',
-                        style: GoogleFonts.poppins(
+                        style: AppFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Colors.red[700],
+                          color: AppColors.error,
                         ),
                       ),
                     ),
@@ -1263,8 +1188,8 @@ class _TabHistorial extends StatelessWidget {
                         const SizedBox(width: 4),
                         Text(
                           horaFormato,
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
+                          style: AppFonts.inter(
+                            fontSize: 14,
                             color: _secondaryColor,
                           ),
                         ),
@@ -1273,8 +1198,8 @@ class _TabHistorial extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       motivo,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
+                      style: AppFonts.inter(
+                        fontSize: 14,
                         color: _secondaryColor.withValues(alpha: 0.8),
                         fontStyle: FontStyle.italic,
                       ),
@@ -1285,7 +1210,7 @@ class _TabHistorial extends StatelessWidget {
                 ),
                 trailing: Icon(
                   Icons.warning_amber_rounded,
-                  color: Colors.red[700],
+                  color: AppColors.error,
                   size: 20,
                 ),
               ),

@@ -3,9 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/services/traspaso_service.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
 
@@ -45,9 +46,7 @@ class ResumenPedidosPendientes {
     for (final doc in docs) {
       final d = doc.data();
       final pedidoId = d['pedidoId']?.toString();
-      ids.add(
-        (pedidoId != null && pedidoId.isNotEmpty) ? pedidoId : doc.id,
-      );
+      ids.add((pedidoId != null && pedidoId.isNotEmpty) ? pedidoId : doc.id);
       totalUnidades += _intDesdeFirestore(d['cantidadEnviada']);
 
       final fecha = d['fecha'];
@@ -92,14 +91,12 @@ class _GrupoPedido {
   final String origen;
   final List<DocumentSnapshot<Map<String, dynamic>>> lineas;
 
-  _GrupoPedido({
-    required this.id,
-    required this.origen,
-    required this.lineas,
-  });
+  _GrupoPedido({required this.id, required this.origen, required this.lineas});
 
-  int get totalEnviado =>
-      lineas.fold(0, (s, d) => s + _intDesdeFirestore(d.data()?['cantidadEnviada']));
+  int get totalEnviado => lineas.fold(
+    0,
+    (s, d) => s + _intDesdeFirestore(d.data()?['cantidadEnviada']),
+  );
 }
 
 int _intDesdeFirestore(dynamic value, [int fallback = 0]) {
@@ -234,7 +231,7 @@ class _DialogConfirmarRecepcionState extends State<_DialogConfirmarRecepcion> {
         widget.grupo.lineas.length == 1
             ? 'Confirmar recepción'
             : 'Confirmar pedido',
-        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        style: AppFonts.inter(fontWeight: FontWeight.bold),
       ),
       content: SizedBox(
         width: double.maxFinite,
@@ -245,8 +242,8 @@ class _DialogConfirmarRecepcionState extends State<_DialogConfirmarRecepcion> {
             children: [
               Text(
                 'Desde: ${widget.grupo.origen}',
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
+                style: AppFonts.inter(
+                  fontSize: 14,
                   color: widget.secondaryColor,
                 ),
               ),
@@ -264,8 +261,8 @@ class _DialogConfirmarRecepcionState extends State<_DialogConfirmarRecepcion> {
                   ),
                   child: Text(
                     'Si recibió menos de lo enviado, debe indicar el motivo.',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
+                    style: AppFonts.inter(
+                      fontSize: 14,
                       color: widget.secondaryColor,
                       height: 1.35,
                     ),
@@ -286,15 +283,15 @@ class _DialogConfirmarRecepcionState extends State<_DialogConfirmarRecepcion> {
                     children: [
                       Text(
                         nombre,
-                        style: GoogleFonts.poppins(
+                        style: AppFonts.inter(
                           fontWeight: FontWeight.w600,
                           color: widget.primaryColor,
                         ),
                       ),
                       Text(
                         'Enviado: $enviada u.',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
+                        style: AppFonts.inter(
+                          fontSize: 14,
                           color: widget.secondaryColor,
                         ),
                       ),
@@ -341,8 +338,8 @@ class _DialogConfirmarRecepcionState extends State<_DialogConfirmarRecepcion> {
                 const SizedBox(height: 4),
                 Text(
                   _error!,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
+                  style: AppFonts.inter(
+                    fontSize: 14,
                     color: AppColors.error,
                     fontWeight: FontWeight.w500,
                   ),
@@ -355,7 +352,7 @@ class _DialogConfirmarRecepcionState extends State<_DialogConfirmarRecepcion> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(null),
-          child: Text('Cancelar', style: GoogleFonts.poppins()),
+          child: Text('Cancelar', style: AppFonts.inter()),
         ),
         ElevatedButton(
           onPressed: _confirmar,
@@ -365,7 +362,7 @@ class _DialogConfirmarRecepcionState extends State<_DialogConfirmarRecepcion> {
           ),
           child: Text(
             'Confirmar',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+            style: AppFonts.inter(fontWeight: FontWeight.bold),
           ),
         ),
       ],
@@ -463,7 +460,7 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
         vendedorUid: user.uid,
         vendedorNombre:
             AuthManager().loggedInVendor?.data()?['username']?.toString() ??
-                user.email,
+            user.email,
       );
 
       if (!mounted) return;
@@ -476,9 +473,9 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
       } else if (resultado.unidadesDevueltas > 0) {
         mensaje = grupo.lineas.length == 1
             ? 'Recepción confirmada con diferencia. '
-                'Lo no recibido volvió al sector origen.'
+                  'Lo no recibido volvió al sector origen.'
             : 'Pedido confirmado con diferencias. '
-                'Lo no recibido volvió al sector origen.';
+                  'Lo no recibido volvió al sector origen.';
       } else {
         mensaje = grupo.lineas.length == 1
             ? 'Recepción confirmada.'
@@ -486,14 +483,12 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(mensaje, style: GoogleFonts.poppins()),
+          content: Text(mensaje, style: AppFonts.inter()),
           backgroundColor: resultado.faltanteRegistrado > 0
-              ? Colors.orange[800]
-              : AppColors.success,
+              ? AppColors.avisoFuerte
+              : AppColors.exitoFuerte,
           behavior: SnackBarBehavior.floating,
-          duration: Duration(
-            seconds: resultado.faltanteRegistrado > 0 ? 6 : 4,
-          ),
+          duration: Duration(seconds: resultado.faltanteRegistrado > 0 ? 6 : 4),
         ),
       );
     } on TraspasoException catch (e) {
@@ -511,8 +506,8 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg, style: GoogleFonts.poppins()),
-        backgroundColor: Colors.red,
+        content: Text(msg, style: AppFonts.inter()),
+        backgroundColor: AppColors.errorFuerte,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -522,33 +517,25 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        title: Text(
-          'Pedidos por confirmar',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            color: accentColor,
-            fontSize: 18,
-          ),
-        ),
-        backgroundColor: primaryColor,
-        foregroundColor: accentColor,
-      ),
+      appBar: AppBar(title: const Text('Pedidos por confirmar')),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            color: accentColor.withValues(alpha: 0.12),
+            decoration: const BoxDecoration(
+              color: AppColors.doradoSuave,
+              border: Border(bottom: BorderSide(color: AppColors.separador)),
+            ),
             child: Text(
               'Sector: ${widget.nombreSector}\n'
               'Recibiste pedidos de otros sectores. '
               'Confirme cuánto llegó. Si recibió menos, indique el motivo.',
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: secondaryColor,
-                height: 1.35,
+              style: AppFonts.inter(
+                fontSize: 15,
+                color: AppColors.tinta,
+                height: 1.4,
               ),
             ),
           ),
@@ -565,47 +552,22 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
-                  return Center(
-                    child: CircularProgressIndicator(color: accentColor),
-                  );
+                  return Center(child: CircularProgressIndicator());
                 }
                 if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        'Error: ${snapshot.error}',
-                        style: GoogleFonts.poppins(color: Colors.red),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
+                  return ErrorAmable(
+                    titulo: 'No pudimos cargar los pedidos',
+                    detalle: '${snapshot.error}',
+                    onReintentar: () => setState(() {}),
                   );
                 }
 
                 final docs = snapshot.data?.docs ?? [];
                 if (docs.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.inbox_outlined,
-                            size: 56,
-                            color: secondaryColor.withValues(alpha: 0.45),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'No hay pedidos pendientes',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                              color: primaryColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  return const EstadoVacio(
+                    titulo: 'Aún no hay traspasos',
+                    mensaje:
+                        'Cuando otro sector le envíe productos, aparecerán aquí para confirmarlos.',
                   );
                 }
 
@@ -631,14 +593,14 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
                             Row(
                               children: [
                                 CircleAvatar(
-                                  backgroundColor:
-                                      accentColor.withValues(alpha: 0.2),
+                                  radius: 24,
+                                  backgroundColor: AppColors.negro,
                                   child: Icon(
                                     esPedidoMulti
                                         ? Icons.receipt_long_outlined
                                         : Icons.local_shipping_outlined,
-                                    color: secondaryColor,
-                                    size: 20,
+                                    color: AppColors.dorado,
+                                    size: 24,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -654,17 +616,19 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
                                                       .data()?['nombre']
                                                       ?.toString() ??
                                                   'Producto',
-                                        style: GoogleFonts.poppins(
-                                          fontWeight: FontWeight.w600,
+                                        style: AppFonts.inter(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.tinta,
                                         ),
                                       ),
                                       Text(
                                         esPedidoMulti
                                             ? '${grupo.lineas.length} productos · ${grupo.totalEnviado} u.'
                                             : 'Desde ${grupo.origen} · ${grupo.totalEnviado} u.',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 12,
-                                          color: secondaryColor,
+                                        style: AppFonts.inter(
+                                          fontSize: 15,
+                                          color: AppColors.tintaSecundaria,
                                         ),
                                       ),
                                     ],
@@ -678,15 +642,16 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
                                 final d = doc.data()!;
                                 final nombre =
                                     d['nombre']?.toString() ?? 'Producto';
-                                final enviada =
-                                    _intDesdeFirestore(d['cantidadEnviada']);
+                                final enviada = _intDesdeFirestore(
+                                  d['cantidadEnviada'],
+                                );
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 4),
                                   child: Text(
                                     '• $nombre — $enviada u.',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12,
-                                      color: secondaryColor,
+                                    style: AppFonts.inter(
+                                      fontSize: 15,
+                                      color: AppColors.tinta,
                                     ),
                                   ),
                                 );
@@ -698,15 +663,13 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
                               child: FilledButton(
                                 onPressed: () => _confirmarPedido(grupo),
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: AppColors.success,
+                                  backgroundColor: AppColors.exito,
+                                  foregroundColor: AppColors.negro,
                                 ),
                                 child: Text(
                                   esPedidoMulti
                                       ? 'Confirmar pedido'
                                       : 'Confirmar recepción',
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w600,
-                                  ),
                                 ),
                               ),
                             ),
@@ -728,8 +691,7 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
 /// Cuenta pedidos pendientes (agrupados por pedidoId).
 int contarPedidosPendientes(
   List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-) =>
-    ResumenPedidosPendientes.fromDocs(docs).cantidadPedidos;
+) => ResumenPedidosPendientes.fromDocs(docs).cantidadPedidos;
 
 /// Notificación destacada cuando hay pedidos de traspaso por confirmar.
 class BannerTraspasosPendientes extends StatefulWidget {
@@ -810,122 +772,119 @@ class _BannerTraspasosPendientesState extends State<BannerTraspasosPendientes> {
     final unidades = widget.resumen.totalUnidades;
 
     return Opacity(
-      opacity: widget.habilitado ? 1 : 0.45,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _abrirConfirmacion,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          child: Ink(
-          decoration: BoxDecoration(
-            color: AppColors.surfaceCard,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(
-              color: AppColors.accent.withValues(alpha: 0.55),
-              width: 1.2,
-            ),
-            boxShadow: AppShadows.card,
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.lg - 1),
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(
-                    width: 4,
-                    color: AppColors.accent,
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Container(
-                            key: ValueKey(_pulso),
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: AppColors.accent.withValues(alpha: 0.16),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              Icons.notifications_active_rounded,
-                              color: AppColors.secondary,
-                              size: 22,
-                            ),
-                          )
-                              .animate(onPlay: (c) => c.repeat(reverse: true))
-                              .scale(
-                                begin: const Offset(1, 1),
-                                end: const Offset(1.06, 1.06),
-                                duration: 900.ms,
-                                curve: Curves.easeInOut,
-                              ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
+          opacity: widget.habilitado ? 1 : 0.45,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _abrirConfirmacion,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              child: Ink(
+                decoration: BoxDecoration(
+                  color: AppColors.dorado,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  border: Border.all(color: AppColors.negro, width: 2),
+                  boxShadow: AppShadows.card,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.lg - 1),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Text(
-                                  n == 1
-                                      ? 'Pedido recibido'
-                                      : 'Pedidos recibidos',
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
-                                    color: AppColors.primaryLight,
-                                    height: 1.2,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  n == 1
-                                      ? 'Confirme la recepción'
-                                      : '$n pedidos por confirmar'
-                                      '${unidades > 0 ? ' · $unidades u.' : ''}',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 11,
-                                    color: AppColors.onSurfaceVariant,
-                                    height: 1.25,
-                                  ),
-                                ),
-                                if (origen != null && origen.isNotEmpty)
-                                  Text(
-                                    'Desde $origen',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.secondary,
+                                Container(
+                                      key: ValueKey(_pulso),
+                                      width: 44,
+                                      height: 44,
+                                      decoration: const BoxDecoration(
+                                        color: AppColors.negro,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.notifications_active_rounded,
+                                        color: AppColors.dorado,
+                                        size: 24,
+                                      ),
+                                    )
+                                    .animate(
+                                      onPlay: (c) => c.repeat(reverse: true),
+                                    )
+                                    .scale(
+                                      begin: const Offset(1, 1),
+                                      end: const Offset(1.06, 1.06),
+                                      duration: 900.ms,
+                                      curve: Curves.easeInOut,
                                     ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        n == 1
+                                            ? 'Pedido recibido'
+                                            : 'Pedidos recibidos',
+                                        style: AppFonts.inter(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 17,
+                                          color: AppColors.negro,
+                                          height: 1.2,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        n == 1
+                                            ? 'Confirme la recepción'
+                                            : '$n pedidos por confirmar'
+                                                  '${unidades > 0 ? ' · $unidades u.' : ''}',
+                                        style: AppFonts.inter(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.negro,
+                                          height: 1.25,
+                                        ),
+                                      ),
+                                      if (origen != null && origen.isNotEmpty)
+                                        Text(
+                                          'Desde $origen',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: AppFonts.inter(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            color: AppColors.negro,
+                                          ),
+                                        ),
+                                    ],
                                   ),
+                                ),
+                                const SizedBox(width: 8),
+                                _BadgeContadorPedidos(cantidad: n),
+                                const SizedBox(width: 6),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: AppColors.negro,
+                                  size: 28,
+                                ),
                               ],
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          _BadgeContadorPedidos(cantidad: n),
-                          const SizedBox(width: 6),
-                          Icon(
-                            Icons.chevron_right_rounded,
-                            color: AppColors.secondary,
-                            size: 22,
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ),
-    ),
-    )
+        )
         .animate()
         .fadeIn(duration: 300.ms, curve: Curves.easeOut)
         .slideY(begin: -0.05, end: 0, duration: 350.ms, curve: Curves.easeOut);
@@ -938,17 +897,15 @@ class _BadgeContadorPedidos extends StatelessWidget {
 
   const _BadgeContadorPedidos({required this.cantidad});
 
-  static const _tam = 22.0;
-  static const _fontSize = 11.0;
+  static const _tam = 28.0;
+  static const _fontSize = 14.0;
 
   @override
   Widget build(BuildContext context) {
     final texto = '$cantidad';
     final unDigito = cantidad < 10;
     // Poppins: el "1" queda ópticamente arriba/izquierda en círculos chicos.
-    final ajusteOptico = cantidad == 1
-        ? const Offset(0.5, 1.0)
-        : Offset.zero;
+    final ajusteOptico = cantidad == 1 ? const Offset(0.5, 1.0) : Offset.zero;
 
     return Container(
       width: unDigito ? _tam : null,
@@ -957,7 +914,7 @@ class _BadgeContadorPedidos extends StatelessWidget {
       padding: unDigito ? null : const EdgeInsets.symmetric(horizontal: 6),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: AppColors.accent.withValues(alpha: 0.22),
+        color: AppColors.negro,
         shape: unDigito ? BoxShape.circle : BoxShape.rectangle,
         borderRadius: unDigito ? null : BorderRadius.circular(_tam / 2),
       ),
@@ -974,12 +931,12 @@ class _BadgeContadorPedidos extends StatelessWidget {
               leading: 0,
               forceStrutHeight: true,
             ),
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontWeight: FontWeight.w700,
               fontSize: _fontSize,
               height: 1,
               letterSpacing: 0,
-              color: AppColors.secondary,
+              color: AppColors.dorado,
             ),
           ),
         ),

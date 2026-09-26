@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/admin_bandejeo_service.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
@@ -80,10 +81,8 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
       appBar: AppBar(
         title: Text(
           'Bandejeo por sector',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          style: AppFonts.inter(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: AppColors.primaryLight,
-        foregroundColor: AppColors.accent,
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -112,8 +111,8 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
           Text(
             'Vista informativa del bandejeo en cada sector: bandejeros, '
             'rondas y dinero en calle.',
-            style: GoogleFonts.poppins(
-              fontSize: 12,
+            style: AppFonts.inter(
+              fontSize: 14,
               color: AppColors.secondary,
               height: 1.35,
             ),
@@ -124,7 +123,7 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
             decoration: InputDecoration(
               labelText: 'Evento',
               filled: true,
-              fillColor: Colors.white,
+              fillColor: AppColors.tarjetaAlta,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
@@ -167,21 +166,12 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
     if (_error != null) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: conMargenInferior(context, const EdgeInsets.all(24)),
         children: [
-          Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
-          const SizedBox(height: 12),
-          Text(
-            'Error al cargar: $_error',
-            style: GoogleFonts.poppins(color: Colors.red[700]),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: OutlinedButton(
-              onPressed: _cargarSectores,
-              child: const Text('Reintentar'),
-            ),
+          ErrorAmable(
+            titulo: 'No pudimos cargar el bandejeo',
+            detalle: 'Error al cargar: $_error',
+            onReintentar: _cargarSectores,
+            dentroDeLista: true,
           ),
         ],
       );
@@ -190,32 +180,13 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
     if (_sectores.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: conMargenInferior(context, const EdgeInsets.all(32)),
         children: [
-          Icon(
-            Icons.directions_walk_outlined,
-            size: 56,
-            color: AppColors.secondary.withValues(alpha: 0.4),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No hay bandejeo registrado',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: AppColors.primaryLight,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Cuando los sectores agreguen bandejeros y rondas, '
-            'aparecerán aquí.',
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: AppColors.secondary,
-            ),
-            textAlign: TextAlign.center,
+          EstadoVacio(
+            titulo: 'No hay bandejeo registrado',
+            mensaje:
+                'Cuando los sectores agreguen bandejeros y rondas, '
+                'aparecerán aquí.',
+            dentroDeLista: true,
           ),
         ],
       );
@@ -223,7 +194,10 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
 
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: conMargenInferior(context, const EdgeInsets.fromLTRB(16, 8, 16, 24)),
+      padding: conMargenInferior(
+        context,
+        const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      ),
       itemCount: _sectores.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) => _SectorBandejeoCard(
@@ -264,7 +238,7 @@ class _SectorBandejeoCard extends StatelessWidget {
           ),
           title: Text(
             resumen.sectorNombre,
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontWeight: FontWeight.bold,
               color: AppColors.primaryLight,
             ),
@@ -276,8 +250,8 @@ class _SectorBandejeoCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   resumen.eventoNombre,
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
+                  style: AppFonts.inter(
+                    fontSize: 14,
                     color: AppColors.secondary,
                   ),
                 ),
@@ -290,11 +264,13 @@ class _SectorBandejeoCard extends StatelessWidget {
                   _ChipInfo(
                     '${resumen.totalBandejeros} bandejero${resumen.totalBandejeros == 1 ? '' : 's'}',
                   ),
-                  _ChipInfo('${resumen.rondasRendidas} ronda${resumen.rondasRendidas == 1 ? '' : 's'}'),
+                  _ChipInfo(
+                    '${resumen.rondasRendidas} ronda${resumen.rondasRendidas == 1 ? '' : 's'}',
+                  ),
                   if (resumen.rondasEnCurso > 0)
                     _ChipInfo(
                       '${resumen.rondasEnCurso} en curso',
-                      color: Colors.orange,
+                      color: AppColors.aviso,
                     ),
                 ],
               ),
@@ -325,9 +301,9 @@ class _SectorBandejeoCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Bandejeros',
-              style: GoogleFonts.poppins(
+              style: AppFonts.inter(
                 fontWeight: FontWeight.w600,
-                fontSize: 13,
+                fontSize: 14,
                 color: AppColors.secondary,
               ),
             ),
@@ -358,8 +334,8 @@ class _ChipInfo extends StatelessWidget {
       ),
       child: Text(
         texto,
-        style: GoogleFonts.poppins(
-          fontSize: 11,
+        style: AppFonts.inter(
+          fontSize: 14,
           fontWeight: FontWeight.w500,
           color: color ?? AppColors.secondary,
         ),
@@ -392,16 +368,13 @@ class _ResumenFila extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: AppColors.secondary,
-              ),
+              style: AppFonts.inter(fontSize: 14, color: AppColors.secondary),
             ),
           ),
           Text(
             valor,
-            style: GoogleFonts.poppins(
-              fontSize: destacado ? 15 : 13,
+            style: AppFonts.inter(
+              fontSize: destacado ? 15 : 14,
               fontWeight: destacado ? FontWeight.bold : FontWeight.w600,
               color: destacado ? AppColors.success : AppColors.primaryLight,
             ),
@@ -416,26 +389,23 @@ class _BandejeroTile extends StatelessWidget {
   final AdminBandejeroResumen bandejero;
   final String Function(double) fmt;
 
-  const _BandejeroTile({
-    required this.bandejero,
-    required this.fmt,
-  });
+  const _BandejeroTile({required this.bandejero, required this.fmt});
 
   @override
   Widget build(BuildContext context) {
     final estado = bandejero.cerrado
         ? 'Cerrado'
         : bandejero.tieneRondaEnCurso
-            ? 'Ronda en curso'
-            : bandejero.rondasRendidas > 0
-                ? 'Entre rondas'
-                : 'Sin rondas';
+        ? 'Ronda en curso'
+        : bandejero.rondasRendidas > 0
+        ? 'Entre rondas'
+        : 'Sin rondas';
 
     final estadoColor = bandejero.cerrado
-        ? Colors.grey
+        ? AppColors.tintaSecundaria
         : bandejero.tieneRondaEnCurso
-            ? Colors.orange
-            : AppColors.success;
+        ? AppColors.aviso
+        : AppColors.success;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -453,7 +423,7 @@ class _BandejeroTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   bandejero.nombre,
-                  style: GoogleFonts.poppins(
+                  style: AppFonts.inter(
                     fontWeight: FontWeight.w600,
                     color: AppColors.primaryLight,
                   ),
@@ -467,14 +437,14 @@ class _BandejeroTile extends StatelessWidget {
                 ),
                 child: Text(
                   estado,
-                  style: GoogleFonts.poppins(
-                    fontSize: 10,
+                  style: AppFonts.inter(
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: estadoColor == Colors.grey
-                        ? Colors.grey[700]
-                        : estadoColor == Colors.orange
-                            ? Colors.orange[900]
-                            : AppColors.success,
+                    color: estadoColor == AppColors.tintaSecundaria
+                        ? AppColors.tintaSecundaria
+                        : estadoColor == AppColors.aviso
+                        ? AppColors.avisoTexto
+                        : AppColors.success,
                   ),
                 ),
               ),
@@ -484,25 +454,19 @@ class _BandejeroTile extends StatelessWidget {
           Text(
             '${bandejero.rondasRendidas} ronda${bandejero.rondasRendidas == 1 ? '' : 's'} rendida${bandejero.rondasRendidas == 1 ? '' : 's'} · '
             'Vendido: ${fmt(bandejero.totalVendido)}',
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              color: AppColors.secondary,
-            ),
+            style: AppFonts.inter(fontSize: 14, color: AppColors.secondary),
           ),
           if (!bandejero.cerrado) ...[
             Text(
               'En bandeja: ${fmt(bandejero.valorEnBandeja)} · '
               'Caja vuelto: ${fmt(bandejero.cajaVuelto)}',
-              style: GoogleFonts.poppins(
-                fontSize: 11,
-                color: AppColors.secondary,
-              ),
+              style: AppFonts.inter(fontSize: 14, color: AppColors.secondary),
             ),
             if (bandejero.tieneRondaEnCurso || bandejero.cajaVuelto > 0)
               Text(
                 'Estimado en calle: ${fmt(bandejero.efectivoEstimadoEnCalles)}',
-                style: GoogleFonts.poppins(
-                  fontSize: 11,
+                style: AppFonts.inter(
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: AppColors.primaryLight,
                 ),
@@ -511,8 +475,8 @@ class _BandejeroTile extends StatelessWidget {
           if (bandejero.cerrado && bandejero.totalARecibirCierre != null)
             Text(
               'Total recibido al cierre: ${fmt(bandejero.totalARecibirCierre!)}',
-              style: GoogleFonts.poppins(
-                fontSize: 11,
+              style: AppFonts.inter(
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: AppColors.success,
               ),
@@ -523,16 +487,13 @@ class _BandejeroTile extends StatelessWidget {
             Text(
               'Comisión al cierre: ${fmt(bandejero.comisionAlCierre!)} '
               '(${bandejero.porcentajeComision!.toStringAsFixed(bandejero.porcentajeComision!.roundToDouble() == bandejero.porcentajeComision! ? 0 : 1)}%)',
-              style: GoogleFonts.poppins(
-                fontSize: 11,
-                color: AppColors.secondary,
-              ),
+              style: AppFonts.inter(fontSize: 14, color: AppColors.secondary),
             )
           else if (!bandejero.cerrado)
             Text(
               'Comisión: se ingresa al cerrar el bandejeo',
-              style: GoogleFonts.poppins(
-                fontSize: 11,
+              style: AppFonts.inter(
+                fontSize: 14,
                 fontStyle: FontStyle.italic,
                 color: AppColors.secondary,
               ),

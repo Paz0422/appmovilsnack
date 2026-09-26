@@ -4,7 +4,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import '../auth/auth_manager.dart';
 import '../core/app_theme.dart';
 import '../services/firestore_helpers.dart';
@@ -64,7 +65,7 @@ class _AgregarStockState extends State<AgregarStock> {
         builder: (ctx, setDialogState) => AlertDialog(
           title: Text(
             'Agregar stock',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+            style: AppFonts.inter(fontWeight: FontWeight.w600),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -72,7 +73,7 @@ class _AgregarStockState extends State<AgregarStock> {
             children: [
               Text(
                 '$nombreProducto · $nombreSector\nStock actual: $stockActual u.',
-                style: GoogleFonts.poppins(fontSize: 13),
+                style: AppFonts.inter(fontSize: 14),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -107,7 +108,9 @@ class _AgregarStockState extends State<AgregarStock> {
                   setDialogState(() => error = 'Ingrese un número mayor que 0');
                   return;
                 }
-                Navigator.of(ctx).pop((cantidad: n, motivo: motivoController.text));
+                Navigator.of(
+                  ctx,
+                ).pop((cantidad: n, motivo: motivoController.text));
               },
               child: const Text('Agregar'),
             ),
@@ -128,31 +131,32 @@ class _AgregarStockState extends State<AgregarStock> {
         cantidad: resultado.cantidad,
         motivo: resultado.motivo,
         adminUid: FirebaseAuth.instance.currentUser?.uid ?? '',
-        adminNombre:
-            AuthManager().loggedInVendor?.data()?['username']?.toString(),
+        adminNombre: AuthManager().loggedInVendor
+            ?.data()?['username']
+            ?.toString(),
       );
       messenger.showSnackBar(
         SnackBar(
           content: Text(
             'Se agregaron ${resultado.cantidad} u. de $nombreProducto a $nombreSector.',
-            style: GoogleFonts.poppins(),
+            style: AppFonts.inter(),
           ),
-          backgroundColor: AppColors.success,
+          backgroundColor: AppColors.exitoFuerte,
           behavior: SnackBarBehavior.floating,
         ),
       );
     } on StockException catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.mensaje, style: GoogleFonts.poppins()),
-          backgroundColor: AppColors.error,
+          content: Text(e.mensaje, style: AppFonts.inter()),
+          backgroundColor: AppColors.errorFuerte,
         ),
       );
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('No se pudo agregar: $e', style: GoogleFonts.poppins()),
-          backgroundColor: AppColors.error,
+          content: Text('No se pudo agregar: $e', style: AppFonts.inter()),
+          backgroundColor: AppColors.errorFuerte,
         ),
       );
     }
@@ -165,57 +169,50 @@ class _AgregarStockState extends State<AgregarStock> {
       appBar: AppBar(
         title: Text(
           'Agregar stock',
-          style: GoogleFonts.poppins(
+          style: AppFonts.inter(
             fontWeight: FontWeight.w600,
             color: AppColors.accent,
             fontSize: 18,
           ),
         ),
-        backgroundColor: AppColors.primaryLight,
-        foregroundColor: AppColors.accent,
       ),
       body: _cargandoEventos
-          ? Center(child: CircularProgressIndicator(color: AppColors.accent))
+          ? Center(child: CircularProgressIndicator())
           : _eventos.isEmpty
-              ? Center(
-                  child: Text(
-                    'No hay eventos activos.',
-                    style: GoogleFonts.poppins(color: AppColors.onSurfaceVariant),
+          ? EstadoVacio(titulo: 'No hay eventos activos.')
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _eventoId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Evento'),
+                    items: [
+                      for (final e in _eventos)
+                        DropdownMenuItem(value: e.id, child: Text(_nombre(e))),
+                    ],
+                    onChanged: (v) => setState(() {
+                      _eventoId = v;
+                      _sectorId = null;
+                    }),
                   ),
-                )
-              : Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _eventoId,
-                        isExpanded: true,
-                        decoration: const InputDecoration(labelText: 'Evento'),
-                        items: [
-                          for (final e in _eventos)
-                            DropdownMenuItem(value: e.id, child: Text(_nombre(e))),
-                        ],
-                        onChanged: (v) => setState(() {
-                          _eventoId = v;
-                          _sectorId = null;
-                        }),
-                      ),
-                    ),
-                    if (_eventoId != null) _buildSelectorSector(),
-                    Expanded(
-                      child: _eventoId == null || _sectorId == null
-                          ? Center(
-                              child: Text(
-                                'Elija un evento y un sector abierto.',
-                                style: GoogleFonts.poppins(
-                                  color: AppColors.onSurfaceVariant,
-                                ),
-                              ),
-                            )
-                          : _buildProductos(),
-                    ),
-                  ],
                 ),
+                if (_eventoId != null) _buildSelectorSector(),
+                Expanded(
+                  child: _eventoId == null || _sectorId == null
+                      ? Center(
+                          child: Text(
+                            'Elija un evento y un sector abierto.',
+                            style: AppFonts.inter(
+                              color: AppColors.onSurfaceVariant,
+                            ),
+                          ),
+                        )
+                      : _buildProductos(),
+                ),
+              ],
+            ),
     );
   }
 
@@ -243,7 +240,9 @@ class _AgregarStockState extends State<AgregarStock> {
                   enabled: !cerrado(s),
                   child: Text(
                     cerrado(s) ? '${_nombre(s)} (Turno cerrado)' : _nombre(s),
-                    style: cerrado(s) ? const TextStyle(color: Colors.grey) : null,
+                    style: cerrado(s)
+                        ? const TextStyle(color: AppColors.tintaSecundaria)
+                        : null,
                   ),
                 ),
             ],
@@ -263,12 +262,13 @@ class _AgregarStockState extends State<AgregarStock> {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: sectorRef.snapshots(),
       builder: (context, sectorSnap) {
-        final nombreSector = sectorSnap.data?.data()?['nombre']?.toString() ?? '';
+        final nombreSector =
+            sectorSnap.data?.data()?['nombre']?.toString() ?? '';
         if (sectorSnap.data?.data()?['turnoCerrado'] == true) {
           return Center(
             child: Text(
               'Este sector cerró su turno: no se puede agregar stock.',
-              style: GoogleFonts.poppins(color: AppColors.onSurfaceVariant),
+              style: AppFonts.inter(color: AppColors.onSurfaceVariant),
             ),
           );
         }
@@ -276,24 +276,27 @@ class _AgregarStockState extends State<AgregarStock> {
           stream: sectorRef.collection('stock').snapshots(),
           builder: (context, snap) {
             if (!snap.hasData) {
-              return Center(
-                child: CircularProgressIndicator(color: AppColors.accent),
-              );
+              return Center(child: CircularProgressIndicator());
             }
-            final docs = [...snap.data!.docs]..sort(
-                (a, b) => (a.data()['nombre']?.toString() ?? '')
-                    .compareTo(b.data()['nombre']?.toString() ?? ''),
+            final docs = [...snap.data!.docs]
+              ..sort(
+                (a, b) => (a.data()['nombre']?.toString() ?? '').compareTo(
+                  b.data()['nombre']?.toString() ?? '',
+                ),
               );
             if (docs.isEmpty) {
               return Center(
                 child: Text(
                   'El sector no tiene stock cargado.',
-                  style: GoogleFonts.poppins(color: AppColors.onSurfaceVariant),
+                  style: AppFonts.inter(color: AppColors.onSurfaceVariant),
                 ),
               );
             }
             return ListView.separated(
-              padding: conMargenInferior(context, const EdgeInsets.fromLTRB(16, 8, 16, 16)),
+              padding: conMargenInferior(
+                context,
+                const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              ),
               itemCount: docs.length,
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, i) {
@@ -301,13 +304,13 @@ class _AgregarStockState extends State<AgregarStock> {
                 final nombre = d['nombre']?.toString() ?? docs[i].id;
                 final cantidad = (d['cantidad'] as num?)?.toInt() ?? 0;
                 return ListTile(
-                  title: Text(nombre, style: GoogleFonts.poppins()),
+                  title: Text(nombre, style: AppFonts.inter()),
                   subtitle: Text(
                     'Stock: $cantidad u.',
-                    style: GoogleFonts.poppins(fontSize: 12),
+                    style: AppFonts.inter(fontSize: 14),
                   ),
                   trailing: IconButton(
-                    icon: Icon(Icons.add_circle, color: AppColors.accent),
+                    icon: Icon(Icons.add_circle, color: AppColors.dorado),
                     tooltip: 'Agregar stock',
                     onPressed: () => _agregar(
                       productoId: docs[i].id,

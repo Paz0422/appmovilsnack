@@ -2,9 +2,10 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
 
 int _intDesdeFirestore(dynamic value, [int fallback = 0]) {
@@ -44,29 +45,34 @@ class _ReporteDiferenciasTraspasoState
 
       final list = <Map<String, dynamic>>[];
 
-      for (final eventoDoc in eventosSnapshot.docs) {
+      // Sectores de todos los eventos en paralelo.
+      final sectoresPorEvento = await Future.wait(
+        eventosSnapshot.docs.map((e) => FirestoreHelpers.getSectores(e.id)),
+      );
+
+      for (final (i, eventoDoc) in eventosSnapshot.docs.indexed) {
         final eventoId = eventoDoc.id;
         final eventoData = eventoDoc.data() as Map<String, dynamic>;
-        final eventoNombre =
-            eventoData['nombre']?.toString() ?? 'Sin nombre';
+        final eventoNombre = eventoData['nombre']?.toString() ?? 'Sin nombre';
 
-        final sectoresSnapshot = await FirestoreHelpers.getSectores(eventoId);
+        final sectoresSnapshot = sectoresPorEvento[i];
+        final traspasosPorSector = await Future.wait(
+          sectoresSnapshot.docs.map(
+            (s) => s.reference
+                .collection('traspasos_entrantes')
+                .where('estado', isEqualTo: 'confirmado')
+                .get(),
+          ),
+        );
 
-        for (final sectorDoc in sectoresSnapshot.docs) {
+        for (final (j, sectorDoc) in sectoresSnapshot.docs.indexed) {
           final sectorDestinoId = sectorDoc.id;
           final sectorDestinoNombre =
               (sectorDoc.data() as Map<String, dynamic>?)?['nombre']
-                      ?.toString() ??
-                  'Sin sector';
+                  ?.toString() ??
+              'Sin sector';
 
-          final traspasosSnapshot = await FirebaseFirestore.instance
-              .collection('eventos')
-              .doc(eventoId)
-              .collection('sectores')
-              .doc(sectorDestinoId)
-              .collection('traspasos_entrantes')
-              .where('estado', isEqualTo: 'confirmado')
-              .get();
+          final traspasosSnapshot = traspasosPorSector[j];
 
           for (final traspasoDoc in traspasosSnapshot.docs) {
             final d = traspasoDoc.data();
@@ -82,8 +88,8 @@ class _ReporteDiferenciasTraspasoState
               'eventoId': eventoId,
               'eventoNombre': eventoNombre,
               'sectorDestinoId': sectorDestinoId,
-              'sectorDestinoNombre': d['sectorDestinoNombre']?.toString() ??
-                  sectorDestinoNombre,
+              'sectorDestinoNombre':
+                  d['sectorDestinoNombre']?.toString() ?? sectorDestinoNombre,
               'sectorOrigenId': d['sectorOrigenId']?.toString() ?? '',
               'sectorOrigenNombre':
                   d['sectorOrigenNombre']?.toString() ?? 'Origen desconocido',
@@ -149,8 +155,7 @@ class _ReporteDiferenciasTraspasoState
       if (_sectorSeleccionadoId == null) return true;
       if (_sectorSeleccionadoId!.contains('|')) {
         final parts = _sectorSeleccionadoId!.split('|');
-        return r['eventoId'] == parts[0] &&
-            r['sectorDestinoId'] == parts[1];
+        return r['eventoId'] == parts[0] && r['sectorDestinoId'] == parts[1];
       }
       return r['sectorDestinoId'] == _sectorSeleccionadoId;
     }).toList();
@@ -219,14 +224,12 @@ class _ReporteDiferenciasTraspasoState
       appBar: AppBar(
         title: Text(
           'Diferencias en traspasos',
-          style: GoogleFonts.poppins(
+          style: AppFonts.inter(
             fontWeight: FontWeight.w600,
             color: AppColors.accent,
             fontSize: 18,
           ),
         ),
-        backgroundColor: AppColors.primaryLight,
-        foregroundColor: AppColors.accent,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -235,10 +238,7 @@ class _ReporteDiferenciasTraspasoState
               children: [
                 Text(
                   'Solo activos',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: Colors.white70,
-                  ),
+                  style: AppFonts.inter(fontSize: 14, color: Colors.white70),
                 ),
                 const SizedBox(width: 6),
                 Switch(
@@ -260,62 +260,26 @@ class _ReporteDiferenciasTraspasoState
 
   Widget _buildBody() {
     if (_isLoading) {
-      return Center(child: CircularProgressIndicator(color: AppColors.accent));
+      return Center(child: CircularProgressIndicator());
     }
     if (_errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
-              const SizedBox(height: 16),
-              Text(
-                'Error al cargar',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primaryLight,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _errorMessage!,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              TextButton.icon(
-                onPressed: _cargar,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Reintentar'),
-              ),
-            ],
-          ),
-        ),
+      return ErrorAmable(
+        titulo: 'No pudimos cargar las diferencias',
+        detalle: _errorMessage,
+        onReintentar: _cargar,
       );
     }
     if (_registros.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            _soloActivos
-                ? 'No hay traspasos con diferencia en eventos activos'
-                : 'No hay traspasos recibidos con menos unidades',
-            style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 14),
-            textAlign: TextAlign.center,
-          ),
-        ),
+      return EstadoVacio(
+        titulo: _soloActivos
+            ? 'No hay traspasos con diferencia en eventos activos'
+            : 'No hay traspasos recibidos con menos unidades',
       );
     }
 
     return RefreshIndicator(
       onRefresh: _cargar,
-      color: AppColors.accent,
+      color: AppColors.dorado,
       child: ListView(
         padding: conMargenInferior(context, const EdgeInsets.all(16)),
         children: [
@@ -325,7 +289,7 @@ class _ReporteDiferenciasTraspasoState
           const SizedBox(height: 16),
           Text(
             'Detalle de diferencias',
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontWeight: FontWeight.bold,
               fontSize: 16,
               color: AppColors.primaryLight,
@@ -335,15 +299,8 @@ class _ReporteDiferenciasTraspasoState
           if (_registrosFiltrados.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text(
-                  'No hay registros con los filtros seleccionados',
-                  style: GoogleFonts.poppins(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+              child: EstadoVacio(
+                titulo: 'No hay registros con los filtros seleccionados',
               ),
             )
           else
@@ -366,17 +323,16 @@ class _ReporteDiferenciasTraspasoState
         children: [
           Text(
             'Filtrar por',
-            style: GoogleFonts.poppins(
-              fontSize: 12,
+            style: AppFonts.inter(
+              fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+              color: AppColors.tintaSecundaria,
             ),
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
-            initialValue: _eventosOpciones.any(
-              (e) => e['id'] == _eventoSeleccionadoId,
-            )
+            initialValue:
+                _eventosOpciones.any((e) => e['id'] == _eventoSeleccionadoId)
                 ? _eventoSeleccionadoId
                 : null,
             isExpanded: true,
@@ -393,14 +349,14 @@ class _ReporteDiferenciasTraspasoState
             items: [
               DropdownMenuItem<String>(
                 value: null,
-                child: Text('Todos', style: GoogleFonts.poppins(fontSize: 13)),
+                child: Text('Todos', style: AppFonts.inter(fontSize: 14)),
               ),
               ..._eventosOpciones.map(
                 (e) => DropdownMenuItem<String>(
                   value: e['id'],
                   child: Text(
                     e['nombre'] ?? '',
-                    style: GoogleFonts.poppins(fontSize: 13),
+                    style: AppFonts.inter(fontSize: 14),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -415,9 +371,8 @@ class _ReporteDiferenciasTraspasoState
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            initialValue: _sectoresOpciones.any(
-              (s) => s['id'] == _sectorSeleccionadoId,
-            )
+            initialValue:
+                _sectoresOpciones.any((s) => s['id'] == _sectorSeleccionadoId)
                 ? _sectorSeleccionadoId
                 : null,
             isExpanded: true,
@@ -434,14 +389,14 @@ class _ReporteDiferenciasTraspasoState
             items: [
               DropdownMenuItem<String>(
                 value: null,
-                child: Text('Todos', style: GoogleFonts.poppins(fontSize: 13)),
+                child: Text('Todos', style: AppFonts.inter(fontSize: 14)),
               ),
               ..._sectoresOpciones.map(
                 (s) => DropdownMenuItem<String>(
                   value: s['id'],
                   child: Text(
                     s['nombre'] ?? '',
-                    style: GoogleFonts.poppins(fontSize: 13),
+                    style: AppFonts.inter(fontSize: 14),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -472,11 +427,8 @@ class _ReporteDiferenciasTraspasoState
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.secondary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: AppGradientes.tarjeta,
+        border: Border.all(color: AppColors.separador),
         borderRadius: BorderRadius.circular(AppRadius.lg),
         boxShadow: AppShadows.card,
       ),
@@ -489,7 +441,7 @@ class _ReporteDiferenciasTraspasoState
               const SizedBox(width: 8),
               Text(
                 'Unidades no recibidas',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontSize: 14,
                   color: Colors.white70,
                   fontWeight: FontWeight.w500,
@@ -501,7 +453,7 @@ class _ReporteDiferenciasTraspasoState
           Text(
             '$totalUnidades u. en ${_registrosFiltrados.length} línea'
             '${_registrosFiltrados.length == 1 ? '' : 's'}',
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Colors.white,
@@ -512,17 +464,17 @@ class _ReporteDiferenciasTraspasoState
             Text(
               '${pedidos.length} pedido${pedidos.length == 1 ? '' : 's'} afectado'
               '${pedidos.length == 1 ? '' : 's'}',
-              style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
+              style: AppFonts.inter(fontSize: 14, color: Colors.white70),
             ),
           ],
           if (totalValor > 0) ...[
             const SizedBox(height: 4),
             Text(
               '\$${totalValor.toStringAsFixed(0)} estimado',
-              style: GoogleFonts.poppins(
+              style: AppFonts.inter(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: AppColors.accent,
+                color: AppColors.primaryLight,
               ),
             ),
           ],
@@ -573,7 +525,7 @@ class _ReporteDiferenciasTraspasoState
                     children: [
                       Text(
                         nombre,
-                        style: GoogleFonts.poppins(
+                        style: AppFonts.inter(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                           color: AppColors.primaryLight,
@@ -582,9 +534,9 @@ class _ReporteDiferenciasTraspasoState
                       const SizedBox(height: 2),
                       Text(
                         '$evento · $origen → $destino',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.grey[600],
+                        style: AppFonts.inter(
+                          fontSize: 14,
+                          color: AppColors.tintaSecundaria,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -598,15 +550,15 @@ class _ReporteDiferenciasTraspasoState
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.12),
+                    color: AppColors.aviso.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     '-$diferencia',
-                    style: GoogleFonts.poppins(
+                    style: AppFonts.inter(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: Colors.orange[800],
+                      color: AppColors.aviso,
                     ),
                   ),
                 ),
@@ -619,7 +571,7 @@ class _ReporteDiferenciasTraspasoState
                 const SizedBox(width: 8),
                 _chipCantidad('Recibido', recibida, AppColors.success),
                 const SizedBox(width: 8),
-                _chipCantidad('Faltante', diferencia, Colors.orange[800]!),
+                _chipCantidad('Faltante', diferencia, AppColors.aviso),
               ],
             ),
             const SizedBox(height: 12),
@@ -629,17 +581,17 @@ class _ReporteDiferenciasTraspasoState
               decoration: BoxDecoration(
                 color: AppColors.primaryLight.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                border: Border.all(color: AppColors.tintaSecundaria.withValues(alpha: 0.3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Comentario del receptor',
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
+                    style: AppFonts.inter(
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey[600],
+                      color: AppColors.tintaSecundaria,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -647,11 +599,11 @@ class _ReporteDiferenciasTraspasoState
                     comentario.isNotEmpty
                         ? comentario
                         : 'Sin comentario registrado',
-                    style: GoogleFonts.poppins(
+                    style: AppFonts.inter(
                       fontSize: 14,
                       color: comentario.isNotEmpty
                           ? AppColors.primaryLight
-                          : Colors.grey[500],
+                          : AppColors.tintaSecundaria,
                       fontStyle: comentario.isEmpty
                           ? FontStyle.italic
                           : FontStyle.normal,
@@ -663,7 +615,10 @@ class _ReporteDiferenciasTraspasoState
             const SizedBox(height: 8),
             Text(
               'Confirmado: $fechaStr',
-              style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[500]),
+              style: AppFonts.inter(
+                fontSize: 14,
+                color: AppColors.tintaSecundaria,
+              ),
             ),
           ],
         ),
@@ -683,12 +638,15 @@ class _ReporteDiferenciasTraspasoState
           children: [
             Text(
               label,
-              style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey[600]),
+              style: AppFonts.inter(
+                fontSize: 14,
+                color: AppColors.tintaSecundaria,
+              ),
             ),
             const SizedBox(height: 2),
             Text(
               '$valor',
-              style: GoogleFonts.poppins(
+              style: AppFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: color,

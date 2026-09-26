@@ -1,9 +1,11 @@
 // Admin: gestionar categorías de productos (agregar, listar, eliminar)
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/core/app_theme.dart';
 
 class GestionCategorias extends StatefulWidget {
   const GestionCategorias({super.key});
@@ -17,9 +19,9 @@ class _GestionCategoriasState extends State<GestionCategorias> {
   bool _loading = true;
   String? _error;
 
-  final Color primaryColor = const Color(0xFF2B2B2B);
-  final Color accentColor = const Color(0xFFDABF41);
-  final Color secondaryColor = const Color(0xFF6B4D2F);
+  final Color primaryColor = AppColors.primaryLight;
+  final Color accentColor = AppColors.accent;
+  final Color secondaryColor = AppColors.secondary;
 
   @override
   void initState() {
@@ -67,7 +69,7 @@ class _GestionCategoriasState extends State<GestionCategorias> {
             return AlertDialog(
               title: Text(
                 'Agregar categoría',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontWeight: FontWeight.bold,
                   color: primaryColor,
                 ),
@@ -85,10 +87,13 @@ class _GestionCategoriasState extends State<GestionCategorias> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: accentColor, width: 2),
+                          borderSide: BorderSide(
+                            color: AppColors.dorado,
+                            width: 2,
+                          ),
                         ),
                       ),
-                      style: GoogleFonts.poppins(),
+                      style: AppFonts.inter(),
                       onChanged: (v) => nombre = v.trim(),
                     ),
                     const SizedBox(height: 16),
@@ -107,7 +112,7 @@ class _GestionCategoriasState extends State<GestionCategorias> {
                             children: [
                               Icon(e.value, size: 22, color: secondaryColor),
                               const SizedBox(width: 8),
-                              Text(e.key, style: GoogleFonts.poppins()),
+                              Text(e.key, style: AppFonts.inter()),
                             ],
                           ),
                         );
@@ -127,7 +132,7 @@ class _GestionCategoriasState extends State<GestionCategorias> {
                   onPressed: () => Navigator.of(ctx).pop(false),
                   child: Text(
                     'Cancelar',
-                    style: GoogleFonts.poppins(color: secondaryColor),
+                    style: AppFonts.inter(color: secondaryColor),
                   ),
                 ),
                 ElevatedButton(
@@ -137,9 +142,9 @@ class _GestionCategoriasState extends State<GestionCategorias> {
                         SnackBar(
                           content: Text(
                             'Escribe un nombre',
-                            style: GoogleFonts.poppins(),
+                            style: AppFonts.inter(),
                           ),
-                          backgroundColor: Colors.red,
+                          backgroundColor: AppColors.errorFuerte,
                         ),
                       );
                       return;
@@ -147,12 +152,12 @@ class _GestionCategoriasState extends State<GestionCategorias> {
                     Navigator.of(ctx).pop(true);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: accentColor,
-                    foregroundColor: primaryColor,
+                    backgroundColor: AppColors.dorado,
+                    foregroundColor: AppColors.negro,
                   ),
                   child: Text(
                     'Agregar',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                    style: AppFonts.inter(fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -180,9 +185,9 @@ class _GestionCategoriasState extends State<GestionCategorias> {
           SnackBar(
             content: Text(
               'Categoría "$nombre" agregada',
-              style: GoogleFonts.poppins(),
+              style: AppFonts.inter(),
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.exitoFuerte,
           ),
         );
         _cargar();
@@ -191,8 +196,8 @@ class _GestionCategoriasState extends State<GestionCategorias> {
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text('Error: $e', style: GoogleFonts.poppins()),
-            backgroundColor: Colors.red,
+            content: Text('Error: $e', style: AppFonts.inter()),
+            backgroundColor: AppColors.errorFuerte,
           ),
         );
       }
@@ -210,25 +215,25 @@ class _GestionCategoriasState extends State<GestionCategorias> {
       builder: (ctx) => AlertDialog(
         title: Text(
           'Eliminar categoría',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          style: AppFonts.inter(fontWeight: FontWeight.bold),
         ),
         content: Text(
           '¿Eliminar "$nombre"? Los productos con esta categoría quedarán como "Otros".',
-          style: GoogleFonts.poppins(),
+          style: AppFonts.inter(),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Cancelar',
-              style: GoogleFonts.poppins(color: secondaryColor),
+              style: AppFonts.inter(color: secondaryColor),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
               'Eliminar',
-              style: GoogleFonts.poppins(color: Colors.red),
+              style: AppFonts.inter(color: AppColors.error),
             ),
           ),
         ],
@@ -240,8 +245,8 @@ class _GestionCategoriasState extends State<GestionCategorias> {
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text('Categoría eliminada', style: GoogleFonts.poppins()),
-            backgroundColor: Colors.green,
+            content: Text('Categoría eliminada', style: AppFonts.inter()),
+            backgroundColor: AppColors.exitoFuerte,
           ),
         );
         _cargar();
@@ -250,8 +255,8 @@ class _GestionCategoriasState extends State<GestionCategorias> {
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text('Error: $e', style: GoogleFonts.poppins()),
-            backgroundColor: Colors.red,
+            content: Text('Error: $e', style: AppFonts.inter()),
+            backgroundColor: AppColors.errorFuerte,
           ),
         );
       }
@@ -261,17 +266,15 @@ class _GestionCategoriasState extends State<GestionCategorias> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFBF7),
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: Text(
           'Categorías de productos',
-          style: GoogleFonts.poppins(
+          style: AppFonts.inter(
             fontWeight: FontWeight.bold,
             color: accentColor,
           ),
         ),
-        backgroundColor: primaryColor,
-        foregroundColor: accentColor,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -280,20 +283,19 @@ class _GestionCategoriasState extends State<GestionCategorias> {
         ],
       ),
       body: _loading
-          ? Center(child: CircularProgressIndicator(color: accentColor))
+          ? Center(child: CircularProgressIndicator())
           : _error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  'Error: $_error',
-                  style: GoogleFonts.poppins(color: Colors.red),
-                  textAlign: TextAlign.center,
-                ),
-              ),
+          ? ErrorAmable(
+              titulo: 'No pudimos cargar las categorías',
+              detalle: 'Error: $_error',
+              onReintentar: _cargar,
             )
           : ListView.builder(
-              padding: conMargenInferior(context, const EdgeInsets.all(16), extra: espacioBotonFlotante),
+              padding: conMargenInferior(
+                context,
+                const EdgeInsets.all(16),
+                extra: espacioBotonFlotante,
+              ),
               itemCount: _docs.length,
               itemBuilder: (context, index) {
                 final doc = _docs[index];
@@ -312,10 +314,13 @@ class _GestionCategoriasState extends State<GestionCategorias> {
                     ),
                     title: Text(
                       nombre,
-                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                      style: AppFonts.inter(fontWeight: FontWeight.w600),
                     ),
                     trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        color: AppColors.error,
+                      ),
                       onPressed: () => _eliminarCategoria(doc),
                     ),
                   ),
@@ -324,12 +329,12 @@ class _GestionCategoriasState extends State<GestionCategorias> {
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _agregarCategoria,
-        backgroundColor: accentColor,
-        foregroundColor: primaryColor,
+        backgroundColor: AppColors.dorado,
+        foregroundColor: AppColors.negro,
         icon: const Icon(Icons.add),
         label: Text(
           'Agregar categoría',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          style: AppFonts.inter(fontWeight: FontWeight.bold),
         ),
       ),
     );

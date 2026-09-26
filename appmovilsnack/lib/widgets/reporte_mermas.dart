@@ -2,9 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
 
 class ReporteMermas extends StatefulWidget {
@@ -36,15 +37,28 @@ class _ReporteMermasState extends State<ReporteMermas> {
       final List<Map<String, dynamic>> list = [];
       final List<Map<String, String>> sectoresCatalogo = [];
 
-      for (var eventoDoc in eventosSnapshot.docs) {
+      // Sectores de todos los eventos en paralelo.
+      final sectoresPorEvento = await Future.wait(
+        eventosSnapshot.docs.map((e) => FirestoreHelpers.getSectores(e.id)),
+      );
+
+      for (final (i, eventoDoc) in eventosSnapshot.docs.indexed) {
         final eventoId = eventoDoc.id;
         final eventoNombre =
             (eventoDoc.data() as Map<String, dynamic>)['nombre']?.toString() ??
             'Sin nombre';
 
-        final sectoresSnapshot = await FirestoreHelpers.getSectores(eventoId);
+        final sectoresSnapshot = sectoresPorEvento[i];
+        final mermasPorSector = await Future.wait(
+          sectoresSnapshot.docs.map(
+            (s) => FirestoreHelpers.refMermasSector(
+              eventoId,
+              s.id,
+            ).orderBy('fecha', descending: true).get(),
+          ),
+        );
 
-        for (var sectorDoc in sectoresSnapshot.docs) {
+        for (final (j, sectorDoc) in sectoresSnapshot.docs.indexed) {
           final sectorId = sectorDoc.id;
           final sectorNombre =
               (sectorDoc.data() as Map<String, dynamic>?)?['nombre']
@@ -59,10 +73,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
             'eventoNombre': eventoNombre,
           });
 
-          final mermasSnapshot =
-              await FirestoreHelpers.refMermasSector(eventoId, sectorId)
-                  .orderBy('fecha', descending: true)
-                  .get();
+          final mermasSnapshot = mermasPorSector[j];
 
           for (var mermaDoc in mermasSnapshot.docs) {
             final d = mermaDoc.data();
@@ -188,15 +199,13 @@ class _ReporteMermasState extends State<ReporteMermas> {
       backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: Text(
-          'Reporte de mermas',
-          style: GoogleFonts.poppins(
+          'Mermas',
+          style: AppFonts.inter(
             fontWeight: FontWeight.w600,
             color: AppColors.accent,
             fontSize: 18,
           ),
         ),
-        backgroundColor: AppColors.primaryLight,
-        foregroundColor: AppColors.accent,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -205,10 +214,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
               children: [
                 Text(
                   'Solo activos',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: Colors.white70,
-                  ),
+                  style: AppFonts.inter(fontSize: 14, color: Colors.white70),
                 ),
                 const SizedBox(width: 6),
                 Switch(
@@ -225,58 +231,22 @@ class _ReporteMermasState extends State<ReporteMermas> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: AppColors.accent))
+          ? Center(child: CircularProgressIndicator())
           : _errorMessage != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Error al cargar',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primaryLight,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _errorMessage!,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    TextButton.icon(
-                      onPressed: _cargar,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Reintentar'),
-                    ),
-                  ],
-                ),
-              ),
+          ? ErrorAmable(
+              titulo: 'No pudimos cargar las mermas',
+              detalle: _errorMessage,
+              onReintentar: _cargar,
             )
           : _mermas.isEmpty
-          ? Center(
-              child: Text(
-                _soloActivos
-                    ? 'No hay mermas en eventos activos'
-                    : 'No hay mermas registradas',
-                style: GoogleFonts.poppins(
-                  color: Colors.grey[600],
-                  fontSize: 14,
-                ),
-                textAlign: TextAlign.center,
-              ),
+          ? EstadoVacio(
+              titulo: _soloActivos
+                  ? 'No hay mermas en eventos activos'
+                  : 'No hay mermas registradas',
             )
           : RefreshIndicator(
               onRefresh: _cargar,
-              color: AppColors.accent,
+              color: AppColors.dorado,
               child: ListView(
                 padding: conMargenInferior(context, const EdgeInsets.all(16)),
                 children: [
@@ -286,7 +256,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
                   const SizedBox(height: 16),
                   Text(
                     'Detalle de mermas',
-                    style: GoogleFonts.poppins(
+                    style: AppFonts.inter(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                       color: AppColors.primaryLight,
@@ -296,15 +266,8 @@ class _ReporteMermasState extends State<ReporteMermas> {
                   if (_mermasFiltradas.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Center(
-                        child: Text(
-                          'No hay mermas con los filtros seleccionados',
-                          style: GoogleFonts.poppins(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
+                      child: EstadoVacio(
+                        titulo: 'No hay mermas con los filtros seleccionados',
                       ),
                     )
                   else
@@ -329,10 +292,10 @@ class _ReporteMermasState extends State<ReporteMermas> {
         children: [
           Text(
             'Filtrar por',
-            style: GoogleFonts.poppins(
-              fontSize: 12,
+            style: AppFonts.inter(
+              fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+              color: AppColors.tintaSecundaria,
             ),
           ),
           const SizedBox(height: 10),
@@ -355,14 +318,14 @@ class _ReporteMermasState extends State<ReporteMermas> {
             items: [
               DropdownMenuItem<String>(
                 value: null,
-                child: Text('Todos', style: GoogleFonts.poppins(fontSize: 13)),
+                child: Text('Todos', style: AppFonts.inter(fontSize: 14)),
               ),
               ..._eventosOpciones.map(
                 (e) => DropdownMenuItem<String>(
                   value: e['id'],
                   child: Text(
                     e['nombre'] ?? '',
-                    style: GoogleFonts.poppins(fontSize: 13),
+                    style: AppFonts.inter(fontSize: 14),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -395,14 +358,14 @@ class _ReporteMermasState extends State<ReporteMermas> {
             items: [
               DropdownMenuItem<String>(
                 value: null,
-                child: Text('Todos', style: GoogleFonts.poppins(fontSize: 13)),
+                child: Text('Todos', style: AppFonts.inter(fontSize: 14)),
               ),
               ..._sectoresOpciones.map(
                 (s) => DropdownMenuItem<String>(
                   value: s['id'],
                   child: Text(
                     s['nombre'] ?? '',
-                    style: GoogleFonts.poppins(fontSize: 13),
+                    style: AppFonts.inter(fontSize: 14),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -432,15 +395,11 @@ class _ReporteMermasState extends State<ReporteMermas> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.red[700]!, Colors.red[900]!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: AppGradientes.perdida,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.red.withValues(alpha: 0.3),
+            color: AppColors.error.withValues(alpha: 0.3),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -455,7 +414,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
               const SizedBox(width: 8),
               Text(
                 'Pérdida total',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontSize: 14,
                   color: Colors.white70,
                   fontWeight: FontWeight.w500,
@@ -466,7 +425,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
           const SizedBox(height: 12),
           Text(
             '$totalUnidades unidades',
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Colors.white,
@@ -476,7 +435,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
             const SizedBox(height: 4),
             Text(
               '\$${totalValor.toStringAsFixed(0)}',
-              style: GoogleFonts.poppins(
+              style: AppFonts.inter(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -515,12 +474,12 @@ class _ReporteMermasState extends State<ReporteMermas> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
+                    color: AppColors.error.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     Icons.remove_circle_outline,
-                    color: Colors.red[700],
+                    color: AppColors.error,
                     size: 26,
                   ),
                 ),
@@ -531,7 +490,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
                     children: [
                       Text(
                         nombreProducto,
-                        style: GoogleFonts.poppins(
+                        style: AppFonts.inter(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                           color: AppColors.primaryLight,
@@ -540,9 +499,9 @@ class _ReporteMermasState extends State<ReporteMermas> {
                       const SizedBox(height: 2),
                       Text(
                         '$eventoNombre · $sectorNombre',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.grey[600],
+                        style: AppFonts.inter(
+                          fontSize: 14,
+                          color: AppColors.tintaSecundaria,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -556,15 +515,15 @@ class _ReporteMermasState extends State<ReporteMermas> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
+                    color: AppColors.error.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     '-$cantidad',
-                    style: GoogleFonts.poppins(
+                    style: AppFonts.inter(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: Colors.red[700],
+                      color: AppColors.error,
                     ),
                   ),
                 ),
@@ -577,23 +536,23 @@ class _ReporteMermasState extends State<ReporteMermas> {
               decoration: BoxDecoration(
                 color: AppColors.primaryLight.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                border: Border.all(color: AppColors.tintaSecundaria.withValues(alpha: 0.3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Motivo',
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
+                    style: AppFonts.inter(
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey[600],
+                      color: AppColors.tintaSecundaria,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     motivo,
-                    style: GoogleFonts.poppins(
+                    style: AppFonts.inter(
                       fontSize: 14,
                       color: AppColors.primaryLight,
                     ),
@@ -604,7 +563,10 @@ class _ReporteMermasState extends State<ReporteMermas> {
             const SizedBox(height: 6),
             Text(
               fechaStr,
-              style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[500]),
+              style: AppFonts.inter(
+                fontSize: 14,
+                color: AppColors.tintaSecundaria,
+              ),
             ),
           ],
         ),

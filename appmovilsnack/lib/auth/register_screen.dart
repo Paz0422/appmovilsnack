@@ -3,20 +3,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/auth/firebase_auth_messages.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/auth/auth_layout.dart';
+import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 // Necessário para ImageFilter.blur
 
 // Paleta de cores baseada no logo "Fusión"
-const Color primaryColor = Color(0xFF2B2B2B); // Preto/marrón oscuro
-const Color accentColor = Color(0xFFDABF41); // Dorado brillante
-const Color secondaryColor = Color(0xFF6B4D2F); // Marrón medio
-const Color backgroundColorStart = Color(
-  0xFFFDFBF7,
-); // Fundo claro elegante (anteriormente backgroundColorEnd)
-const Color backgroundColorEnd = Color(
-  0xFFFDFBF7,
-); // Usamos o mesmo para um fundo uniforme se só quiser uma cor
+const Color primaryColor = AppColors.primaryLight; // Preto/marrón oscuro
+const Color accentColor = AppColors.accent; // Dorado brillante
+const Color secondaryColor = AppColors.secondary; // Marrón medio
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -40,8 +35,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: GoogleFonts.lato()),
-        backgroundColor: isError ? Colors.redAccent : Colors.green,
+        content: Text(message, style: AppFonts.inter()),
+        backgroundColor: isError ? AppColors.errorFuerte : AppColors.exitoFuerte,
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: isError ? 6 : 4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -204,171 +199,86 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Registrar Nuevo Usuario',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.bold,
-            color: accentColor,
+    return PantallaAcceso(
+      titulo: 'Registrar Nuevo Usuario',
+      descripcion: 'Crea una nueva cuenta de vendedor.',
+      children: [
+        TextField(
+          controller: _usernameController,
+          autofocus: true,
+          textInputAction: TextInputAction.next,
+          style: estiloCampoAcceso,
+          decoration: const InputDecoration(
+            labelText: 'Nombre de Usuario',
+            prefixIcon: Icon(Icons.person_outline),
+            helperText: 'Mín. 3 caracteres.',
           ),
         ),
-        backgroundColor: primaryColor,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [backgroundColorStart, backgroundColorEnd],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+        const SizedBox(height: 20),
+        TextField(
+          controller: _emailController,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          style: estiloCampoAcceso,
+          decoration: const InputDecoration(
+            labelText: 'Correo Electrónico',
+            prefixIcon: Icon(Icons.email_outlined),
           ),
         ),
-        child: Center(
-          child: SingleChildScrollView(
-            padding: conMargenInferior(context, const EdgeInsets.all(24.0)),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Crea una nueva cuenta de vendedor.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.lato(
-                    fontSize: 18,
-                    color: primaryColor,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 30),
-                TextField(
-                  controller: _usernameController,
-                  autofocus: true,
-                  style: GoogleFonts.lato(fontStyle: FontStyle.italic),
-                  decoration:
-                      _buildInputDecoration(
-                        'Nombre de Usuario',
-                        Icons.person_outline,
-                      ).copyWith(
-                        helperText: 'Mín. 3 caracteres.',
-                        helperStyle: GoogleFonts.lato(color: Colors.black54),
-                      ),
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  style: GoogleFonts.lato(fontStyle: FontStyle.italic),
-                  decoration: _buildInputDecoration(
-                    'Correo Electrónico',
-                    Icons.email_outlined,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: _passwordController,
-                  style: GoogleFonts.lato(fontStyle: FontStyle.italic),
-                  obscureText: !_isPasswordVisible,
-                  decoration:
-                      _buildInputDecoration(
-                        'Contraseña',
-                        Icons.lock_outline,
-                      ).copyWith(
-                        helperText:
-                            'Mín. 5 caracteres, incluir letras y números.',
-                        helperStyle: GoogleFonts.lato(color: Colors.black54),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _isPasswordVisible
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: Colors.black54,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _isPasswordVisible = !_isPasswordVisible;
-                            });
-                          },
-                        ),
-                      ),
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: _confirmPasswordController,
-                  style: GoogleFonts.lato(fontStyle: FontStyle.italic),
-                  obscureText: !_isConfirmPasswordVisible,
-                  decoration:
-                      _buildInputDecoration(
-                        'Confirmar Contraseña',
-                        Icons.lock_outline,
-                      ).copyWith(
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _isConfirmPasswordVisible
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: Colors.black54,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _isConfirmPasswordVisible =
-                                  !_isConfirmPasswordVisible;
-                            });
-                          },
-                        ),
-                      ),
-                ),
-                const SizedBox(height: 30),
-                ElevatedButton.icon(
-                  onPressed: _registerUser,
-                  icon: const Icon(Icons.person_add),
-                  label: Text(
-                    'Registrarme',
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accentColor,
-                    foregroundColor: primaryColor,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 50,
-                      vertical: 15,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                    elevation: 8,
-                    shadowColor: Colors.black.withValues(alpha: 0.5),
-                  ),
-                ),
-              ],
+        const SizedBox(height: 20),
+        TextField(
+          controller: _passwordController,
+          obscureText: !_isPasswordVisible,
+          textInputAction: TextInputAction.next,
+          style: estiloCampoAcceso,
+          decoration: InputDecoration(
+            labelText: 'Contraseña',
+            prefixIcon: const Icon(Icons.lock_outline),
+            helperText: 'Mín. 5 caracteres, incluir letras y números.',
+            suffixIcon: IconButton(
+              tooltip: _isPasswordVisible ? 'Ocultar' : 'Mostrar',
+              icon: Icon(
+                _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
+              ),
+              onPressed: () {
+                setState(() {
+                  _isPasswordVisible = !_isPasswordVisible;
+                });
+              },
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  InputDecoration _buildInputDecoration(String label, IconData prefixIcon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(prefixIcon, color: const Color.fromARGB(137, 0, 0, 0)),
-      filled: true,
-      fillColor: Colors.white.withValues(alpha: 0.8),
-      // --- MODIFICACIÓN AQUÍ: AÑADIDO UN BORDE POR DEFECTO ---
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12.0),
-        borderSide: BorderSide(
-          color: primaryColor.withValues(alpha: 0.5),
-          width: 1.0,
-        ), // Borde por defecto
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12.0),
-        borderSide: const BorderSide(color: primaryColor, width: 2.5),
-      ),
-      labelStyle: GoogleFonts.lato(fontStyle: FontStyle.italic),
+        const SizedBox(height: 20),
+        TextField(
+          controller: _confirmPasswordController,
+          obscureText: !_isConfirmPasswordVisible,
+          textInputAction: TextInputAction.done,
+          style: estiloCampoAcceso,
+          decoration: InputDecoration(
+            labelText: 'Confirmar Contraseña',
+            prefixIcon: const Icon(Icons.lock_outline),
+            suffixIcon: IconButton(
+              tooltip: _isConfirmPasswordVisible ? 'Ocultar' : 'Mostrar',
+              icon: Icon(
+                _isConfirmPasswordVisible
+                    ? Icons.visibility_off
+                    : Icons.visibility,
+              ),
+              onPressed: () {
+                setState(() {
+                  _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                });
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 28),
+        ElevatedButton.icon(
+          onPressed: _registerUser,
+          icon: const Icon(Icons.person_add),
+          label: const Text('Registrarme'),
+        ),
+      ],
     );
   }
 }

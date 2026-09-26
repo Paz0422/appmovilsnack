@@ -10,7 +10,8 @@ import 'package:front_appsnack/widgets/confirmacion_traspasos.dart';
 import 'package:front_appsnack/widgets/bandejeo_flow.dart';
 import 'package:front_appsnack/widgets/estadio_selection.dart';
 import 'package:front_appsnack/core/app_theme.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 
 class HomeVendedor extends StatefulWidget {
   final String eventId;
@@ -33,10 +34,10 @@ class HomeVendedor extends StatefulWidget {
 }
 
 class _HomeVendedorState extends State<HomeVendedor> {
-  final Color primaryColor = const Color(0xFF2B2B2B);
-  final Color accentColor = const Color(0xFFDABF41);
-  final Color secondaryColor = const Color(0xFF6B4D2F);
-  final Color backgroundColor = const Color(0xFFFDFBF7);
+  final Color primaryColor = AppColors.primaryLight;
+  final Color accentColor = AppColors.accent;
+  final Color secondaryColor = AppColors.secondary;
+  final Color backgroundColor = AppColors.surface;
 
   DateTime _currentTime = DateTime.now();
   late final String _currentSectorNombre;
@@ -76,16 +77,16 @@ class _HomeVendedorState extends State<HomeVendedor> {
             builder: (ctx) => AlertDialog(
               title: Text(
                 'Sector con turno cerrado',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                style: AppFonts.inter(fontWeight: FontWeight.bold),
               ),
               content: Text(
                 'Este sector tiene el turno cerrado. Un administrador debe reabrirlo desde Gestión de eventos para poder operar aquí.',
-                style: GoogleFonts.poppins(),
+                style: AppFonts.inter(),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(),
-                  child: Text('Entendido', style: GoogleFonts.poppins()),
+                  child: Text('Entendido', style: AppFonts.inter()),
                 ),
               ],
             ),
@@ -180,21 +181,30 @@ class _HomeVendedorState extends State<HomeVendedor> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset("assets/imagenes/logo.png", height: 32),
+            Image.asset(
+              "assets/imagenes/logo.png",
+              height: 40,
+              excludeFromSemantics: true,
+            ),
             const SizedBox(width: 10),
-            Text(
-              'Panel de Vendedor',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                color: accentColor,
-                fontSize: 17,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const MarcaFusion(tamano: 22),
+                Text(
+                  'Panel de Vendedor',
+                  style: AppFonts.inter(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
         actions: null,
-        backgroundColor: primaryColor,
-        foregroundColor: accentColor,
         automaticallyImplyLeading: false,
       ),
       bottomNavigationBar: _buildBarraAccesoCuenta(),
@@ -202,12 +212,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
         builder: (context, constraints) {
           final layout = _VendedorPanelLayout.fromWidth(constraints.maxWidth);
           return Padding(
-            padding: EdgeInsets.fromLTRB(
-              layout.padding,
-              12,
-              layout.padding,
-              8,
-            ),
+            padding: EdgeInsets.fromLTRB(layout.padding, 12, layout.padding, 8),
             child: Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
@@ -242,10 +247,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                             ),
                           ),
                           const SizedBox(width: 16),
-                          Expanded(
-                            flex: 6,
-                            child: _buildPanelAcciones(layout),
-                          ),
+                          Expanded(flex: 6, child: _buildPanelAcciones(layout)),
                         ],
                       )
                     : Column(
@@ -274,9 +276,9 @@ class _HomeVendedorState extends State<HomeVendedor> {
 
   Widget _buildBarraAccesoCuenta() {
     return Material(
-      color: Colors.white,
+      color: AppColors.tarjeta,
       elevation: 10,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
+      shadowColor: Colors.black.withValues(alpha: 0.3),
       child: SafeArea(
         top: false,
         child: Padding(
@@ -288,9 +290,9 @@ class _HomeVendedorState extends State<HomeVendedor> {
                   icon: Icons.stadium_outlined,
                   label: 'Cambiar evento',
                   onTap: _cambiarEvento,
-                  color: secondaryColor,
-                  borde: accentColor.withValues(alpha: 0.75),
-                  fondo: accentColor.withValues(alpha: 0.1),
+                  color: AppColors.tinta,
+                  borde: AppColors.separador,
+                  fondo: AppColors.tarjetaAlta,
                 ),
               ),
               const SizedBox(width: 12),
@@ -300,17 +302,17 @@ class _HomeVendedorState extends State<HomeVendedor> {
                         icon: Icons.admin_panel_settings_outlined,
                         label: 'Panel admin',
                         onTap: _volverAlPanelAdmin,
-                        color: primaryColor,
-                        borde: primaryColor.withValues(alpha: 0.25),
-                        fondo: primaryColor.withValues(alpha: 0.06),
+                        color: AppColors.tinta,
+                        borde: AppColors.separador,
+                        fondo: AppColors.tarjetaAlta,
                       )
                     : _buildBotonBarraInferior(
                         icon: Icons.logout_rounded,
                         label: 'Cerrar sesión',
                         onTap: _cerrarSesion,
                         color: AppColors.error,
-                        borde: AppColors.error.withValues(alpha: 0.35),
-                        fondo: AppColors.error.withValues(alpha: 0.08),
+                        borde: AppColors.error,
+                        fondo: AppColors.errorSuave,
                       ),
               ),
             ],
@@ -337,23 +339,24 @@ class _HomeVendedorState extends State<HomeVendedor> {
           decoration: BoxDecoration(
             color: fondo,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: borde, width: 1.2),
+            border: Border.all(color: borde, width: 1.5),
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 13),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: AppTamanos.boton),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, color: color, size: 20),
+                Icon(icon, color: color, size: 22),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                    style: AppFonts.inter(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
                       color: color,
                     ),
                   ),
@@ -371,9 +374,9 @@ class _HomeVendedorState extends State<HomeVendedor> {
       SnackBar(
         content: Text(
           'Debe ingresar el stock inicial antes de usar esta operación.',
-          style: GoogleFonts.poppins(),
+          style: AppFonts.inter(),
         ),
-        backgroundColor: Colors.orange,
+        backgroundColor: AppColors.avisoFuerte,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -392,22 +395,27 @@ class _HomeVendedorState extends State<HomeVendedor> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.12),
+        color: AppColors.avisoSuave,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.45)),
+        border: Border.all(color: AppColors.aviso, width: 1.5),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline_rounded, color: Colors.orange[800], size: 22),
+          const Icon(
+            Icons.info_outline_rounded,
+            color: AppColors.aviso,
+            size: 24,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               'Ingrese el stock inicial para habilitar traspasos, mermas y bandejeo. '
               'Puede recibir traspasos de otros sectores antes de cargar su inventario.',
-              style: GoogleFonts.poppins(
-                fontSize: 12.5,
-                color: secondaryColor,
+              style: AppFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.avisoTexto,
                 height: 1.35,
               ),
             ),
@@ -444,8 +452,9 @@ class _HomeVendedorState extends State<HomeVendedor> {
   Widget _buildEncabezadoTurno({required bool compacto}) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        gradient: AppGradientes.tarjeta,
+        border: Border.all(color: AppColors.separador),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
         boxShadow: AppShadows.card,
       ),
       clipBehavior: Clip.antiAlias,
@@ -453,7 +462,6 @@ class _HomeVendedorState extends State<HomeVendedor> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(width: 5, color: accentColor),
             Expanded(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -468,12 +476,12 @@ class _HomeVendedorState extends State<HomeVendedor> {
                       width: compacto ? 40 : 44,
                       height: compacto ? 40 : 44,
                       decoration: BoxDecoration(
-                        color: accentColor.withValues(alpha: 0.15),
+                        color: AppColors.dorado,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
                         Icons.storefront_rounded,
-                        color: secondaryColor,
+                        color: AppColors.negro,
                         size: compacto ? 22 : 24,
                       ),
                     ),
@@ -487,20 +495,20 @@ class _HomeVendedorState extends State<HomeVendedor> {
                               _nombreEvento!,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.poppins(
-                                fontSize: compacto ? 11 : 12,
+                              style: AppFonts.inter(
+                                fontSize: 14,
                                 fontWeight: FontWeight.w500,
-                                color: secondaryColor,
+                                color: AppColors.tintaSecundaria,
                               ),
                             ),
                           Text(
                             _currentSectorNombre,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.poppins(
-                              fontSize: compacto ? 15 : 16,
-                              fontWeight: FontWeight.w700,
-                              color: primaryColor,
+                            style: AppFonts.inter(
+                              fontSize: compacto ? 20 : 22,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
                             ),
                           ),
                         ],
@@ -511,19 +519,19 @@ class _HomeVendedorState extends State<HomeVendedor> {
                       children: [
                         Text(
                           '${_currentTime.hour.toString().padLeft(2, '0')}:${_currentTime.minute.toString().padLeft(2, '0')}:${_currentTime.second.toString().padLeft(2, '0')}',
-                          style: GoogleFonts.poppins(
-                            fontSize: compacto ? 18 : 20,
-                            fontWeight: FontWeight.w700,
-                            color: accentColor,
+                          style: AppFonts.inter(
+                            fontSize: compacto ? 20 : 22,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.dorado,
                             height: 1,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           '${_currentTime.day.toString().padLeft(2, '0')}/${_currentTime.month.toString().padLeft(2, '0')}/${_currentTime.year}',
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            color: secondaryColor,
+                          style: AppFonts.inter(
+                            fontSize: 14,
+                            color: AppColors.tintaSecundaria,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -552,13 +560,13 @@ class _HomeVendedorState extends State<HomeVendedor> {
             width: compacto ? 48 : 54,
             height: compacto ? 48 : 54,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.22),
+              color: AppColors.negro,
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
               esFinal ? Icons.fact_check_outlined : Icons.add_box_outlined,
               size: compacto ? 26 : 30,
-              color: Colors.white,
+              color: AppColors.dorado,
             ),
           ),
           const SizedBox(width: 14),
@@ -568,13 +576,11 @@ class _HomeVendedorState extends State<HomeVendedor> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  esFinal
-                      ? 'Ingresar stock final'
-                      : 'Ingresar stock inicial',
-                  style: GoogleFonts.poppins(
-                    fontSize: compacto ? 16 : 18,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                  esFinal ? 'Ingresar stock final' : 'Ingresar stock inicial',
+                  style: AppFonts.inter(
+                    fontSize: compacto ? 19 : 21,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.negro,
                     height: 1.2,
                   ),
                 ),
@@ -585,9 +591,10 @@ class _HomeVendedorState extends State<HomeVendedor> {
                       : 'Registre las cantidades de apertura',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: Colors.white.withValues(alpha: 0.9),
+                  style: AppFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.negro.withValues(alpha: 0.8),
                     height: 1.25,
                   ),
                 ),
@@ -595,10 +602,10 @@ class _HomeVendedorState extends State<HomeVendedor> {
             ),
           ),
           const SizedBox(width: 8),
-          Icon(
+          const Icon(
             Icons.arrow_forward_ios_rounded,
-            color: Colors.white.withValues(alpha: 0.92),
-            size: 18,
+            color: AppColors.negro,
+            size: 22,
           ),
         ],
       ),
@@ -608,22 +615,12 @@ class _HomeVendedorState extends State<HomeVendedor> {
       color: Colors.transparent,
       child: InkWell(
         onTap: esFinal ? _ingresarStockFinal : _agregarStockInicial,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
         child: Ink(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [accentColor, secondaryColor],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            boxShadow: [
-              BoxShadow(
-                color: accentColor.withValues(alpha: 0.35),
-                blurRadius: 14,
-                offset: const Offset(0, 5),
-              ),
-            ],
+            gradient: AppGradientes.dorado,
+            borderRadius: BorderRadius.circular(AppRadius.xl),
+            boxShadow: AppShadows.dorado,
           ),
           child: expandir
               ? SizedBox.expand(
@@ -648,8 +645,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
         icon: Icons.swap_horiz_rounded,
         label: 'Traspaso',
         descripcion: 'Enviar a otro sector',
-        iconBg: AppColors.accent.withValues(alpha: 0.18),
-        iconColor: secondaryColor,
+        iconBg: AppColors.cian.withValues(alpha: 0.16),
+        iconColor: AppColors.cian,
         onTap: () => _ejecutarSiHayStockInicial(() {
           Navigator.push(
             context,
@@ -669,8 +666,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
         icon: Icons.remove_circle_outline_rounded,
         label: 'Mermas',
         descripcion: 'Productos perdidos',
-        iconBg: AppColors.error.withValues(alpha: 0.12),
-        iconColor: AppColors.error,
+        iconBg: AppColors.coral.withValues(alpha: 0.16),
+        iconColor: AppColors.coral,
         onTap: () => _ejecutarSiHayStockInicial(() {
           Navigator.push(
             context,
@@ -690,8 +687,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
         icon: Icons.restaurant_menu_rounded,
         label: 'Bandejeo',
         descripcion: 'Armar bandejas',
-        iconBg: secondaryColor.withValues(alpha: 0.14),
-        iconColor: secondaryColor,
+        iconBg: AppColors.dorado.withValues(alpha: 0.16),
+        iconColor: AppColors.dorado,
         onTap: () => _ejecutarSiHayStockInicial(() {
           Navigator.push(
             context,
@@ -710,8 +707,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
         icon: Icons.inventory_2_outlined,
         label: 'Ver stock',
         descripcion: 'Ver inventario',
-        iconBg: AppColors.success.withValues(alpha: 0.14),
-        iconColor: AppColors.success,
+        iconBg: AppColors.violeta.withValues(alpha: 0.16),
+        iconColor: AppColors.violeta,
         onTap: _verStock,
         requiereStockInicial: false,
       ),
@@ -724,9 +721,9 @@ class _HomeVendedorState extends State<HomeVendedor> {
   ) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.outline.withValues(alpha: 0.55)),
+        gradient: AppGradientes.tarjeta,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: AppColors.separador),
         boxShadow: AppShadows.card,
       ),
       padding: EdgeInsets.fromLTRB(
@@ -740,23 +737,14 @@ class _HomeVendedorState extends State<HomeVendedor> {
         children: [
           Row(
             children: [
-              Container(
-                width: 4,
-                height: layout.compacto ? 16 : 18,
-                decoration: BoxDecoration(
-                  color: accentColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 8),
               Text(
                 layout.stockYOperacionesEnFila
                     ? 'Operaciones'
                     : 'Operaciones del turno',
-                style: GoogleFonts.poppins(
-                  fontSize: layout.tituloSeccion,
-                  fontWeight: FontWeight.w600,
-                  color: primaryColor,
+                style: AppFonts.inter(
+                  fontSize: layout.tituloSeccion + 2,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.tinta,
                 ),
               ),
             ],
@@ -772,7 +760,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
                         Expanded(
                           child: _buildActionTile(
                             acciones[i],
-                            habilitado: !acciones[i].requiereStockInicial ||
+                            habilitado:
+                                !acciones[i].requiereStockInicial ||
                                 _stockInicialAgregado,
                             compacto: layout.compacto,
                           ),
@@ -854,14 +843,12 @@ class _HomeVendedorState extends State<HomeVendedor> {
         onTap: habilitado ? accion.onTap : _mostrarAvisoStockInicial,
         borderRadius: BorderRadius.circular(14),
         child: Opacity(
-          opacity: habilitado ? 1 : 0.42,
+          opacity: habilitado ? 1 : 0.5,
           child: Ink(
             decoration: BoxDecoration(
-              color: accion.iconBg.withValues(alpha: 0.35),
+              color: AppColors.fondo,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: accion.iconColor.withValues(alpha: 0.14),
-              ),
+              border: Border.all(color: AppColors.separador, width: 1.5),
             ),
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -874,7 +861,10 @@ class _HomeVendedorState extends State<HomeVendedor> {
                 final mostrarDescripcion = !muyApretado;
 
                 return Padding(
-                  padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: padH,
+                    vertical: padV,
+                  ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
@@ -883,15 +873,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
                         width: iconBox,
                         height: iconBox,
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(13),
-                          boxShadow: [
-                            BoxShadow(
-                              color: accion.iconColor.withValues(alpha: 0.12),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                          color: accion.iconBg,
+                          shape: BoxShape.circle,
                         ),
                         child: Icon(
                           accion.icon,
@@ -905,10 +888,10 @@ class _HomeVendedorState extends State<HomeVendedor> {
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.poppins(
-                          fontSize: compacto || muyApretado ? 12.5 : 14,
-                          fontWeight: FontWeight.w600,
-                          color: primaryColor,
+                        style: AppFonts.inter(
+                          fontSize: compacto || muyApretado ? 15 : 17,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.tinta,
                           height: 1.1,
                         ),
                       ),
@@ -919,9 +902,9 @@ class _HomeVendedorState extends State<HomeVendedor> {
                           textAlign: TextAlign.center,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.poppins(
-                            fontSize: compacto ? 10 : 11,
-                            color: secondaryColor.withValues(alpha: 0.88),
+                          style: AppFonts.inter(
+                            fontSize: 14,
+                            color: AppColors.tintaSecundaria,
                             height: 1.15,
                           ),
                         ),
@@ -963,22 +946,21 @@ class _HomeVendedorState extends State<HomeVendedor> {
     late final Color color;
     if (result == 'saved') {
       mensaje = 'Stock inicial guardado correctamente.';
-      color = Colors.green;
+      color = AppColors.exitoFuerte;
     } else if (result == 'draft') {
       mensaje =
           'Borrador guardado. Para activar el punto, use Guardar y salir.';
-      color = Colors.orange;
+      color = AppColors.avisoFuerte;
     } else if (result == 'exit') {
-      mensaje =
-          'Salió sin finalizar. Complete el stock y use Guardar y salir.';
-      color = Colors.orange;
+      mensaje = 'Salió sin finalizar. Complete el stock y use Guardar y salir.';
+      color = AppColors.avisoFuerte;
     } else {
       return;
     }
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(mensaje, style: GoogleFonts.poppins()),
+        content: Text(mensaje, style: AppFonts.inter()),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 3),

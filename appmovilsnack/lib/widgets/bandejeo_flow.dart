@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/core/precio.dart';
 
 // Paleta de colores basada en el logo "Fusión"
-const Color _primaryColor = Color(0xFF2B2B2B);
-const Color _accentColor = Color(0xFFDABF41);
-const Color _secondaryColor = Color(0xFF6B4D2F);
-const Color _backgroundColor = Color(0xFFFDFBF7);
+const Color _primaryColor = AppColors.primaryLight;
+const Color _accentColor = AppColors.accent;
+const Color _secondaryColor = AppColors.secondary;
+const Color _backgroundColor = AppColors.surface;
 
 int _intFirestore(dynamic value, [int fallback = 0]) {
   if (value == null) return fallback;
@@ -29,9 +32,7 @@ bool _bandejeroEstaCerrado(Map<String, dynamic> data) {
   return data['activo'] == false;
 }
 
-Map<String, int> _cantidadesBandejaDesdeRonda(
-  Map<String, dynamic>? rondaData,
-) {
+Map<String, int> _cantidadesBandejaDesdeRonda(Map<String, dynamic>? rondaData) {
   final map = <String, int>{};
   if (rondaData == null) return map;
   final productos = rondaData['productos'] as List<dynamic>? ?? const [];
@@ -66,11 +67,7 @@ int _unidadesPropioEnStock(Map<String, dynamic> data) {
   return cantidad - _unidadesPorTraspasoEnStock(data);
 }
 
-int _totalBandejaDesdePropio(
-  int propio,
-  int traspasoFijo,
-  int maxTotal,
-) {
+int _totalBandejaDesdePropio(int propio, int traspasoFijo, int maxTotal) {
   if (traspasoFijo > 0) {
     return _intClamp(propio + traspasoFijo, traspasoFijo, maxTotal);
   }
@@ -97,10 +94,10 @@ class _ProductoBandeja {
   });
 
   int get cantidadPropioEnBandeja => _intClamp(
-        cantidadInicial - cantidadTraspasoEnBandeja,
-        0,
-        cantidadInicial,
-      );
+    cantidadInicial - cantidadTraspasoEnBandeja,
+    0,
+    cantidadInicial,
+  );
 
   int get cantidadVendida => cantidadInicial - cantidadSobrante;
   double get totalVendido => cantidadVendida * precio;
@@ -124,7 +121,8 @@ class _CasillaCantidadBandeja extends StatefulWidget {
   });
 
   @override
-  State<_CasillaCantidadBandeja> createState() => _CasillaCantidadBandejaState();
+  State<_CasillaCantidadBandeja> createState() =>
+      _CasillaCantidadBandejaState();
 }
 
 class _CasillaCantidadBandejaState extends State<_CasillaCantidadBandeja> {
@@ -191,9 +189,7 @@ class _CasillaCantidadBandejaState extends State<_CasillaCantidadBandeja> {
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
       borderSide: BorderSide(
-        color: enfocado
-            ? _accentColor
-            : _accentColor.withValues(alpha: 0.55),
+        color: enfocado ? _accentColor : _accentColor.withValues(alpha: 0.55),
         width: enfocado ? 2 : 1.2,
       ),
     );
@@ -214,16 +210,19 @@ class _CasillaCantidadBandejaState extends State<_CasillaCantidadBandeja> {
         readOnly: !widget.habilitado,
         textAlign: TextAlign.center,
         keyboardType: TextInputType.number,
-        style: GoogleFonts.poppins(
+        style: AppFonts.inter(
           fontSize: 16,
           fontWeight: FontWeight.bold,
           color: _primaryColor,
         ),
         decoration: InputDecoration(
           filled: true,
-          fillColor: Colors.white,
+          fillColor: AppColors.tarjetaAlta,
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 4,
+            vertical: 10,
+          ),
           hintText: '—',
           border: borde,
           enabledBorder: borde,
@@ -270,7 +269,9 @@ class _ControlesCargaBandeja extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final valorCasilla = esSumaAdicional && enBandeja ? 0 : (enBandeja ? (modoTraspaso ? propioActual : totalActual) : 0);
+    final valorCasilla = esSumaAdicional && enBandeja
+        ? 0
+        : (enBandeja ? (modoTraspaso ? propioActual : totalActual) : 0);
     final maxCasilla = esSumaAdicional && enBandeja
         ? maxAgregar
         : (modoTraspaso ? maxPropio : maxTotal);
@@ -289,9 +290,12 @@ class _ControlesCargaBandeja extends StatelessWidget {
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  constraints: const BoxConstraints(
+                    minWidth: AppTamanos.toque,
+                    minHeight: AppTamanos.toque,
+                  ),
                   icon: const Icon(Icons.remove_circle),
-                  color: Colors.red,
+                  color: AppColors.error,
                   onPressed: onQuitarDeBandeja,
                 ),
               if (etiquetaCasilla != null)
@@ -299,10 +303,7 @@ class _ControlesCargaBandeja extends StatelessWidget {
                   padding: const EdgeInsets.only(right: 6),
                   child: Text(
                     etiquetaCasilla,
-                    style: GoogleFonts.poppins(
-                      fontSize: 9,
-                      color: _secondaryColor,
-                    ),
+                    style: AppFonts.inter(fontSize: 14, color: _secondaryColor),
                   ),
                 ),
               _CasillaCantidadBandeja(
@@ -314,15 +315,15 @@ class _ControlesCargaBandeja extends StatelessWidget {
               IconButton(
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                constraints: const BoxConstraints(minWidth: AppTamanos.toque, minHeight: AppTamanos.toque),
                 icon: const Icon(Icons.add_circle),
-                color: _accentColor,
+                color: AppColors.dorado,
                 onPressed: enBandeja
                     ? (esSumaAdicional
-                        ? (maxAgregar > 0 ? () => onPropioChanged(1) : null)
-                        : (totalActual < maxTotal
-                            ? () => onPropioChanged(totalActual + 1)
-                            : null))
+                          ? (maxAgregar > 0 ? () => onPropioChanged(1) : null)
+                          : (totalActual < maxTotal
+                                ? () => onPropioChanged(totalActual + 1)
+                                : null))
                     : onAgregarPrimero,
               ),
             ],
@@ -333,9 +334,9 @@ class _ControlesCargaBandeja extends StatelessWidget {
               child: Text(
                 'Puede sumar hasta $maxAgregar u. más (lleva $totalActual)',
                 textAlign: TextAlign.right,
-                style: GoogleFonts.poppins(
-                  fontSize: 10,
-                  color: Colors.orange[900],
+                style: AppFonts.inter(
+                  fontSize: 14,
+                  color: AppColors.avisoTexto,
                 ),
               ),
             ),
@@ -343,7 +344,9 @@ class _ControlesCargaBandeja extends StatelessWidget {
       );
     }
 
-    final propioParaPreview = esSumaAdicional && enBandeja ? propioActual : propioActual;
+    final propioParaPreview = esSumaAdicional && enBandeja
+        ? propioActual
+        : propioActual;
     final totalCalculado = _totalBandejaDesdePropio(
       propioParaPreview,
       traspasoFijo,
@@ -352,7 +355,8 @@ class _ControlesCargaBandeja extends StatelessWidget {
     final puedeSubir = esSumaAdicional && enBandeja
         ? maxAgregar > 0
         : propioActual < maxPropio;
-    final puedeBajar = enBandeja && (propioActual > 0 || totalActual > traspasoFijo);
+    final puedeBajar =
+        enBandeja && (propioActual > 0 || totalActual > traspasoFijo);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -364,9 +368,9 @@ class _ControlesCargaBandeja extends StatelessWidget {
               IconButton(
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                constraints: const BoxConstraints(minWidth: AppTamanos.toque, minHeight: AppTamanos.toque),
                 icon: const Icon(Icons.remove_circle),
-                color: Colors.red,
+                color: AppColors.error,
                 onPressed: puedeBajar
                     ? () {
                         if (propioActual <= 0) {
@@ -382,13 +386,12 @@ class _ControlesCargaBandeja extends StatelessWidget {
               children: [
                 Text(
                   etiquetaCasilla ?? 'Lo que carga',
-                  style: GoogleFonts.poppins(
-                    fontSize: 9,
-                    color: _secondaryColor,
-                  ),
+                  style: AppFonts.inter(fontSize: 14, color: _secondaryColor),
                 ),
                 _CasillaCantidadBandeja(
-                  key: ValueKey('propio-$propioActual-$traspasoFijo-$esSumaAdicional'),
+                  key: ValueKey(
+                    'propio-$propioActual-$traspasoFijo-$esSumaAdicional',
+                  ),
                   valor: valorCasilla,
                   maxDisponible: maxCasilla,
                   minValor: esSumaAdicional && enBandeja
@@ -402,18 +405,18 @@ class _ControlesCargaBandeja extends StatelessWidget {
             IconButton(
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              constraints: const BoxConstraints(minWidth: AppTamanos.toque, minHeight: AppTamanos.toque),
               icon: const Icon(Icons.add_circle),
-              color: _accentColor,
+              color: AppColors.dorado,
               onPressed: enBandeja
                   ? (esSumaAdicional
-                      ? (maxAgregar > 0 ? () => onPropioChanged(1) : null)
-                      : (puedeSubir
-                          ? () => onPropioChanged(propioActual + 1)
-                          : null))
+                        ? (maxAgregar > 0 ? () => onPropioChanged(1) : null)
+                        : (puedeSubir
+                              ? () => onPropioChanged(propioActual + 1)
+                              : null))
                   : (maxPropio > 0
-                      ? onAgregarPrimero
-                      : () => onPropioChanged(0)),
+                        ? onAgregarPrimero
+                        : () => onPropioChanged(0)),
             ),
           ],
         ),
@@ -421,24 +424,24 @@ class _ControlesCargaBandeja extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.green.withValues(alpha: 0.1),
+            color: AppColors.exito.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.green.withValues(alpha: 0.35)),
+            border: Border.all(color: AppColors.exito.withValues(alpha: 0.35)),
           ),
           child: Text(
             esSumaAdicional && enBandeja
                 ? 'Lleva $totalActual u. ($propioActual + $traspasoFijo traspaso)\n'
-                    'Al sumar, el traspaso no se duplica.'
+                      'Al sumar, el traspaso no se duplica.'
                 : enBandeja
-                    ? 'Total en bandeja: $totalCalculado u.\n'
-                        '($propioActual + $traspasoFijo traspaso automático)'
-                    : 'Al cargar: total $totalCalculado u.\n'
-                        '($propioActual + $traspasoFijo traspaso automático)',
+                ? 'Total en bandeja: $totalCalculado u.\n'
+                      '($propioActual + $traspasoFijo traspaso automático)'
+                : 'Al cargar: total $totalCalculado u.\n'
+                      '($propioActual + $traspasoFijo traspaso automático)',
             textAlign: TextAlign.right,
-            style: GoogleFonts.poppins(
-              fontSize: 11,
+            style: AppFonts.inter(
+              fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.green[800],
+              color: AppColors.exito,
               height: 1.3,
             ),
           ),
@@ -475,6 +478,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
   String? _rondaId; // ronda en curso / activa para este bandejero
   /// Efectivo entregado para vuelto al iniciar la primera ronda del turno.
   double _cajaVuelto = 0;
+
   /// true cuando se entró por "Agregar más cosas" a una ronda en curso.
   bool _actualizandoBandeja = false;
 
@@ -519,9 +523,9 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
         SnackBar(
           content: Text(
             'No se pudo guardar la ronda: $e',
-            style: GoogleFonts.poppins(),
+            style: AppFonts.inter(),
           ),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppColors.avisoFuerte,
         ),
       );
       return;
@@ -562,11 +566,8 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
     _pageController.jumpToPage(0);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          'Ronda rendida correctamente',
-          style: GoogleFonts.poppins(),
-        ),
-        backgroundColor: Colors.green,
+        content: Text('Ronda rendida correctamente', style: AppFonts.inter()),
+        backgroundColor: AppColors.exitoFuerte,
       ),
     );
   }
@@ -584,172 +585,170 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
         }
       },
       child: Scaffold(
-      backgroundColor: _backgroundColor,
-      appBar: AppBar(
-        title: Text(
-          _currentPage == 0
-              ? 'Bandejeo'
-              : _currentPage == 1
-              ? (_actualizandoBandeja
-                  ? 'Agregar a la bandeja'
-                  : 'Carga de Bandeja')
-              : _currentPage == 2
-              ? 'Ronda en Curso'
-              : 'Rendición de Cuentas',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.bold,
-            color: _accentColor,
-          ),
-        ),
-        backgroundColor: _primaryColor,
-        foregroundColor: _accentColor,
-        automaticallyImplyLeading:
-            _currentPage == 0 || _muestraFlechaAtrasEnAppBar,
-        leading: _currentPage == 0
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Volver',
-                onPressed: () => Navigator.of(context).pop(),
-              )
-            : _currentPage == 3
-                ? IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    tooltip: 'Lista de bandejeros',
-                    onPressed: _volverAListaBandejeros,
-                  )
+        backgroundColor: _backgroundColor,
+        appBar: AppBar(
+          title: Text(
+            _currentPage == 0
+                ? 'Bandejeo'
                 : _currentPage == 1
-                    ? IconButton(
-                        icon: const Icon(Icons.arrow_back),
-                        onPressed: _anteriorPaso,
-                      )
-                    : null,
-      ),
-      body: PageView(
-        controller: _pageController,
-        onPageChanged: (index) {
-          setState(() {
-            _currentPage = index;
-          });
-        },
-        physics:
-            const NeverScrollableScrollPhysics(), // Deshabilitar swipe manual
-        children: [
-          _PasoSeleccionBandejero(
-            key: const PageStorageKey<String>('bandejeo-paso-bandejeros'),
-            eventoId: widget.eventoId,
-            sectorId: widget.sectorId,
-            onSeleccionado: _seleccionarBandejero,
-            onVerResumenCierre: _mostrarResumenBandejeroCerrado,
+                ? (_actualizandoBandeja
+                      ? 'Agregar a la bandeja'
+                      : 'Carga de Bandeja')
+                : _currentPage == 2
+                ? 'Ronda en Curso'
+                : 'Rendición de Cuentas',
+            style: AppFonts.inter(
+              fontWeight: FontWeight.bold,
+              color: _accentColor,
+            ),
           ),
-          _PasoCargaBandeja(
-            eventoId: widget.eventoId,
-            sectorId: widget.sectorId,
-            productosBandeja: _productosBandeja,
-            esActualizacionRonda: _actualizandoBandeja,
-            onProductosChanged: (productos) {
-              setState(() {
-                _productosBandeja = productos;
-              });
-            },
-            onSiguiente: () async {
-              if (_productosBandeja.isNotEmpty) {
-                final eraActualizacion = _actualizandoBandeja;
-                try {
-                  await _upsertRondaEnCurso();
-                } catch (e) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Error guardando ronda: $e',
-                        style: GoogleFonts.poppins(),
-                      ),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
-                if (!context.mounted) return;
-                setState(() => _actualizandoBandeja = false);
-                if (eraActualizacion) {
-                  await _volverAListaBandejeros();
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Bandeja actualizada correctamente',
-                        style: GoogleFonts.poppins(),
-                      ),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                } else {
-                  _siguientePaso();
-                }
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Debe seleccionar al menos un producto',
-                      style: GoogleFonts.poppins(),
-                    ),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-          ),
-          _PasoResumenRonda(
-            productosBandeja: _productosBandeja,
-            valorTotal: _calcularValorTotal(),
-            onVolverLista: _volverAListaBandejeros,
-          ),
-          _PasoRendicion(
-            productosBandeja: _productosBandeja,
-            totalVendido: _calcularTotalVendido(),
-            eventoId: widget.eventoId,
-            sectorId: widget.sectorId,
-            isGuardando: _isGuardando,
-            onSobrantesChanged: (productoId, cantidadSobrante) {
-              setState(() {
-                final producto = _productosBandeja.firstWhere(
-                  (p) => p.productoId == productoId,
-                );
-                producto.cantidadSobrante = cantidadSobrante;
-              });
-            },
-            onConfirmar: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              setState(() {
-                _isGuardando = true;
-              });
-
-              try {
-                await _confirmarVenta();
-                if (mounted) {
-                  _irAListaTrasRendirRonda();
-                }
-              } catch (e) {
+          automaticallyImplyLeading:
+              _currentPage == 0 || _muestraFlechaAtrasEnAppBar,
+          leading: _currentPage == 0
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Volver',
+                  onPressed: () => Navigator.of(context).pop(),
+                )
+              : _currentPage == 3
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Lista de bandejeros',
+                  onPressed: _volverAListaBandejeros,
+                )
+              : _currentPage == 1
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: _anteriorPaso,
+                )
+              : null,
+        ),
+        body: PageView(
+          controller: _pageController,
+          onPageChanged: (index) {
+            setState(() {
+              _currentPage = index;
+            });
+          },
+          physics:
+              const NeverScrollableScrollPhysics(), // Deshabilitar swipe manual
+          children: [
+            _PasoSeleccionBandejero(
+              key: const PageStorageKey<String>('bandejeo-paso-bandejeros'),
+              eventoId: widget.eventoId,
+              sectorId: widget.sectorId,
+              onSeleccionado: _seleccionarBandejero,
+              onVerResumenCierre: _mostrarResumenBandejeroCerrado,
+            ),
+            _PasoCargaBandeja(
+              eventoId: widget.eventoId,
+              sectorId: widget.sectorId,
+              productosBandeja: _productosBandeja,
+              esActualizacionRonda: _actualizandoBandeja,
+              onProductosChanged: (productos) {
                 setState(() {
-                  _isGuardando = false;
+                  _productosBandeja = productos;
                 });
-                if (mounted) {
-                  messenger.showSnackBar(
+              },
+              onSiguiente: () async {
+                if (_productosBandeja.isNotEmpty) {
+                  final eraActualizacion = _actualizandoBandeja;
+                  try {
+                    await _upsertRondaEnCurso();
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Error guardando ronda: $e',
+                          style: AppFonts.inter(),
+                        ),
+                        backgroundColor: AppColors.errorFuerte,
+                      ),
+                    );
+                    return;
+                  }
+                  if (!context.mounted) return;
+                  setState(() => _actualizandoBandeja = false);
+                  if (eraActualizacion) {
+                    await _volverAListaBandejeros();
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Bandeja actualizada correctamente',
+                          style: AppFonts.inter(),
+                        ),
+                        backgroundColor: AppColors.exitoFuerte,
+                      ),
+                    );
+                  } else {
+                    _siguientePaso();
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Error al confirmar venta: $e',
-                        style: GoogleFonts.poppins(),
+                        'Debe seleccionar al menos un producto',
+                        style: AppFonts.inter(),
                       ),
-                      backgroundColor: Colors.red,
+                      backgroundColor: AppColors.errorFuerte,
                     ),
                   );
                 }
-              }
-            },
-          ),
-        ],
+              },
+            ),
+            _PasoResumenRonda(
+              productosBandeja: _productosBandeja,
+              valorTotal: _calcularValorTotal(),
+              onVolverLista: _volverAListaBandejeros,
+            ),
+            _PasoRendicion(
+              productosBandeja: _productosBandeja,
+              totalVendido: _calcularTotalVendido(),
+              eventoId: widget.eventoId,
+              sectorId: widget.sectorId,
+              isGuardando: _isGuardando,
+              onSobrantesChanged: (productoId, cantidadSobrante) {
+                setState(() {
+                  final producto = _productosBandeja.firstWhere(
+                    (p) => p.productoId == productoId,
+                  );
+                  producto.cantidadSobrante = cantidadSobrante;
+                });
+              },
+              onConfirmar: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                setState(() {
+                  _isGuardando = true;
+                });
+
+                try {
+                  await _confirmarVenta();
+                  if (mounted) {
+                    _irAListaTrasRendirRonda();
+                  }
+                } catch (e) {
+                  setState(() {
+                    _isGuardando = false;
+                  });
+                  if (mounted) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Error al confirmar venta: $e',
+                          style: AppFonts.inter(),
+                        ),
+                        backgroundColor: AppColors.errorFuerte,
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
+        ),
       ),
-    ),
     );
   }
 
@@ -816,8 +815,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
 
     await FirebaseFirestore.instance.runTransaction((tx) async {
       final rondaSnap = await tx.get(rondaRef);
-      final cantidadAnterior =
-          _cantidadesBandejaDesdeRonda(rondaSnap.data());
+      final cantidadAnterior = _cantidadesBandejaDesdeRonda(rondaSnap.data());
 
       final todosLosIds = <String>{
         ...cantidadAnterior.keys,
@@ -832,8 +830,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
 
         final stockRef = _stockRef(productoId);
         final stockSnap = await tx.get(stockRef);
-        final nombre =
-            nombresPorId[productoId] ?? productoId;
+        final nombre = nombresPorId[productoId] ?? productoId;
 
         if (delta > 0) {
           if (!stockSnap.exists) {
@@ -841,8 +838,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
               'El producto $nombre no existe en el inventario del sector.',
             );
           }
-          final stockActual =
-              _intFirestore(stockSnap.data()?['cantidad']);
+          final stockActual = _intFirestore(stockSnap.data()?['cantidad']);
           if (stockActual < delta) {
             throw Exception(
               'Stock insuficiente para $nombre. '
@@ -854,11 +850,9 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
           final stockActual = stockSnap.exists
               ? _intFirestore(stockSnap.data()?['cantidad'])
               : 0;
-          tx.set(
-            stockRef,
-            {'cantidad': stockActual - delta},
-            SetOptions(merge: true),
-          );
+          tx.set(stockRef, {
+            'cantidad': stockActual - delta,
+          }, SetOptions(merge: true));
         }
       }
 
@@ -902,7 +896,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
         return AlertDialog(
           title: Text(
             'Caja para vuelto',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+            style: AppFonts.inter(fontWeight: FontWeight.bold),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -911,7 +905,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
               Text(
                 'Indique cuánto efectivo se entrega al bandejero para vuelto. '
                 'Ese monto se sumará al total a entregar al cerrar el bandejeo.',
-                style: GoogleFonts.poppins(fontSize: 13, height: 1.35),
+                style: AppFonts.inter(fontSize: 14, height: 1.35),
               ),
               const SizedBox(height: 14),
               TextField(
@@ -940,7 +934,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
               onPressed: () => Navigator.pop(ctx),
               child: Text(
                 'Cancelar',
-                style: GoogleFonts.poppins(color: _secondaryColor),
+                style: AppFonts.inter(color: _secondaryColor),
               ),
             ),
             ElevatedButton(
@@ -953,9 +947,9 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
                     SnackBar(
                       content: Text(
                         'Ingrese un monto válido (0 o mayor).',
-                        style: GoogleFonts.poppins(),
+                        style: AppFonts.inter(),
                       ),
-                      backgroundColor: Colors.orange,
+                      backgroundColor: AppColors.avisoFuerte,
                     ),
                   );
                   return;
@@ -963,12 +957,12 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
                 Navigator.pop(ctx, monto);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: _accentColor,
-                foregroundColor: _primaryColor,
+                backgroundColor: AppColors.dorado,
+                foregroundColor: AppColors.negro,
               ),
               child: Text(
                 'Continuar',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                style: AppFonts.inter(fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -1042,7 +1036,9 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
             precio: (p['precio'] as num?)?.toDouble() ?? 0.0,
             cantidadInicial: _intFirestore(p['cantidadInicial']),
             cantidadSobrante: _intFirestore(p['cantidadSobrante']),
-            cantidadTraspasoEnBandeja: _intFirestore(p['cantidadTraspasoEnBandeja']),
+            cantidadTraspasoEnBandeja: _intFirestore(
+              p['cantidadTraspasoEnBandeja'],
+            ),
           );
         })
         .where((p) => p.productoId.isNotEmpty)
@@ -1057,7 +1053,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
       context: context,
       isDismissible: true,
       enableDrag: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.tarjeta,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -1070,7 +1066,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
             children: [
               Text(
                 'Ronda en curso',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: _primaryColor,
@@ -1079,25 +1075,25 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
               const SizedBox(height: 6),
               Text(
                 'Bandejero: ${_bandejeroNombre ?? ''}',
-                style: GoogleFonts.poppins(color: _secondaryColor),
+                style: AppFonts.inter(color: _secondaryColor),
               ),
               const SizedBox(height: 12),
               ListTile(
                 leading: const Icon(Icons.visibility),
-                title: Text('Ver lo que llevó', style: GoogleFonts.poppins()),
+                title: Text('Ver lo que llevó', style: AppFonts.inter()),
                 onTap: () => Navigator.pop(context, _AccionRonda.ver),
               ),
               ListTile(
                 leading: const Icon(Icons.add_shopping_cart),
-                title: Text('Agregar más cosas', style: GoogleFonts.poppins()),
+                title: Text('Agregar más cosas', style: AppFonts.inter()),
                 onTap: () => Navigator.pop(context, _AccionRonda.agregar),
               ),
               ListTile(
                 leading: const Icon(Icons.check_circle_outline),
-                title: Text('Rendir ronda', style: GoogleFonts.poppins()),
+                title: Text('Rendir ronda', style: AppFonts.inter()),
                 subtitle: Text(
                   'Cerrar la ronda y registrar ventas',
-                  style: GoogleFonts.poppins(fontSize: 12),
+                  style: AppFonts.inter(fontSize: 14),
                 ),
                 onTap: () => Navigator.pop(context, _AccionRonda.rendir),
               ),
@@ -1189,7 +1185,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
       context: context,
       isDismissible: true,
       enableDrag: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.tarjeta,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -1202,7 +1198,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
             children: [
               Text(
                 _bandejeroNombre ?? 'Bandejero',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: _primaryColor,
@@ -1211,26 +1207,26 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
               const SizedBox(height: 6),
               Text(
                 'Sin rondas rendidas. Puede iniciar una ronda o cerrar el bandejeo sin ventas.',
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
+                style: AppFonts.inter(
+                  fontSize: 14,
                   color: _secondaryColor,
                   height: 1.35,
                 ),
               ),
               const SizedBox(height: 12),
               ListTile(
-                leading: Icon(Icons.add_circle_outline, color: _accentColor),
+                leading: const Icon(Icons.add_circle_outline, color: AppColors.dorado),
                 title: Text(
                   'Nueva ronda',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  style: AppFonts.inter(fontWeight: FontWeight.w600),
                 ),
                 onTap: () => Navigator.pop(context, false),
               ),
               ListTile(
-                leading: Icon(Icons.logout_rounded, color: Colors.red[700]),
+                leading: Icon(Icons.logout_rounded, color: AppColors.error),
                 title: Text(
                   'Cerrar bandejeo (sin ventas)',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  style: AppFonts.inter(fontWeight: FontWeight.w600),
                 ),
                 onTap: () => Navigator.pop(context, true),
               ),
@@ -1247,7 +1243,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
       context: context,
       isDismissible: true,
       enableDrag: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.tarjeta,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -1260,7 +1256,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
             children: [
               Text(
                 _bandejeroNombre ?? 'Bandejero',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: _primaryColor,
@@ -1269,8 +1265,8 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
               const SizedBox(height: 6),
               Text(
                 'Ya completó al menos una ronda. ¿Qué desea hacer?',
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
+                style: AppFonts.inter(
+                  fontSize: 14,
                   color: _secondaryColor,
                   height: 1.35,
                 ),
@@ -1283,15 +1279,15 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
                     color: _accentColor.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.replay_rounded, color: _accentColor),
+                  child: Icon(Icons.replay_rounded, color: AppColors.dorado),
                 ),
                 title: Text(
                   'Otra ronda',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  style: AppFonts.inter(fontWeight: FontWeight.w600),
                 ),
                 subtitle: Text(
                   'Cargar una nueva bandeja y salir de nuevo',
-                  style: GoogleFonts.poppins(fontSize: 12),
+                  style: AppFonts.inter(fontSize: 14),
                 ),
                 onTap: () =>
                     Navigator.pop(context, _AccionBandejeroTrasRonda.otraRonda),
@@ -1300,18 +1296,18 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.12),
+                    color: AppColors.error.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.logout_rounded, color: Colors.red[700]),
+                  child: Icon(Icons.logout_rounded, color: AppColors.error),
                 ),
                 title: Text(
                   'Cerrar bandejeo',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  style: AppFonts.inter(fontWeight: FontWeight.w600),
                 ),
                 subtitle: Text(
                   'Finalizar el turno de este bandejero en el sector',
-                  style: GoogleFonts.poppins(fontSize: 12),
+                  style: AppFonts.inter(fontSize: 14),
                 ),
                 onTap: () => Navigator.pop(
                   context,
@@ -1347,9 +1343,9 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
         SnackBar(
           content: Text(
             '$nombre tiene una ronda en curso. Rinda la ronda antes de cerrar el bandejeo.',
-            style: GoogleFonts.poppins(),
+            style: AppFonts.inter(),
           ),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppColors.avisoFuerte,
         ),
       );
       return;
@@ -1358,7 +1354,8 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
     final resumen = await _cargarResumenRondasRendidas(bandejeroId);
     if (!mounted) return;
 
-    final resumenFinal = resumen ??
+    final resumenFinal =
+        resumen ??
         const _ResumenVentasBandejero(
           totalVendido: 0,
           cantidadRondas: 0,
@@ -1369,7 +1366,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
     if (!mounted) return;
     final cajaVuelto =
         (bandejeroSnap.data()?['cajaVuelto'] as num?)?.toDouble() ??
-            _cajaVuelto;
+        _cajaVuelto;
 
     final porcentaje = await _mostrarDialogoResumenCierre(
       nombre: nombre,
@@ -1393,21 +1390,21 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
           .collection('bandejeros')
           .doc(bandejeroId)
           .set({
-        'activo': true,
-        'bandejeoCerrado': true,
-        'bandejeoCerradoEn': FieldValue.serverTimestamp(),
-        'cierreResumen': cierre,
-        'ultimaRondaRendida': false,
-      }, SetOptions(merge: true));
+            'activo': true,
+            'bandejeoCerrado': true,
+            'bandejeoCerradoEn': FieldValue.serverTimestamp(),
+            'cierreResumen': cierre,
+            'ultimaRondaRendida': false,
+          }, SetOptions(merge: true));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'No se pudo cerrar el bandejeo: $e',
-            style: GoogleFonts.poppins(),
+            style: AppFonts.inter(),
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.errorFuerte,
         ),
       );
       return;
@@ -1433,9 +1430,9 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
         content: Text(
           'Bandejeo de $nombre cerrado. Total a recibir: '
           '\$${(cierre['totalARecibir'] as num).toStringAsFixed(0)}',
-          style: GoogleFonts.poppins(),
+          style: AppFonts.inter(),
         ),
-        backgroundColor: Colors.green,
+        backgroundColor: AppColors.exitoFuerte,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -1444,8 +1441,8 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
   /// Al rendir: devuelve al inventario lo no vendido (sobrante). Lo cargado en bandeja ya se descontó al guardar la ronda.
   Future<void> _confirmarVenta() async {
     await FirebaseFirestore.instance.runTransaction((transaction) async {
-      final Map<String, DocumentSnapshot<Map<String, dynamic>>>
-          stockSnapshots = {};
+      final Map<String, DocumentSnapshot<Map<String, dynamic>>> stockSnapshots =
+          {};
       final conSobrante = _productosBandeja
           .where((p) => p.cantidadSobrante > 0)
           .toList();
@@ -1538,14 +1535,10 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
             .collection('bandejeros')
             .doc(_bandejeroId);
 
-        transaction.set(
-          bandejeroRef,
-          {
-            'ultimaRondaRendida': true,
-            'actualizadoEn': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+        transaction.set(bandejeroRef, {
+          'ultimaRondaRendida': true,
+          'actualizadoEn': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
     });
   }
@@ -1627,8 +1620,8 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
     final pct = (cierreGuardado?['porcentajeComision'] as num?)?.toDouble();
     final comision = (cierreGuardado?['comision'] as num?)?.toDouble();
     final aRecibir = (cierreGuardado?['totalARecibir'] as num?)?.toDouble();
-    final caja = (cierreGuardado?['cajaVuelto'] as num?)?.toDouble() ??
-        cajaVuelto;
+    final caja =
+        (cierreGuardado?['cajaVuelto'] as num?)?.toDouble() ?? cajaVuelto;
 
     return showDialog<double>(
       context: context,
@@ -1662,9 +1655,9 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
         SnackBar(
           content: Text(
             'No hay ventas registradas para $nombre.',
-            style: GoogleFonts.poppins(),
+            style: AppFonts.inter(),
           ),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppColors.avisoFuerte,
         ),
       );
       return;
@@ -1732,7 +1725,9 @@ class _ResumenVentasBandejero {
     };
   }
 
-  static _ResumenVentasBandejero? desdeCierreGuardado(Map<String, dynamic>? data) {
+  static _ResumenVentasBandejero? desdeCierreGuardado(
+    Map<String, dynamic>? data,
+  ) {
     if (data == null) return null;
     final productosRaw = data['productos'] as List<dynamic>? ?? const [];
     final productos = productosRaw
@@ -1806,8 +1801,8 @@ class _DialogoResumenCierreBandejeoState
 
   double get _totalARecibir =>
       widget.soloLectura && widget.totalARecibirInicial != null
-          ? widget.totalARecibirInicial!
-          : widget.resumen.totalVendido + widget.cajaVuelto;
+      ? widget.totalARecibirInicial!
+      : widget.resumen.totalVendido + widget.cajaVuelto;
 
   void _actualizarPorcentaje(String texto) {
     final valor = double.tryParse(texto.replaceAll(',', '.'));
@@ -1824,7 +1819,7 @@ class _DialogoResumenCierreBandejeoState
         widget.soloLectura
             ? 'Resumen · ${widget.nombreBandejero}'
             : 'Cerrar bandejeo · ${widget.nombreBandejero}',
-        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        style: AppFonts.inter(fontWeight: FontWeight.bold),
       ),
       content: SizedBox(
         width: double.maxFinite,
@@ -1835,7 +1830,7 @@ class _DialogoResumenCierreBandejeoState
             children: [
               Text(
                 widget.nombreBandejero,
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: _primaryColor,
@@ -1846,30 +1841,30 @@ class _DialogoResumenCierreBandejeoState
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
+                  color: AppColors.exito.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Column(
                   children: [
                     Text(
                       'Total vendido',
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
+                      style: AppFonts.inter(
+                        fontSize: 14,
                         color: _secondaryColor,
                       ),
                     ),
                     Text(
                       '\$${resumen.totalVendido.toStringAsFixed(0)}',
-                      style: GoogleFonts.poppins(
+                      style: AppFonts.inter(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: Colors.green[800],
+                        color: AppColors.exito,
                       ),
                     ),
                     Text(
                       '${resumen.cantidadRondas} ronda${resumen.cantidadRondas == 1 ? '' : 's'} rendida${resumen.cantidadRondas == 1 ? '' : 's'}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
+                      style: AppFonts.inter(
+                        fontSize: 14,
                         color: _secondaryColor,
                       ),
                     ),
@@ -1880,9 +1875,9 @@ class _DialogoResumenCierreBandejeoState
                 const SizedBox(height: 12),
                 Text(
                   'Detalle',
-                  style: GoogleFonts.poppins(
+                  style: AppFonts.inter(
                     fontWeight: FontWeight.w600,
-                    fontSize: 13,
+                    fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -1894,15 +1889,15 @@ class _DialogoResumenCierreBandejeoState
                         Expanded(
                           child: Text(
                             '${p.nombre} (${p.cantidadVendida} u.)',
-                            style: GoogleFonts.poppins(fontSize: 12),
+                            style: AppFonts.inter(fontSize: 14),
                           ),
                         ),
                         Text(
                           '\$${p.subtotal.toStringAsFixed(0)}',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
+                          style: AppFonts.inter(
+                            fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: _accentColor,
+                            color: AppColors.primaryLight,
                           ),
                         ),
                       ],
@@ -1931,32 +1926,28 @@ class _DialogoResumenCierreBandejeoState
               ] else ...[
                 Text(
                   'Comisión: ${widget.porcentajeInicial?.toStringAsFixed(0) ?? _porcentaje.toStringAsFixed(0)}%',
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    color: _secondaryColor,
-                  ),
+                  style: AppFonts.inter(fontSize: 14, color: _secondaryColor),
                 ),
                 const SizedBox(height: 8),
               ],
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
+                  color: AppColors.exito.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: AppColors.exito.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Column(
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Total vendido',
-                          style: GoogleFonts.poppins(),
-                        ),
+                        Text('Total vendido', style: AppFonts.inter()),
                         Text(
                           '\$${resumen.totalVendido.toStringAsFixed(0)}',
-                          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                          style: AppFonts.inter(fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
@@ -1964,13 +1955,10 @@ class _DialogoResumenCierreBandejeoState
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Caja para vuelto',
-                          style: GoogleFonts.poppins(),
-                        ),
+                        Text('Caja para vuelto', style: AppFonts.inter()),
                         Text(
                           '\$${widget.cajaVuelto.toStringAsFixed(0)}',
-                          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                          style: AppFonts.inter(fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
@@ -1980,16 +1968,14 @@ class _DialogoResumenCierreBandejeoState
                       children: [
                         Text(
                           'Total a recibir',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: AppFonts.inter(fontWeight: FontWeight.bold),
                         ),
                         Text(
                           '\$${_totalARecibir.toStringAsFixed(0)}',
-                          style: GoogleFonts.poppins(
+                          style: AppFonts.inter(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
-                            color: Colors.green[800],
+                            color: AppColors.exito,
                           ),
                         ),
                       ],
@@ -2009,16 +1995,16 @@ class _DialogoResumenCierreBandejeoState
                   children: [
                     Text(
                       'Comisión (referencia para pago al finalizar)',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
+                      style: AppFonts.inter(
+                        fontSize: 14,
                         color: _secondaryColor,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Ingrese el porcentaje al cerrar el bandejeo.',
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
+                      style: AppFonts.inter(
+                        fontSize: 14,
                         color: _secondaryColor.withValues(alpha: 0.85),
                         height: 1.25,
                       ),
@@ -2029,13 +2015,13 @@ class _DialogoResumenCierreBandejeoState
                       children: [
                         Text(
                           '${_porcentaje.toStringAsFixed(_porcentaje == _porcentaje.roundToDouble() ? 0 : 1)}% del vendido',
-                          style: GoogleFonts.poppins(),
+                          style: AppFonts.inter(),
                         ),
                         Text(
                           '\$${_comision.toStringAsFixed(0)}',
-                          style: GoogleFonts.poppins(
+                          style: AppFonts.inter(
                             fontWeight: FontWeight.w600,
-                            color: _accentColor,
+                            color: AppColors.primaryLight,
                           ),
                         ),
                       ],
@@ -2053,21 +2039,19 @@ class _DialogoResumenCierreBandejeoState
             onPressed: () => Navigator.pop(context),
             child: Text(
               'Cancelar',
-              style: GoogleFonts.poppins(color: _secondaryColor),
+              style: AppFonts.inter(color: _secondaryColor),
             ),
           ),
         ElevatedButton(
-          onPressed: () => Navigator.pop(
-            context,
-            widget.soloLectura ? null : _porcentaje,
-          ),
+          onPressed: () =>
+              Navigator.pop(context, widget.soloLectura ? null : _porcentaje),
           style: ElevatedButton.styleFrom(
-            backgroundColor: _accentColor,
-            foregroundColor: _primaryColor,
+            backgroundColor: AppColors.dorado,
+            foregroundColor: AppColors.negro,
           ),
           child: Text(
             widget.soloLectura ? 'Cerrar' : 'Confirmar cierre',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+            style: AppFonts.inter(fontWeight: FontWeight.bold),
           ),
         ),
       ],
@@ -2083,7 +2067,8 @@ class _PasoSeleccionBandejero extends StatefulWidget {
     String bandejeroId,
     String nombre,
     Map<String, dynamic> data,
-  ) onVerResumenCierre;
+  )
+  onVerResumenCierre;
 
   const _PasoSeleccionBandejero({
     super.key,
@@ -2123,7 +2108,7 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('Agregar bandejero', style: GoogleFonts.poppins()),
+          title: Text('Agregar bandejero', style: AppFonts.inter()),
           content: TextField(
             controller: controller,
             autofocus: true,
@@ -2132,15 +2117,15 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Cancelar', style: GoogleFonts.poppins()),
+              child: Text('Cancelar', style: AppFonts.inter()),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, controller.text.trim()),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _accentColor,
-                foregroundColor: _primaryColor,
+                backgroundColor: AppColors.dorado,
+                foregroundColor: AppColors.negro,
               ),
-              child: Text('Guardar', style: GoogleFonts.poppins()),
+              child: Text('Guardar', style: AppFonts.inter()),
             ),
           ],
         );
@@ -2183,7 +2168,7 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
             children: [
               Text(
                 'Seleccione un bandejero',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: _primaryColor,
@@ -2199,20 +2184,13 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData) {
-                return Center(
-                  child: CircularProgressIndicator(color: _accentColor),
-                );
+                return Center(child: CircularProgressIndicator());
               }
               if (snapshot.hasError) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Text(
-                      'Error cargando bandejeros: ${snapshot.error}',
-                      style: GoogleFonts.poppins(color: Colors.red),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
+                return ErrorAmable(
+                  titulo: 'No pudimos cargar los bandejeros',
+                  detalle: 'Error cargando bandejeros: ${snapshot.error}',
+                  onReintentar: () => setState(() {}),
                 );
               }
 
@@ -2226,45 +2204,19 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
                 return na.toLowerCase().compareTo(nb.toLowerCase());
               }
 
-              final activos = rawDocs
-                  .where((d) => !_bandejeroEstaCerrado(d.data()))
-                  .toList()
-                ..sort(cmpNombre);
-              final cerrados = rawDocs
-                  .where((d) => _bandejeroEstaCerrado(d.data()))
-                  .toList()
-                ..sort(cmpNombre);
+              final activos =
+                  rawDocs
+                      .where((d) => !_bandejeroEstaCerrado(d.data()))
+                      .toList()
+                    ..sort(cmpNombre);
+              final cerrados =
+                  rawDocs.where((d) => _bandejeroEstaCerrado(d.data())).toList()
+                    ..sort(cmpNombre);
 
               if (activos.isEmpty && cerrados.isEmpty) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.person_add_alt_1,
-                          size: 64,
-                          color: _secondaryColor.withValues(alpha: 0.6),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No hay bandejeros aún',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: _primaryColor,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Agregue el primero para comenzar.',
-                          style: GoogleFonts.poppins(color: _secondaryColor),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
+                return EstadoVacio(
+                  titulo: 'No hay bandejeros aún',
+                  mensaje: 'Agregue el primero para comenzar.',
                 );
               }
 
@@ -2274,18 +2226,15 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
               }) {
                 final data = doc.data();
                 final nombre = data['nombre'] as String? ?? 'Sin nombre';
-                final yaRindio =
-                    !cerrado && data['ultimaRondaRendida'] == true;
+                final yaRindio = !cerrado && data['ultimaRondaRendida'] == true;
                 final cierre = data['cierreResumen'] as Map<String, dynamic>?;
-                final totalCierre =
-                    (cierre?['totalVendido'] as num?)?.toDouble();
+                final totalCierre = (cierre?['totalVendido'] as num?)
+                    ?.toDouble();
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   elevation: cerrado ? 1 : 2,
-                  color: cerrado
-                      ? Colors.grey.withValues(alpha: 0.08)
-                      : null,
+                  color: cerrado ? AppColors.tintaSecundaria.withValues(alpha: 0.08) : null,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                     side: cerrado
@@ -2306,7 +2255,7 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
                     ),
                     title: Text(
                       nombre,
-                      style: GoogleFonts.poppins(
+                      style: AppFonts.inter(
                         fontWeight: FontWeight.w600,
                         color: _primaryColor,
                       ),
@@ -2316,28 +2265,26 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
                             totalCierre != null
                                 ? 'Cerrado · vendió \$${totalCierre.toStringAsFixed(0)} · ver comisión'
                                 : 'Cerrado · ver resumen y comisión',
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
+                            style: AppFonts.inter(
+                              fontSize: 14,
                               color: _secondaryColor,
                             ),
                           )
                         : yaRindio
-                            ? Text(
-                                'Ronda rendida · otra ronda o cerrar bandejeo',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  color: _secondaryColor,
-                                ),
-                              )
-                            : Text(
-                                'Nueva ronda',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  color: _secondaryColor.withValues(
-                                    alpha: 0.8,
-                                  ),
-                                ),
-                              ),
+                        ? Text(
+                            'Ronda rendida · otra ronda o cerrar bandejeo',
+                            style: AppFonts.inter(
+                              fontSize: 14,
+                              color: _secondaryColor,
+                            ),
+                          )
+                        : Text(
+                            'Nueva ronda',
+                            style: AppFonts.inter(
+                              fontSize: 14,
+                              color: _secondaryColor.withValues(alpha: 0.8),
+                            ),
+                          ),
                     trailing: Icon(
                       cerrado ? Icons.receipt_long : Icons.chevron_right,
                       color: _secondaryColor,
@@ -2358,8 +2305,8 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
                   padding: const EdgeInsets.only(bottom: 8, top: 4),
                   child: Text(
                     titulo,
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
+                    style: AppFonts.inter(
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                       color: _secondaryColor,
                     ),
@@ -2389,7 +2336,7 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
           width: double.infinity,
           padding: conMargenInferior(context, const EdgeInsets.all(16)),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.tarjeta,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.08),
@@ -2403,14 +2350,11 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
             icon: const Icon(Icons.person_add_alt_1),
             label: Text(
               'Agregar bandejero',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+              style: AppFonts.inter(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: _accentColor,
-              foregroundColor: _primaryColor,
+              backgroundColor: AppColors.dorado,
+              foregroundColor: AppColors.negro,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -2481,29 +2425,17 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
 
     int total;
     if (yaEnBandeja && esSumaAdicional) {
-      final actual = widget.productosBandeja
-          .firstWhere((p) => p.productoId == productoId);
+      final actual = widget.productosBandeja.firstWhere(
+        (p) => p.productoId == productoId,
+      );
       if (traspasoFijo > 0) {
-        final propioNuevo =
-            actual.cantidadPropioEnBandeja + cantidadPropio;
-        total = _totalBandejaDesdePropio(
-          propioNuevo,
-          traspasoFijo,
-          maxTotal,
-        );
+        final propioNuevo = actual.cantidadPropioEnBandeja + cantidadPropio;
+        total = _totalBandejaDesdePropio(propioNuevo, traspasoFijo, maxTotal);
       } else {
-        total = _intClamp(
-          actual.cantidadInicial + cantidadPropio,
-          1,
-          maxTotal,
-        );
+        total = _intClamp(actual.cantidadInicial + cantidadPropio, 1, maxTotal);
       }
     } else if (traspasoFijo > 0) {
-      total = _totalBandejaDesdePropio(
-        cantidadPropio,
-        traspasoFijo,
-        maxTotal,
-      );
+      total = _totalBandejaDesdePropio(cantidadPropio, traspasoFijo, maxTotal);
     } else {
       total = _intClamp(cantidadPropio, 1, maxTotal);
     }
@@ -2587,8 +2519,8 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                   Text(
                     'Sume unidades a lo que ya lleva. '
                     'Con traspaso, solo cargue lo propio y el traspaso se suma solo.',
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
+                    style: AppFonts.inter(
+                      fontSize: 14,
                       color: _secondaryColor,
                       height: 1.35,
                     ),
@@ -2597,7 +2529,7 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                 ],
                 Text(
                   'Productos en bandeja: ${productosBandeja.length}',
-                  style: GoogleFonts.poppins(
+                  style: AppFonts.inter(
                     fontWeight: FontWeight.bold,
                     fontSize: 15,
                     color: _primaryColor,
@@ -2606,7 +2538,7 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                 const SizedBox(height: 4),
                 Text(
                   'Total: \$${productosBandeja.fold(0.0, (total, p) => total + (p.cantidadInicial * p.precio)).toStringAsFixed(0)}',
-                  style: GoogleFonts.poppins(
+                  style: AppFonts.inter(
                     fontWeight: FontWeight.bold,
                     fontSize: 17,
                     color: _accentColor,
@@ -2622,44 +2554,20 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData) {
-                return Center(
-                  child: CircularProgressIndicator(color: _accentColor),
-                );
+                return Center(child: CircularProgressIndicator());
               }
 
               if (snapshot.hasError) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Text(
-                      'Error al cargar productos: ${snapshot.error}',
-                      style: GoogleFonts.poppins(color: Colors.red),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
+                return ErrorAmable(
+                  titulo: 'No pudimos cargar los productos',
+                  detalle: 'Error al cargar productos: ${snapshot.error}',
+                  onReintentar: () => setState(() {}),
                 );
               }
 
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.inventory_2_outlined,
-                        size: 64,
-                        color: _secondaryColor.withValues(alpha: 0.5),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No hay productos con stock disponible',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          color: _secondaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
+                return EstadoVacio(
+                  titulo: 'No hay productos con stock disponible',
                 );
               }
 
@@ -2690,8 +2598,9 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                   final productoId = productoDoc.id;
                   final enBandeja = _estaEnBandeja(productoId);
                   final productoEnBandeja = enBandeja
-                      ? widget.productosBandeja
-                          .firstWhere((p) => p.productoId == productoId)
+                      ? widget.productosBandeja.firstWhere(
+                          (p) => p.productoId == productoId,
+                        )
                       : null;
                   final traspasoFijo = _traspasoFijoParaProducto(
                     productoEnBandeja,
@@ -2710,14 +2619,14 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                       : 0;
                   final propioEnBandeja = enBandeja
                       ? (productoEnBandeja!.cantidadTraspasoEnBandeja > 0
-                          ? productoEnBandeja.cantidadPropioEnBandeja
-                          : modoTraspaso
-                              ? _intClamp(
-                                  cantidadEnBandeja - traspasoFijo,
-                                  0,
-                                  cantidadEnBandeja,
-                                )
-                              : cantidadEnBandeja)
+                            ? productoEnBandeja.cantidadPropioEnBandeja
+                            : modoTraspaso
+                            ? _intClamp(
+                                cantidadEnBandeja - traspasoFijo,
+                                0,
+                                cantidadEnBandeja,
+                              )
+                            : cantidadEnBandeja)
                       : 0;
                   final maxAgregar = enBandeja
                       ? _intClamp(
@@ -2735,7 +2644,7 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                       side: enBandeja
-                          ? BorderSide(color: _accentColor, width: 2)
+                          ? BorderSide(color: AppColors.dorado, width: 2)
                           : BorderSide.none,
                     ),
                     child: Padding(
@@ -2752,13 +2661,14 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                                 decoration: BoxDecoration(
                                   color: enBandeja
                                       ? _accentColor.withValues(alpha: 0.2)
-                                      : Colors.grey.withValues(alpha: 0.1),
+                                      : AppColors.tintaSecundaria.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Icon(
                                   Icons.fastfood,
-                                  color:
-                                      enBandeja ? _accentColor : _secondaryColor,
+                                  color: enBandeja
+                                      ? _accentColor
+                                      : _secondaryColor,
                                   size: 26,
                                 ),
                               ),
@@ -2771,7 +2681,7 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                                       nombre,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.poppins(
+                                      style: AppFonts.inter(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 15,
                                         color: _primaryColor,
@@ -2780,13 +2690,13 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                                     const SizedBox(height: 4),
                                     Text(
                                       modoTraspaso
-                                          ? 'Precio: \$${precio.toStringAsFixed(0)} · '
-                                              'Stock: $cantidadDisponible '
-                                              '($propioStock + $porTraspasoStock traspaso)'
-                                          : 'Precio: \$${precio.toStringAsFixed(0)} · '
-                                              'Stock: $cantidadDisponible',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 12,
+                                          ? '${etiquetaPrecio(precio)} · '
+                                                'Stock: $cantidadDisponible '
+                                                '($propioStock + $porTraspasoStock traspaso)'
+                                          : '${etiquetaPrecio(precio)} · '
+                                                'Stock: $cantidadDisponible',
+                                      style: AppFonts.inter(
+                                        fontSize: 14,
                                         color: _secondaryColor,
                                       ),
                                     ),
@@ -2795,9 +2705,9 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                                       Text(
                                         'Cargue solo lo que tiene; '
                                         '$traspasoFijo u. de traspaso se suman solas.',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 10,
-                                          color: Colors.orange[900],
+                                        style: AppFonts.inter(
+                                          fontSize: 14,
+                                          color: AppColors.avisoTexto,
                                           height: 1.25,
                                         ),
                                       ),
@@ -2807,12 +2717,12 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                                       Text(
                                         modoTraspaso
                                             ? 'En bandeja: $cantidadEnBandeja u. '
-                                                '($propioEnBandeja + $traspasoFijo traspaso)'
+                                                  '($propioEnBandeja + $traspasoFijo traspaso)'
                                             : 'En bandeja: $cantidadEnBandeja u.',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 11,
+                                        style: AppFonts.inter(
+                                          fontSize: 14,
                                           fontWeight: FontWeight.w600,
-                                          color: _accentColor,
+                                          color: AppColors.primaryLight,
                                         ),
                                       ),
                                     ],
@@ -2858,8 +2768,7 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                                           productoId: productoId,
                                           nombre: nombre,
                                           precio: precio,
-                                          cantidadPropio:
-                                              cantidadEnBandeja - 1,
+                                          cantidadPropio: cantidadEnBandeja - 1,
                                           traspasoFijo: 0,
                                           maxTotal: cantidadDisponible,
                                           yaEnBandeja: true,
@@ -2890,8 +2799,7 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                                 traspasoFijo: traspasoFijo,
                                 maxTotal: cantidadDisponible,
                                 yaEnBandeja: enBandeja,
-                                esSumaAdicional:
-                                    esSumaAdicional && enBandeja,
+                                esSumaAdicional: esSumaAdicional && enBandeja,
                               );
                             },
                             onAgregarPrimero: () {
@@ -2921,7 +2829,7 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
           width: double.infinity,
           padding: conMargenInferior(context, const EdgeInsets.all(16)),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.tarjeta,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.1),
@@ -2940,22 +2848,19 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                     });
                   },
             style: ElevatedButton.styleFrom(
-              backgroundColor: _accentColor,
-              foregroundColor: _primaryColor,
+              backgroundColor: AppColors.dorado,
+              foregroundColor: AppColors.negro,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              disabledBackgroundColor: Colors.grey,
+              disabledBackgroundColor: AppColors.tintaSecundaria,
             ),
             child: Text(
               widget.esActualizacionRonda
                   ? 'Actualizar bandeja'
                   : 'Iniciar ronda',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
+              style: AppFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
             ),
           ),
         ),
@@ -2985,36 +2890,32 @@ class _PasoResumenRonda extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [_accentColor, _secondaryColor],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            gradient: AppGradientes.dorado,
           ),
           child: Column(
             children: [
-              Icon(Icons.shopping_basket, size: 64, color: Colors.white),
+              Icon(Icons.shopping_basket, size: 64, color: AppColors.negro),
               const SizedBox(height: 16),
               Text(
                 'Ronda en Curso',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: AppColors.negro,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 'Valor Total Potencial',
-                style: GoogleFonts.poppins(fontSize: 14, color: Colors.white70),
+                style: AppFonts.inter(fontSize: 14, color: AppColors.negro),
               ),
               const SizedBox(height: 8),
               Text(
                 '\$${valorTotal.toStringAsFixed(0)}',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: AppColors.negro,
                 ),
               ),
             ],
@@ -3042,28 +2943,29 @@ class _PasoResumenRonda extends StatelessWidget {
                       color: _accentColor.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(Icons.fastfood, color: _accentColor, size: 28),
+                    child: Icon(
+                      Icons.fastfood,
+                      color: AppColors.dorado,
+                      size: 28,
+                    ),
                   ),
                   title: Text(
                     producto.nombre,
-                    style: GoogleFonts.poppins(
+                    style: AppFonts.inter(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
                   ),
                   subtitle: Text(
                     'Cantidad: ${producto.cantidadInicial}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: _secondaryColor,
-                    ),
+                    style: AppFonts.inter(fontSize: 14, color: _secondaryColor),
                   ),
                   trailing: Text(
                     '\$${(producto.cantidadInicial * producto.precio).toStringAsFixed(0)}',
-                    style: GoogleFonts.poppins(
+                    style: AppFonts.inter(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
-                      color: _accentColor,
+                      color: AppColors.primaryLight,
                     ),
                   ),
                 ),
@@ -3075,7 +2977,7 @@ class _PasoResumenRonda extends StatelessWidget {
           width: double.infinity,
           padding: conMargenInferior(context, const EdgeInsets.all(16)),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.tarjeta,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.1),
@@ -3087,8 +2989,8 @@ class _PasoResumenRonda extends StatelessWidget {
           child: ElevatedButton(
             onPressed: onVolverLista,
             style: ElevatedButton.styleFrom(
-              backgroundColor: _accentColor,
-              foregroundColor: _primaryColor,
+              backgroundColor: AppColors.dorado,
+              foregroundColor: AppColors.negro,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -3102,7 +3004,7 @@ class _PasoResumenRonda extends StatelessWidget {
                 Flexible(
                   child: Text(
                     'Volver a lista de bandejeros',
-                    style: GoogleFonts.poppins(
+                    style: AppFonts.inter(
                       fontWeight: FontWeight.bold,
                       fontSize: 17,
                     ),
@@ -3146,23 +3048,20 @@ class _PasoRendicion extends StatelessWidget {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(20),
-          color: Colors.green.withValues(alpha: 0.1),
+          color: AppColors.exito.withValues(alpha: 0.1),
           child: Column(
             children: [
               Text(
                 'Total Vendido',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  color: _secondaryColor,
-                ),
+                style: AppFonts.inter(fontSize: 16, color: _secondaryColor),
               ),
               const SizedBox(height: 8),
               Text(
                 '\$${totalVendido.toStringAsFixed(0)}',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
-                  color: Colors.green[700],
+                  color: AppColors.exito,
                 ),
               ),
               const SizedBox(height: 12),
@@ -3170,8 +3069,8 @@ class _PasoRendicion extends StatelessWidget {
                 'La comisión se ingresa al cerrar el bandejeo del bandejero, '
                 'no en cada ronda.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
+                style: AppFonts.inter(
+                  fontSize: 14,
                   color: _secondaryColor,
                   height: 1.35,
                 ),
@@ -3199,12 +3098,12 @@ class _PasoRendicion extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.fastfood, color: _accentColor),
+                          Icon(Icons.fastfood, color: AppColors.dorado),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               producto.nombre,
-                              style: GoogleFonts.poppins(
+                              style: AppFonts.inter(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
                               ),
@@ -3215,7 +3114,7 @@ class _PasoRendicion extends StatelessWidget {
                       const SizedBox(height: 12),
                       Text(
                         'Llevó: ${producto.cantidadInicial}',
-                        style: GoogleFonts.poppins(
+                        style: AppFonts.inter(
                           fontSize: 14,
                           color: _secondaryColor,
                         ),
@@ -3223,19 +3122,19 @@ class _PasoRendicion extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         'Vendió: ${producto.cantidadVendida} u.',
-                        style: GoogleFonts.poppins(
+                        style: AppFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Colors.green[700],
+                          color: AppColors.exito,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'Total vendido: \$${producto.totalVendido.toStringAsFixed(0)}',
-                        style: GoogleFonts.poppins(
+                        style: AppFonts.inter(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          color: _accentColor,
+                          color: AppColors.primaryLight,
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -3244,8 +3143,8 @@ class _PasoRendicion extends StatelessWidget {
                         children: [
                           Text(
                             'Sobrante',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
+                            style: AppFonts.inter(
+                              fontSize: 14,
                               color: _secondaryColor,
                             ),
                           ),
@@ -3254,11 +3153,11 @@ class _PasoRendicion extends StatelessWidget {
                             visualDensity: VisualDensity.compact,
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(
-                              minWidth: 36,
-                              minHeight: 36,
+                              minWidth: AppTamanos.toque,
+                              minHeight: AppTamanos.toque,
                             ),
                             icon: const Icon(Icons.remove_circle),
-                            color: Colors.red,
+                            color: AppColors.error,
                             onPressed: producto.cantidadSobrante > 0
                                 ? () => onSobrantesChanged(
                                     producto.productoId,
@@ -3271,7 +3170,7 @@ class _PasoRendicion extends StatelessWidget {
                             child: Text(
                               '${producto.cantidadSobrante}',
                               textAlign: TextAlign.center,
-                              style: GoogleFonts.poppins(
+                              style: AppFonts.inter(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 18,
                               ),
@@ -3281,12 +3180,13 @@ class _PasoRendicion extends StatelessWidget {
                             visualDensity: VisualDensity.compact,
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(
-                              minWidth: 36,
-                              minHeight: 36,
+                              minWidth: AppTamanos.toque,
+                              minHeight: AppTamanos.toque,
                             ),
                             icon: const Icon(Icons.add_circle),
-                            color: _accentColor,
-                            onPressed: producto.cantidadSobrante <
+                            color: AppColors.dorado,
+                            onPressed:
+                                producto.cantidadSobrante <
                                     producto.cantidadInicial
                                 ? () => onSobrantesChanged(
                                     producto.productoId,
@@ -3308,7 +3208,7 @@ class _PasoRendicion extends StatelessWidget {
           width: double.infinity,
           padding: conMargenInferior(context, const EdgeInsets.all(16)),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.tarjeta,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.1),
@@ -3320,13 +3220,13 @@ class _PasoRendicion extends StatelessWidget {
           child: ElevatedButton(
             onPressed: isGuardando ? null : onConfirmar,
             style: ElevatedButton.styleFrom(
-              backgroundColor: _accentColor,
-              foregroundColor: _primaryColor,
+              backgroundColor: AppColors.dorado,
+              foregroundColor: AppColors.negro,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              disabledBackgroundColor: Colors.grey,
+              disabledBackgroundColor: AppColors.tintaSecundaria,
             ),
             child: isGuardando
                 ? SizedBox(
@@ -3344,7 +3244,7 @@ class _PasoRendicion extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         'Confirmar Venta',
-                        style: GoogleFonts.poppins(
+                        style: AppFonts.inter(
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
                         ),

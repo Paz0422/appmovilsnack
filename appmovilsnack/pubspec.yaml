@@ -14,8 +14,6 @@ dependencies:
   cloud_firestore: ^5.6.12
   firebase_auth: ^5.7.0
   flutter_animate: ^4.5.0
-  google_fonts: ^6.2.1
-  wave: ^0.2.2
   share_plus: ^10.1.0
   path_provider: ^2.1.5
   fl_chart: ^0.66.2
@@ -40,4 +38,22 @@ flutter:
   
   assets:
     - assets/imagenes/
+    - assets/fuentes/
+
+  # Fuentes incluidas en la app: no se descargan, funcionan sin señal.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fuentes/Inter-Regular.ttf
+        - asset: assets/fuentes/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fuentes/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fuentes/Inter-Bold.ttf
+          weight: 700
+        - asset: assets/fuentes/Inter-ExtraBold.ttf
+          weight: 800
+    - family: Lobster
+      fonts:
+        - asset: assets/fuentes/Lobster-Regular.ttf
 

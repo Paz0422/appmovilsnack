@@ -4,13 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:front_appsnack/core/app_theme.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/core/avisos_sesion.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
 import 'package:front_appsnack/services/cierre_turno_service.dart';
 import 'package:front_appsnack/services/vendedor_ventas_service.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/core/precio.dart';
 
 /// Cierre de turno por conciliación de inventario:
 /// stock inicial − inventario final = unidades vendidas → dinero estimado.
@@ -42,6 +45,7 @@ class _ProductoConciliacion {
   final double precio;
   final String categoria;
   final int cantidadInicial;
+
   /// Stock del sistema al abrir el conteo (inicial + traspasos − mermas, etc.).
   /// Se puede contar más: el exceso es sobrante, no venta.
   final int cantidadMaxima;
@@ -60,14 +64,14 @@ class _ProductoConciliacion {
   /// Con sobrante las ventas son 0, nunca negativas: no restan del total ni
   /// del ranking.
   int get cantidadVendida => CierreTurnoService.unidadesVendidas(
-        stockSistema: cantidadMaxima,
-        contado: cantidadFinal,
-      );
+    stockSistema: cantidadMaxima,
+    contado: cantidadFinal,
+  );
   double get subtotal => cantidadVendida > 0 ? cantidadVendida * precio : 0;
   int get sobrante => CierreTurnoService.sobrante(
-        stockSistema: cantidadMaxima,
-        contado: cantidadFinal,
-      );
+    stockSistema: cantidadMaxima,
+    contado: cantidadFinal,
+  );
   bool get tieneSobrante => sobrante > 0;
   bool get recibioTraspaso => cantidadMaxima > cantidadInicial;
 }
@@ -86,12 +90,15 @@ bool _bandejeroBandejeoCerrado(Map<String, dynamic> data) {
 
 ({double monto, int unidades}) _totalesVenta(
   Iterable<_ProductoConciliacion> productos,
-) =>
-    CierreTurnoService.totalesVenta(productos.map((p) => (
-          stockSistema: p.cantidadMaxima,
-          contado: p.cantidadFinal,
-          precio: p.precio,
-        )));
+) => CierreTurnoService.totalesVenta(
+  productos.map(
+    (p) => (
+      stockSistema: p.cantidadMaxima,
+      contado: p.cantidadFinal,
+      precio: p.precio,
+    ),
+  ),
+);
 
 class _ResumenBandejeroEnCierre {
   final String nombre;
@@ -111,13 +118,13 @@ class _ResumenBandejeroEnCierre {
   });
 
   Map<String, dynamic> toFirestore() => {
-        'nombre': nombre,
-        'totalVendido': totalVendido,
-        'porcentajeComision': porcentajeComision,
-        'comision': comision,
-        'cajaVuelto': cajaVuelto,
-        'totalARecibir': totalARecibir,
-      };
+    'nombre': nombre,
+    'totalVendido': totalVendido,
+    'porcentajeComision': porcentajeComision,
+    'comision': comision,
+    'cajaVuelto': cajaVuelto,
+    'totalARecibir': totalARecibir,
+  };
 
   static double _totalARecibirDesdeCierre(Map<String, dynamic> cierre) {
     final directo = (cierre['totalARecibir'] as num?)?.toDouble();
@@ -128,14 +135,12 @@ class _ResumenBandejeroEnCierre {
   }
 
   static _ResumenBandejeroEnCierre? desdeMap(Map<String, dynamic> m) {
-    final nombre = m['nombre']?.toString() ??
-        m['bandejeroNombre']?.toString();
+    final nombre = m['nombre']?.toString() ?? m['bandejeroNombre']?.toString();
     if (nombre == null || nombre.isEmpty) return null;
     return _ResumenBandejeroEnCierre(
       nombre: nombre,
       totalVendido: (m['totalVendido'] as num?)?.toDouble() ?? 0,
-      porcentajeComision:
-          (m['porcentajeComision'] as num?)?.toDouble() ?? 0,
+      porcentajeComision: (m['porcentajeComision'] as num?)?.toDouble() ?? 0,
       comision: (m['comision'] as num?)?.toDouble() ?? 0,
       cajaVuelto: (m['cajaVuelto'] as num?)?.toDouble() ?? 0,
       totalARecibir: _totalARecibirDesdeCierre(m),
@@ -157,23 +162,27 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
   bool _mostroAvisoBorrador = false;
 
   final _cierreService = CierreTurnoService();
+
   /// Stock de cada producto al abrir el conteo. El cierre solo se escribe si
   /// sigue igual; se guarda en el borrador para detectar cambios al volver.
   Map<String, int> _stockAlIniciar = {};
+
   /// Productos cuyo stock cambió durante el conteo: hay que volver a contarlos.
   Set<String> _productosCambiados = {};
+
   /// Traspasos entrantes sin confirmar y rondas abiertas: bloquean el conteo.
   List<String> _movimientosPendientes = [];
+
   /// Conteo con sobrante ya confirmado por el vendedor ({productoId: contado}),
   /// para no volver a preguntar si no lo cambia.
   final Map<String, int> _sobrantesConfirmados = {};
 
-  DocumentReference<Map<String, dynamic>> get _sectorRef =>
-      FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(widget.eventoId)
-          .collection('sectores')
-          .doc(widget.sectorId);
+  DocumentReference<Map<String, dynamic>> get _sectorRef => FirebaseFirestore
+      .instance
+      .collection('eventos')
+      .doc(widget.eventoId)
+      .collection('sectores')
+      .doc(widget.sectorId);
 
   @override
   void initState() {
@@ -243,9 +252,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       SnackBar(
         content: Text(
           'Borrador guardado. Puede continuar el conteo cuando vuelva a cerrar turno.',
-          style: GoogleFonts.poppins(),
+          style: AppFonts.inter(),
         ),
-        backgroundColor: Colors.green,
+        backgroundColor: AppColors.exitoFuerte,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
       ),
@@ -257,24 +266,21 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
     if (widget.soloVerReporte || _productos.isEmpty) return;
     _leerCantidadesDesdeControllers();
     try {
-      await _sectorRef.set(
-        {
-          'borradorCierreTurno': {
-            'actualizadoEn': FieldValue.serverTimestamp(),
-            'enResumen': enResumen,
-            'stockAlIniciar': _stockAlIniciar,
-            'productos': _productos
-                .map(
-                  (p) => {
-                    'productoId': p.productoId,
-                    'cantidadFinal': p.cantidadFinal,
-                  },
-                )
-                .toList(),
-          },
+      await _sectorRef.set({
+        'borradorCierreTurno': {
+          'actualizadoEn': FieldValue.serverTimestamp(),
+          'enResumen': enResumen,
+          'stockAlIniciar': _stockAlIniciar,
+          'productos': _productos
+              .map(
+                (p) => {
+                  'productoId': p.productoId,
+                  'cantidadFinal': p.cantidadFinal,
+                },
+              )
+              .toList(),
         },
-        SetOptions(merge: true),
-      );
+      }, SetOptions(merge: true));
     } catch (_) {}
   }
 
@@ -320,7 +326,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
 
       final sectorData = sectorSnap.data();
       if (widget.soloVerReporte && sectorData?['ultimoCierre'] != null) {
-        _cargarDesdeCierreGuardado(sectorData!['ultimoCierre'] as Map<String, dynamic>);
+        _cargarDesdeCierreGuardado(
+          sectorData!['ultimoCierre'] as Map<String, dynamic>,
+        );
         return;
       }
 
@@ -377,8 +385,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           cantidadMaxima: maxima,
           cantidadFinal: maxima,
         );
-      }).toList()
-        ..sort((a, b) => a.nombre.compareTo(b.nombre));
+      }).toList()..sort((a, b) => a.nombre.compareTo(b.nombre));
 
       final stockActual = {
         for (final doc in stockSnapshot.docs)
@@ -401,13 +408,12 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         // Stock movido desde que se empezó este conteo (p. ej. salió y volvió).
         final previo = borrador['stockAlIniciar'];
         if (previo is Map) {
-          cambiados.addAll(CierreTurnoService.productosCambiados(
-            {
+          cambiados.addAll(
+            CierreTurnoService.productosCambiados({
               for (final e in previo.entries)
                 if (e.value is num) e.key.toString(): (e.value as num).toInt(),
-            },
-            stockActual,
-          ));
+            }, stockActual),
+          );
         }
         if (borrador['enResumen'] == true && cambiados.isEmpty) {
           final totales = _totalesVenta(productos);
@@ -437,9 +443,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           SnackBar(
             content: Text(
               CierreTurnoService.mensajeStockCambio,
-              style: GoogleFonts.poppins(),
+              style: AppFonts.inter(),
             ),
-            backgroundColor: Colors.orange[800],
+            backgroundColor: AppColors.avisoFuerte,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 8),
           ),
@@ -450,9 +456,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           SnackBar(
             content: Text(
               'Se restauró el conteo guardado anteriormente.',
-              style: GoogleFonts.poppins(),
+              style: AppFonts.inter(),
             ),
-            backgroundColor: AppColors.accent,
+            backgroundColor: AppColors.grafito,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 3),
           ),
@@ -478,7 +484,8 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         precio: (m['precio'] as num?)?.toDouble() ?? 0.0,
         categoria: _normalizarCategoria(m['categoria']?.toString()),
         cantidadInicial: (m['cantidadInicial'] as int?) ?? 0,
-        cantidadMaxima: (m['cantidadMaxima'] as int?) ??
+        cantidadMaxima:
+            (m['cantidadMaxima'] as int?) ??
             (m['cantidadInicial'] as int?) ??
             (m['cantidadFinal'] as int?) ??
             0,
@@ -567,13 +574,13 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         builder: (context) => AlertDialog(
           title: Text(
             'No se puede cerrar todavía',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+            style: AppFonts.inter(fontWeight: FontWeight.w600),
           ),
           content: Text(
             'Hay movimientos pendientes que cambian el stock del sector:\n'
             '• ${movimientos.join('\n• ')}\n\n'
             'Resuélvalos y vuelva a revisar el conteo.',
-            style: GoogleFonts.poppins(fontSize: 14),
+            style: AppFonts.inter(fontSize: 14),
           ),
           actions: [
             TextButton(
@@ -591,8 +598,8 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
     if (msgBandejeros != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(msgBandejeros, style: GoogleFonts.poppins()),
-          backgroundColor: Colors.orange,
+          content: Text(msgBandejeros, style: AppFonts.inter()),
+          backgroundColor: AppColors.avisoFuerte,
           duration: const Duration(seconds: 6),
         ),
       );
@@ -612,7 +619,8 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       final cierre = data['cierreResumen'];
       if (cierre is! Map<String, dynamic>) continue;
 
-      final nombre = data['nombre']?.toString() ??
+      final nombre =
+          data['nombre']?.toString() ??
           cierre['bandejeroNombre']?.toString() ??
           'Bandejero';
       final item = _ResumenBandejeroEnCierre(
@@ -622,7 +630,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
             (cierre['porcentajeComision'] as num?)?.toDouble() ?? 0,
         comision: (cierre['comision'] as num?)?.toDouble() ?? 0,
         cajaVuelto: (cierre['cajaVuelto'] as num?)?.toDouble() ?? 0,
-        totalARecibir: _ResumenBandejeroEnCierre._totalARecibirDesdeCierre(cierre),
+        totalARecibir: _ResumenBandejeroEnCierre._totalARecibirDesdeCierre(
+          cierre,
+        ),
       );
       lista.add(item);
     }
@@ -638,9 +648,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           SnackBar(
             content: Text(
               'La cantidad final de "${p.nombre}" no puede ser negativa.',
-              style: GoogleFonts.poppins(),
+              style: AppFonts.inter(),
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.errorFuerte,
           ),
         );
         return;
@@ -663,13 +673,13 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       builder: (ctx) => AlertDialog(
         title: Text(
           p.nombre,
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+          style: AppFonts.inter(fontWeight: FontWeight.w600),
         ),
         content: Text(
           'Está contando ${p.sobrante} más de lo registrado. ¿Confirma?\n\n'
           'Sistema: ${p.cantidadMaxima} · Contado: ${p.cantidadFinal}. '
           'El sobrante se registrará para que el administrador lo revise.',
-          style: GoogleFonts.poppins(fontSize: 14),
+          style: AppFonts.inter(fontSize: 14),
         ),
         actions: [
           TextButton(
@@ -693,9 +703,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           SnackBar(
             content: Text(
               'La cantidad final de "${p.nombre}" no puede ser negativa.',
-              style: GoogleFonts.poppins(),
+              style: AppFonts.inter(),
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.errorFuerte,
           ),
         );
         return;
@@ -739,7 +749,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
     buffer.writeln('RESUMEN');
     buffer.writeln('───────────────────────────────────────');
     buffer.writeln('Unidades vendidas (estimadas): $_totalUnidadesVendidas');
-    buffer.writeln('Dinero estimado del punto: \$${_totalEstimado.toStringAsFixed(0)}');
+    buffer.writeln(
+      'Dinero estimado del punto: \$${_totalEstimado.toStringAsFixed(0)}',
+    );
     if (_bandejerosCierre.isNotEmpty) {
       buffer.writeln();
       buffer.writeln('───────────────────────────────────────');
@@ -785,8 +797,8 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al exportar: $e', style: GoogleFonts.poppins()),
-            backgroundColor: Colors.red,
+            content: Text('Error al exportar: $e', style: AppFonts.inter()),
+            backgroundColor: AppColors.errorFuerte,
           ),
         );
       }
@@ -818,18 +830,20 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       }
 
       final productosData = _productos
-          .map((p) => {
-                'productoId': p.productoId,
-                'nombre': p.nombre,
-                'precio': p.precio,
-                'categoria': p.categoria,
-                'cantidadInicial': p.cantidadInicial,
-                'cantidadMaxima': p.cantidadMaxima,
-                'cantidadFinal': p.cantidadFinal,
-                'cantidadVendida': p.cantidadVendida,
-                'subtotal': p.subtotal,
-                if (p.tieneSobrante) 'sobrante': p.sobrante,
-              })
+          .map(
+            (p) => {
+              'productoId': p.productoId,
+              'nombre': p.nombre,
+              'precio': p.precio,
+              'categoria': p.categoria,
+              'cantidadInicial': p.cantidadInicial,
+              'cantidadMaxima': p.cantidadMaxima,
+              'cantidadFinal': p.cantidadFinal,
+              'cantidadVendida': p.cantidadVendida,
+              'subtotal': p.subtotal,
+              if (p.tieneSobrante) 'sobrante': p.sobrante,
+            },
+          )
           .toList();
 
       final cierreId =
@@ -852,7 +866,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         eventoId: widget.eventoId,
         sectorId: widget.sectorId,
         stockAlIniciar: _stockAlIniciar,
-        conteoFinal: {for (final p in _productos) p.productoId: p.cantidadFinal},
+        conteoFinal: {
+          for (final p in _productos) p.productoId: p.cantidadFinal,
+        },
         cierreData: cierreData,
         totalEstimado: _totalEstimado,
         // Las incidencias de sobrante van a nombre del uid de Auth (reglas).
@@ -886,14 +902,16 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         }
       }
 
+      // Solo interfaz: el login muestra "¡Turno cerrado!" con la mascota.
+      AvisosSesion.turnoCerradoEn = widget.nombreSector;
       await AuthManager().cerrarSesion();
     } on TurnoYaCerradoException catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$e', style: GoogleFonts.poppins()),
-            backgroundColor: Colors.red,
+            content: Text('$e', style: AppFonts.inter()),
+            backgroundColor: AppColors.errorFuerte,
           ),
         );
       }
@@ -902,8 +920,8 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al cerrar turno: $e', style: GoogleFonts.poppins()),
-            backgroundColor: Colors.red,
+            content: Text('Error al cerrar turno: $e', style: AppFonts.inter()),
+            backgroundColor: AppColors.errorFuerte,
           ),
         );
       }
@@ -914,8 +932,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       _mostrarResumen && !widget.soloVerReporte;
 
   bool get _mostrarBotonAtras =>
-      widget.soloVerReporte ||
-      (!_mostrarResumen && widget.fromAdmin);
+      widget.soloVerReporte || (!_mostrarResumen && widget.fromAdmin);
 
   @override
   Widget build(BuildContext context) {
@@ -928,74 +945,59 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         _retrocederConBorrador();
       },
       child: Scaffold(
-      backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        leading: _mostrarBotonAtras
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _retrocederConBorrador,
-              )
-            : null,
-        title: Text(
-          widget.soloVerReporte
-              ? 'Reporte de cierre'
-              : _mostrarResumen
-                  ? 'Resumen de cierre'
-                  : 'Inventario final',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            color: AppColors.accent,
-            fontSize: 18,
+        backgroundColor: AppColors.surface,
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          leading: _mostrarBotonAtras
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: _retrocederConBorrador,
+                )
+              : null,
+          title: Text(
+            widget.soloVerReporte
+                ? 'Reporte de cierre'
+                : _mostrarResumen
+                ? 'Resumen de cierre'
+                : 'Inventario final',
+            style: AppFonts.inter(
+              fontWeight: FontWeight.w600,
+              color: AppColors.accent,
+              fontSize: 18,
+            ),
           ),
+          actions: [
+            if (widget.fromAdmin && !widget.soloVerReporte && !_mostrarResumen)
+              IconButton(
+                icon: const Icon(Icons.admin_panel_settings_outlined),
+                onPressed: () =>
+                    Navigator.of(context).popUntil((route) => route.isFirst),
+              ),
+            if (_mostrarResumen)
+              IconButton(
+                icon: const Icon(Icons.share),
+                onPressed: _isLoading ? null : _exportarTexto,
+              ),
+          ],
         ),
-        backgroundColor: AppColors.primaryLight,
-        foregroundColor: AppColors.accent,
-        actions: [
-          if (widget.fromAdmin && !widget.soloVerReporte && !_mostrarResumen)
-            IconButton(
-              icon: const Icon(Icons.admin_panel_settings_outlined),
-              onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
-            ),
-          if (_mostrarResumen)
-            IconButton(
-              icon: const Icon(Icons.share),
-              onPressed: _isLoading ? null : _exportarTexto,
-            ),
-        ],
+        body: _isLoading
+            ? Center(child: CircularProgressIndicator())
+            : _error != null
+            ? _buildError()
+            : _movimientosPendientes.isNotEmpty
+            ? _buildMovimientosPendientes()
+            : _mostrarResumen
+            ? _buildResumenView()
+            : _buildInventarioFinalView(),
       ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: AppColors.accent))
-          : _error != null
-              ? _buildError()
-              : _movimientosPendientes.isNotEmpty
-                  ? _buildMovimientosPendientes()
-                  : _mostrarResumen
-                  ? _buildResumenView()
-                  : _buildInventarioFinalView(),
-    ),
     );
   }
 
   Widget _buildError() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: AppColors.error),
-            const SizedBox(height: 16),
-            Text(
-              _error!,
-              style: GoogleFonts.poppins(color: AppColors.error),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            FilledButton(onPressed: _cargarDatos, child: const Text('Reintentar')),
-          ],
-        ),
-      ),
+    return ErrorAmable(
+      titulo: 'No se pudo abrir el cierre',
+      mensaje: _error!,
+      onReintentar: _cargarDatos,
     );
   }
 
@@ -1005,12 +1007,12 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(Icons.pending_actions, size: 48, color: Colors.orange[800]),
+          Icon(Icons.pending_actions, size: 48, color: AppColors.aviso),
           const SizedBox(height: 12),
           Text(
             'Antes de contar, resuelva estos movimientos',
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontSize: 17,
               fontWeight: FontWeight.w600,
               color: AppColors.primaryLight,
@@ -1022,15 +1024,15 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
             'desactualizado. Confirme los traspasos desde el aviso de pedidos '
             'pendientes en el inicio y rinda las rondas en Bandejeo.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(fontSize: 13, color: AppColors.secondary),
+            style: AppFonts.inter(fontSize: 14, color: AppColors.secondary),
           ),
           const SizedBox(height: 16),
           ..._movimientosPendientes.map(
             (m) => Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
-                leading: Icon(Icons.warning_amber, color: Colors.orange[800]),
-                title: Text(m, style: GoogleFonts.poppins(fontSize: 14)),
+                leading: Icon(Icons.warning_amber, color: AppColors.aviso),
+                title: Text(m, style: AppFonts.inter(fontSize: 14)),
               ),
             ),
           ),
@@ -1062,7 +1064,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
             children: [
               Text(
                 'Inventario final — ${widget.nombreSector}',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontWeight: FontWeight.w600,
                   color: AppColors.primaryLight,
                 ),
@@ -1071,10 +1073,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
               Text(
                 'Ingrese cuántas unidades quedan. Si cuenta más que el stock del '
                 'sistema, se registrará como sobrante para el administrador.',
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  color: AppColors.secondary,
-                ),
+                style: AppFonts.inter(fontSize: 14, color: AppColors.secondary),
               ),
             ],
           ),
@@ -1091,7 +1090,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                   side: cambio
-                      ? BorderSide(color: Colors.orange[800]!, width: 2)
+                      ? BorderSide(color: AppColors.aviso, width: 2)
                       : BorderSide.none,
                 ),
                 child: Padding(
@@ -1101,7 +1100,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                     children: [
                       Text(
                         p.nombre,
-                        style: GoogleFonts.poppins(
+                        style: AppFonts.inter(
                           fontWeight: FontWeight.w600,
                           fontSize: 15,
                           color: AppColors.primaryLight,
@@ -1114,16 +1113,16 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                             Icon(
                               Icons.sync_problem,
                               size: 16,
-                              color: Colors.orange[800],
+                              color: AppColors.aviso,
                             ),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
                                 'El stock cambió: vuelva a contar',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
+                                style: AppFonts.inter(
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.orange[800],
+                                  color: AppColors.aviso,
                                 ),
                               ),
                             ),
@@ -1134,19 +1133,16 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                       Text(
                         'Inicial: ${p.cantidadInicial} · Sistema: ${p.cantidadMaxima}'
                         '${p.recibioTraspaso ? ' (incl. traspaso)' : ''} · '
-                        'Precio: \$${p.precio.toStringAsFixed(0)}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
+                        '${etiquetaPrecio(p.precio)}',
+                        style: AppFonts.inter(
+                          fontSize: 14,
                           color: AppColors.secondary,
                         ),
                       ),
                       const SizedBox(height: 10),
                       Row(
                         children: [
-                          Text(
-                            'Quedan:',
-                            style: GoogleFonts.poppins(fontSize: 14),
-                          ),
+                          Text('Quedan:', style: AppFonts.inter(fontSize: 14)),
                           Expanded(
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -1155,17 +1151,17 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(
-                                    minWidth: 34,
-                                    minHeight: 34,
+                                    minWidth: AppTamanos.toque,
+                                    minHeight: AppTamanos.toque,
                                   ),
                                   iconSize: 22,
                                   icon: const Icon(Icons.remove_circle_outline),
                                   color: AppColors.primaryLight,
                                   onPressed: p.cantidadFinal > 0
                                       ? () => _setCantidadFinal(
-                                            p,
-                                            p.cantidadFinal - 1,
-                                          )
+                                          p,
+                                          p.cantidadFinal - 1,
+                                        )
                                       : null,
                                 ),
                                 SizedBox(
@@ -1175,7 +1171,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                                         _cantidadControllers[p.productoId],
                                     keyboardType: TextInputType.number,
                                     textAlign: TextAlign.center,
-                                    style: GoogleFonts.poppins(
+                                    style: AppFonts.inter(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                       color: AppColors.primaryLight,
@@ -1184,9 +1180,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                                       isDense: true,
                                       contentPadding:
                                           const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                        vertical: 8,
-                                      ),
+                                            horizontal: 4,
+                                            vertical: 8,
+                                          ),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(8),
                                       ),
@@ -1202,16 +1198,14 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(
-                                    minWidth: 34,
-                                    minHeight: 34,
+                                    minWidth: AppTamanos.toque,
+                                    minHeight: AppTamanos.toque,
                                   ),
                                   iconSize: 22,
                                   icon: const Icon(Icons.add_circle_outline),
                                   color: AppColors.primaryLight,
-                                  onPressed: () => _setCantidadFinal(
-                                    p,
-                                    p.cantidadFinal + 1,
-                                  ),
+                                  onPressed: () =>
+                                      _setCantidadFinal(p, p.cantidadFinal + 1),
                                 ),
                               ],
                             ),
@@ -1220,17 +1214,17 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                           if (p.tieneSobrante)
                             Text(
                               'Sobrante: +${p.sobrante}',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
+                              style: AppFonts.inter(
+                                fontSize: 14,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.orange[800],
+                                color: AppColors.aviso,
                               ),
                             )
                           else
                             Text(
                               'Vendido: ${p.cantidadVendida}',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
+                              style: AppFonts.inter(
+                                fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.success,
                               ),
@@ -1253,13 +1247,15 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
               icon: const Icon(Icons.check_circle_outline),
               label: Text(
                 'Guardar y salir',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                style: AppFonts.inter(fontWeight: FontWeight.w600),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.accent,
                 foregroundColor: AppColors.primaryLight,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -1288,20 +1284,25 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.12),
+                color: AppColors.aviso.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+                border: Border.all(
+                  color: AppColors.aviso.withValues(alpha: 0.4),
+                ),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.warning_amber, color: Colors.orange[800]),
+                  Icon(Icons.warning_amber, color: AppColors.aviso),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Hay productos con sobrante (se contó más que el stock del '
                       'sistema). Sus ventas quedan en 0 y el sobrante se registrará '
                       'para que el administrador lo revise.',
-                      style: GoogleFonts.poppins(fontSize: 13, color: Colors.orange[900]),
+                      style: AppFonts.inter(
+                        fontSize: 14,
+                        color: AppColors.avisoTexto,
+                      ),
                     ),
                   ),
                 ],
@@ -1318,13 +1319,15 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
               icon: const Icon(Icons.share),
               label: Text(
                 'Exportar resumen',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                style: AppFonts.inter(fontWeight: FontWeight.w600),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.accent,
                 foregroundColor: AppColors.primaryLight,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -1337,13 +1340,15 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                 icon: const Icon(Icons.check_circle_outline),
                 label: Text(
                   'Confirmar cierre y volver al inicio',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  style: AppFonts.inter(fontWeight: FontWeight.w600),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryLight,
-                  foregroundColor: AppColors.accent,
+                  backgroundColor: AppColors.dorado,
+                  foregroundColor: AppColors.negro,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),
@@ -1358,7 +1363,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.tarjeta,
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
@@ -1373,7 +1378,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         children: [
           Text(
             'Evento: $_nombreEvento',
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.bold,
               color: AppColors.primaryLight,
@@ -1382,7 +1387,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           const SizedBox(height: 4),
           Text(
             'Sector: ${widget.nombreSector}',
-            style: GoogleFonts.poppins(fontSize: 14, color: AppColors.secondary),
+            style: AppFonts.inter(fontSize: 14, color: AppColors.secondary),
           ),
         ],
       ),
@@ -1394,40 +1399,36 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.accent, AppColors.secondary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.accent.withValues(alpha: 0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: AppColors.negro,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.dorado, width: 2),
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Dinero estimado del punto',
-            style: GoogleFonts.poppins(fontSize: 14, color: Colors.white70),
+            style: AppFonts.inter(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFFD8D2C4),
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             '\$${_totalEstimado.toStringAsFixed(0)}',
-            style: GoogleFonts.poppins(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+            style: AppFonts.inter(
+              fontSize: 40,
+              fontWeight: FontWeight.w800,
+              color: AppColors.dorado,
+              height: 1.1,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             '$_totalUnidadesVendidas unidades vendidas (inicial − final)',
-            style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
+            style: AppFonts.inter(fontSize: 16, color: Colors.white),
           ),
         ],
       ),
@@ -1439,7 +1440,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.tarjeta,
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
@@ -1454,7 +1455,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         children: [
           Text(
             'Bandejeros — cierre de bandejeo',
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontSize: 18,
               fontWeight: FontWeight.w600,
               color: AppColors.primaryLight,
@@ -1463,17 +1464,14 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           const SizedBox(height: 4),
           Text(
             'Ventas y comisión registrada al cerrar cada bandejero.',
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: AppColors.secondary,
-            ),
+            style: AppFonts.inter(fontSize: 14, color: AppColors.secondary),
           ),
           const SizedBox(height: 12),
           ..._bandejerosCierre.map((b) {
             final pct =
                 b.porcentajeComision == b.porcentajeComision.roundToDouble()
-                    ? '${b.porcentajeComision.toInt()}'
-                    : b.porcentajeComision.toStringAsFixed(1);
+                ? '${b.porcentajeComision.toInt()}'
+                : b.porcentajeComision.toStringAsFixed(1);
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Container(
@@ -1491,7 +1489,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                   children: [
                     Text(
                       b.nombre,
-                      style: GoogleFonts.poppins(
+                      style: AppFonts.inter(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
                         color: AppColors.primaryLight,
@@ -1500,29 +1498,29 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                     const SizedBox(height: 6),
                     Text(
                       'Vendido: \$${b.totalVendido.toStringAsFixed(0)}',
-                      style: GoogleFonts.poppins(
+                      style: AppFonts.inter(
                         fontSize: 14,
                         color: AppColors.secondary,
                       ),
                     ),
                     Text(
                       'Caja para vuelto: \$${b.cajaVuelto.toStringAsFixed(0)}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
+                      style: AppFonts.inter(
+                        fontSize: 14,
                         color: AppColors.secondary,
                       ),
                     ),
                     Text(
                       'Comisión al cierre: \$${b.comision.toStringAsFixed(0)} ($pct%)',
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
+                      style: AppFonts.inter(
+                        fontSize: 14,
                         color: AppColors.secondary,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Total a recibir: \$${b.totalARecibir.toStringAsFixed(0)}',
-                      style: GoogleFonts.poppins(
+                      style: AppFonts.inter(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: AppColors.success,
@@ -1543,7 +1541,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.tarjeta,
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
@@ -1558,63 +1556,67 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         children: [
           Text(
             'Detalle por producto',
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontSize: 18,
               fontWeight: FontWeight.w600,
               color: AppColors.primaryLight,
             ),
           ),
           const SizedBox(height: 12),
-          ..._productos.map((p) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            p.nombre,
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.primaryLight,
-                            ),
-                          ),
-                          Text(
-                            'Inicial: ${p.cantidadInicial} → Final: ${p.cantidadFinal}'
-                            '${p.tieneSobrante ? ' (sobrante +${p.sobrante})' : ''}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: AppColors.secondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+          ..._productos.map(
+            (p) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Vendido: ${p.cantidadVendida}',
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: p.tieneSobrante ? Colors.orange[800] : AppColors.success,
+                          p.nombre,
+                          style: AppFonts.inter(
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.primaryLight,
                           ),
                         ),
                         Text(
-                          '\$${p.subtotal.toStringAsFixed(0)}',
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
+                          'Inicial: ${p.cantidadInicial} → Final: ${p.cantidadFinal}'
+                          '${p.tieneSobrante ? ' (sobrante +${p.sobrante})' : ''}',
+                          style: AppFonts.inter(
+                            fontSize: 14,
                             color: AppColors.secondary,
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
-              )),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Vendido: ${p.cantidadVendida}',
+                        style: AppFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: p.tieneSobrante
+                              ? AppColors.aviso
+                              : AppColors.success,
+                        ),
+                      ),
+                      Text(
+                        '\$${p.subtotal.toStringAsFixed(0)}',
+                        style: AppFonts.inter(
+                          fontSize: 14,
+                          color: AppColors.secondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

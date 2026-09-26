@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/services/traspaso_service.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
 
@@ -42,10 +43,10 @@ class TraspasoStock extends StatefulWidget {
 }
 
 class _TraspasoStockState extends State<TraspasoStock> {
-  final Color primaryColor = const Color(0xFF2B2B2B);
-  final Color accentColor = const Color(0xFFDABF41);
-  final Color secondaryColor = const Color(0xFF6B4D2F);
-  final Color backgroundColor = const Color(0xFFFDFBF7);
+  final Color primaryColor = AppColors.primaryLight;
+  final Color accentColor = AppColors.accent;
+  final Color secondaryColor = AppColors.secondary;
+  final Color backgroundColor = AppColors.surface;
 
   bool _isLoading = true;
   bool _enviando = false;
@@ -66,9 +67,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
 
   List<Map<String, dynamic>> _destinosDisponibles() {
     return _sectores
-        .where(
-          (s) => s['id'] != _sectorOrigenId && s['turnoCerrado'] != true,
-        )
+        .where((s) => s['id'] != _sectorOrigenId && s['turnoCerrado'] != true)
         .toList();
   }
 
@@ -110,9 +109,11 @@ class _TraspasoStockState extends State<TraspasoStock> {
       if (mounted) {
         setState(() {
           _sectores = sectores;
-          _sectorOrigenId = widget.sectorIdOrigenInicial ??
+          _sectorOrigenId =
+              widget.sectorIdOrigenInicial ??
               (sectores.where((s) => s['turnoCerrado'] != true).firstOrNull ??
-                  sectores.firstOrNull)?['id'] as String?;
+                      sectores.firstOrNull)?['id']
+                  as String?;
           _syncSectorDestino();
           _isLoading = false;
           _error = null;
@@ -150,7 +151,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           existente != null ? 'Actualizar cantidad' : 'Agregar al pedido',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          style: AppFonts.inter(fontWeight: FontWeight.bold),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -158,7 +159,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
           children: [
             Text(
               nombre,
-              style: GoogleFonts.poppins(
+              style: AppFonts.inter(
                 fontWeight: FontWeight.w600,
                 fontSize: 16,
                 color: primaryColor,
@@ -174,7 +175,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
               ),
               child: Text(
                 'Disponible: $stockDisponible u.',
-                style: GoogleFonts.poppins(fontSize: 13, color: secondaryColor),
+                style: AppFonts.inter(fontSize: 14, color: secondaryColor),
               ),
             ),
             const SizedBox(height: 14),
@@ -203,12 +204,12 @@ class _TraspasoStockState extends State<TraspasoStock> {
               onPressed: () => Navigator.of(dialogContext).pop(-1),
               child: Text(
                 'Quitar',
-                style: GoogleFonts.poppins(color: AppColors.error),
+                style: AppFonts.inter(color: AppColors.error),
               ),
             ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(null),
-            child: Text('Cancelar', style: GoogleFonts.poppins()),
+            child: Text('Cancelar', style: AppFonts.inter()),
           ),
           ElevatedButton.icon(
             onPressed: () {
@@ -218,7 +219,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
             icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
             label: Text(
               existente != null ? 'Actualizar' : 'Agregar',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              style: AppFonts.inter(fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: accentColor,
@@ -291,7 +292,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
               const SizedBox(height: 16),
               Text(
                 'Su pedido',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                   color: primaryColor,
@@ -299,7 +300,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
               ),
               Text(
                 'Hacia: ${_nombreSector(_sectorDestinoId)}',
-                style: GoogleFonts.poppins(fontSize: 13, color: secondaryColor),
+                style: AppFonts.inter(fontSize: 14, color: secondaryColor),
               ),
               const SizedBox(height: 12),
               Flexible(
@@ -313,12 +314,12 @@ class _TraspasoStockState extends State<TraspasoStock> {
                       contentPadding: EdgeInsets.zero,
                       title: Text(
                         l.nombre,
-                        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                        style: AppFonts.inter(fontWeight: FontWeight.w600),
                       ),
                       subtitle: Text(
                         '${l.cantidad} u.',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
+                        style: AppFonts.inter(
+                          fontSize: 14,
                           color: secondaryColor,
                         ),
                       ),
@@ -342,7 +343,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
               const SizedBox(height: 8),
               Text(
                 '${lineas.length} productos · $_totalUnidadesPedido unidades',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontWeight: FontWeight.w600,
                   color: primaryColor,
                 ),
@@ -389,7 +390,9 @@ class _TraspasoStockState extends State<TraspasoStock> {
     final destinoNombre = _nombreSector(destinoId);
     final origenNombre = _nombreSector(origenId);
     final lineas = _pedido.values.toList();
-    final resumen = lineas.map((l) => '• ${l.nombre}: ${l.cantidad} u.').join('\n');
+    final resumen = lineas
+        .map((l) => '• ${l.nombre}: ${l.cantidad} u.')
+        .join('\n');
 
     final confirmado = await showDialog<bool>(
       context: context,
@@ -397,7 +400,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           '¿Enviar pedido?',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          style: AppFonts.inter(fontWeight: FontWeight.bold),
         ),
         content: SingleChildScrollView(
           child: Column(
@@ -406,17 +409,17 @@ class _TraspasoStockState extends State<TraspasoStock> {
             children: [
               Text(
                 'Hacia: $destinoNombre',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontWeight: FontWeight.w600,
                   color: secondaryColor,
                 ),
               ),
               const SizedBox(height: 10),
-              Text(resumen, style: GoogleFonts.poppins(height: 1.45)),
+              Text(resumen, style: AppFonts.inter(height: 1.45)),
               const SizedBox(height: 8),
               Text(
                 'Total: ${lineas.length} productos · $_totalUnidadesPedido u.',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontWeight: FontWeight.w600,
                   color: primaryColor,
                 ),
@@ -427,14 +430,14 @@ class _TraspasoStockState extends State<TraspasoStock> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancelar', style: GoogleFonts.poppins()),
+            child: Text('Cancelar', style: AppFonts.inter()),
           ),
           ElevatedButton.icon(
             onPressed: () => Navigator.of(ctx).pop(true),
             icon: const Icon(Icons.send_rounded, size: 18),
             label: Text(
               'Enviar pedido',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+              style: AppFonts.inter(fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: accentColor,
@@ -505,8 +508,8 @@ class _TraspasoStockState extends State<TraspasoStock> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg, style: GoogleFonts.poppins()),
-        backgroundColor: esError ? Colors.red : AppColors.success,
+        content: Text(msg, style: AppFonts.inter()),
+        backgroundColor: esError ? AppColors.errorFuerte : AppColors.exitoFuerte,
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: esError ? 3 : 4),
       ),
@@ -522,21 +525,19 @@ class _TraspasoStockState extends State<TraspasoStock> {
       appBar: AppBar(
         title: Text(
           'Traspaso',
-          style: GoogleFonts.poppins(
+          style: AppFonts.inter(
             fontWeight: FontWeight.w600,
             color: accentColor,
             fontSize: 18,
           ),
         ),
-        backgroundColor: primaryColor,
-        foregroundColor: accentColor,
         actions: [
           if (tienePedido)
             TextButton(
               onPressed: _limpiarPedido,
               child: Text(
                 'Vaciar',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   color: accentColor,
                   fontWeight: FontWeight.w600,
                 ),
@@ -545,28 +546,26 @@ class _TraspasoStockState extends State<TraspasoStock> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: accentColor))
+          ? Center(child: CircularProgressIndicator())
           : _error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  _error!,
-                  style: GoogleFonts.poppins(color: Colors.red),
-                  textAlign: TextAlign.center,
-                ),
-              ),
+          ? ErrorAmable(
+              titulo: 'No pudimos cargar los sectores',
+              detalle: _error,
+              onReintentar: () {
+                setState(() {
+                  _isLoading = true;
+                  _error = null;
+                });
+                _cargarSectores();
+              },
             )
           : Column(
               children: [
                 _buildSelector(),
                 Expanded(
                   child: _sectorOrigenId == null
-                      ? Center(
-                          child: Text(
-                            'No hay sector origen disponible.',
-                            style: GoogleFonts.poppins(color: secondaryColor),
-                          ),
+                      ? const EstadoVacio(
+                          titulo: 'No hay sector origen disponible.',
                         )
                       : _ListaStockTraspaso(
                           key: ValueKey(_sectorOrigenId),
@@ -577,7 +576,9 @@ class _TraspasoStockState extends State<TraspasoStock> {
                           accentColor: accentColor,
                           primaryColor: primaryColor,
                           secondaryColor: secondaryColor,
-                          bottomPadding: tienePedido ? 88 : 16 + margenSistemaInferior(context),
+                          bottomPadding: tienePedido
+                              ? 88
+                              : 16 + margenSistemaInferior(context),
                           onAgregar: _agregarAlPedido,
                         ),
                 ),
@@ -590,7 +591,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
   Widget _buildBarraPedido() {
     return Material(
       elevation: 8,
-      color: Colors.white,
+      color: AppColors.tarjeta,
       child: SafeArea(
         top: false,
         child: Padding(
@@ -609,16 +610,16 @@ class _TraspasoStockState extends State<TraspasoStock> {
                       children: [
                         Text(
                           '${_pedido.length} productos en el pedido',
-                          style: GoogleFonts.poppins(
+                          style: AppFonts.inter(
                             fontWeight: FontWeight.w600,
-                            fontSize: 13,
+                            fontSize: 14,
                             color: primaryColor,
                           ),
                         ),
                         Text(
                           '$_totalUnidadesPedido u. · Toque para ver',
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
+                          style: AppFonts.inter(
+                            fontSize: 14,
                             color: secondaryColor,
                           ),
                         ),
@@ -629,7 +630,8 @@ class _TraspasoStockState extends State<TraspasoStock> {
               ),
               const SizedBox(width: 10),
               FilledButton.icon(
-                onPressed: (_enviando ||
+                onPressed:
+                    (_enviando ||
                         _sectorDestinoId == null ||
                         _sectorEstaCerrado(_sectorOrigenId) ||
                         _sectorEstaCerrado(_sectorDestinoId))
@@ -647,7 +649,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
                     : const Icon(Icons.send_rounded, size: 18),
                 label: Text(
                   'Enviar',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                  style: AppFonts.inter(fontWeight: FontWeight.bold),
                 ),
                 style: FilledButton.styleFrom(
                   backgroundColor: accentColor,
@@ -685,9 +687,12 @@ class _TraspasoStockState extends State<TraspasoStock> {
     bool bloqueado = false,
     bool marcarCerrados = false,
   }) {
-    final valorValido = value != null &&
+    final valorValido =
+        value != null &&
         options.any(
-          (s) => s['id'] == value && (!marcarCerrados || s['turnoCerrado'] != true),
+          (s) =>
+              s['id'] == value &&
+              (!marcarCerrados || s['turnoCerrado'] != true),
         );
     String etiquetaSector(Map<String, dynamic> s) {
       final nombre = s['nombre']?.toString() ?? 'Sin nombre';
@@ -718,10 +723,10 @@ class _TraspasoStockState extends State<TraspasoStock> {
                 etiquetaSector(s),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
+                style: AppFonts.inter(
+                  fontSize: 14,
                   color: marcarCerrados && s['turnoCerrado'] == true
-                      ? Colors.grey
+                      ? AppColors.tintaSecundaria
                       : null,
                 ),
               ),
@@ -736,11 +741,11 @@ class _TraspasoStockState extends State<TraspasoStock> {
                 etiquetaSector(s),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
+                style: AppFonts.inter(
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: marcarCerrados && s['turnoCerrado'] == true
-                      ? Colors.grey
+                      ? AppColors.tintaSecundaria
                       : primaryColor,
                 ),
               ),
@@ -756,10 +761,12 @@ class _TraspasoStockState extends State<TraspasoStock> {
         ? _nombreSector(_sectorOrigenId)
         : (widget.nombreSectorOrigenInicial ?? 'Su sector');
 
-    final origenOptions =
-        _sectores.where((s) => s['id'] != _sectorDestinoId).toList();
-    final destinoOptions =
-        _sectores.where((s) => s['id'] != _sectorOrigenId).toList();
+    final origenOptions = _sectores
+        .where((s) => s['id'] != _sectorDestinoId)
+        .toList();
+    final destinoOptions = _sectores
+        .where((s) => s['id'] != _sectorOrigenId)
+        .toList();
     final hayDestinoDisponible = _destinosDisponibles().isNotEmpty;
     final origenFijo = widget.sectorIdOrigenInicial != null;
 
@@ -767,7 +774,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.tarjeta,
         boxShadow: AppShadows.card,
       ),
       child: Column(
@@ -777,8 +784,8 @@ class _TraspasoStockState extends State<TraspasoStock> {
             widget.nombreEvento,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
+            style: AppFonts.inter(
+              fontSize: 14,
               color: secondaryColor,
               fontWeight: FontWeight.w500,
             ),
@@ -802,8 +809,8 @@ class _TraspasoStockState extends State<TraspasoStock> {
                     children: [
                       Text(
                         'Sector origen (envías desde)',
-                        style: GoogleFonts.poppins(
-                          fontSize: 11,
+                        style: AppFonts.inter(
+                          fontSize: 14,
                           color: secondaryColor,
                         ),
                       ),
@@ -811,7 +818,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
                         origenNombre,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.poppins(
+                        style: AppFonts.inter(
                           fontWeight: FontWeight.bold,
                           color: primaryColor,
                           fontSize: 14,
@@ -857,8 +864,8 @@ class _TraspasoStockState extends State<TraspasoStock> {
             const SizedBox(height: 8),
             Text(
               'No hay sectores destino disponibles: todos tienen el turno cerrado.',
-              style: GoogleFonts.poppins(
-                fontSize: 12,
+              style: AppFonts.inter(
+                fontSize: 14,
                 color: AppColors.error,
                 height: 1.35,
               ),
@@ -868,8 +875,8 @@ class _TraspasoStockState extends State<TraspasoStock> {
           Text(
             'Toque los productos para armar el pedido. '
             'Cuando termines, envialo todo junto.',
-            style: GoogleFonts.poppins(
-              fontSize: 12,
+            style: AppFonts.inter(
+              fontSize: 14,
               color: secondaryColor.withValues(alpha: 0.9),
               height: 1.35,
             ),
@@ -880,13 +887,14 @@ class _TraspasoStockState extends State<TraspasoStock> {
   }
 }
 
-typedef _AgregarPedidoCallback = Future<void> Function({
-  required String productoId,
-  required String nombre,
-  required double precio,
-  required int stockDisponible,
-  String? categoria,
-});
+typedef _AgregarPedidoCallback =
+    Future<void> Function({
+      required String productoId,
+      required String nombre,
+      required double precio,
+      required int stockDisponible,
+      String? categoria,
+    });
 
 class _ListaStockTraspaso extends StatefulWidget {
   final String eventoId;
@@ -948,36 +956,34 @@ class _ListaStockTraspasoState extends State<_ListaStockTraspaso> {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _stockStream,
       builder: (context, snapshot) {
-        final cargando = snapshot.connectionState == ConnectionState.waiting &&
+        final cargando =
+            snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData;
         if (cargando) {
-          return Center(
-            child: CircularProgressIndicator(color: widget.accentColor),
-          );
+          return Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              'Error cargando stock: ${snapshot.error}',
-              style: GoogleFonts.poppins(color: Colors.red),
-            ),
+          return ErrorAmable(
+            titulo: 'No pudimos cargar el stock',
+            detalle: '${snapshot.error}',
+            onReintentar: () => setState(() {}),
           );
         }
 
-        final docs = List<DocumentSnapshot<Map<String, dynamic>>>.from(
-          snapshot.data?.docs ?? [],
-        )..sort((a, b) {
-            final an = a.data()?['nombre']?.toString() ?? '';
-            final bn = b.data()?['nombre']?.toString() ?? '';
-            return an.compareTo(bn);
-          });
+        final docs =
+            List<DocumentSnapshot<Map<String, dynamic>>>.from(
+              snapshot.data?.docs ?? [],
+            )..sort((a, b) {
+              final an = a.data()?['nombre']?.toString() ?? '';
+              final bn = b.data()?['nombre']?.toString() ?? '';
+              return an.compareTo(bn);
+            });
 
         if (docs.isEmpty) {
-          return Center(
-            child: Text(
-              'No hay stock en su sector para traspasar.',
-              style: GoogleFonts.poppins(color: widget.secondaryColor),
-            ),
+          return const EstadoVacio(
+            titulo: 'No hay stock en su sector para traspasar.',
+            mensaje:
+                'Cuando su sector tenga productos, podrá enviarlos desde aquí.',
           );
         }
 
@@ -1062,7 +1068,7 @@ class _ListaStockTraspasoState extends State<_ListaStockTraspaso> {
                                 nombre,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.poppins(
+                                style: AppFonts.inter(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 14,
                                   color: habilitado
@@ -1073,8 +1079,8 @@ class _ListaStockTraspasoState extends State<_ListaStockTraspaso> {
                               const SizedBox(height: 4),
                               Text(
                                 'Stock: $cantidad  ·  \$${precio.toStringAsFixed(0)}',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
+                                style: AppFonts.inter(
+                                  fontSize: 14,
                                   color: widget.secondaryColor,
                                 ),
                               ),
@@ -1082,8 +1088,8 @@ class _ListaStockTraspasoState extends State<_ListaStockTraspaso> {
                                 const SizedBox(height: 2),
                                 Text(
                                   'En pedido: ${enPedido.cantidad} u.',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 11,
+                                  style: AppFonts.inter(
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w600,
                                     color: widget.secondaryColor,
                                   ),
@@ -1092,8 +1098,8 @@ class _ListaStockTraspasoState extends State<_ListaStockTraspaso> {
                                 const SizedBox(height: 2),
                                 Text(
                                   'Toque para agregar al pedido',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 11,
+                                  style: AppFonts.inter(
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w500,
                                     color: widget.accentColor.withValues(
                                       alpha: 0.95,

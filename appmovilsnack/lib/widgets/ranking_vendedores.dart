@@ -1,6 +1,7 @@
 // Ranking de vendedores por ventas acumuladas en cierres de turno (año calendario).
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/vendedor_ventas_service.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
@@ -40,8 +41,9 @@ class _RankingVendedoresState extends State<RankingVendedores> {
       _error = null;
     });
     try {
-      final lista =
-          await VendedorVentasService.cargarRanking(anio: _anioSeleccionado);
+      final lista = await VendedorVentasService.cargarRanking(
+        anio: _anioSeleccionado,
+      );
       if (!mounted) return;
       setState(() {
         _ranking = lista;
@@ -70,24 +72,18 @@ class _RankingVendedoresState extends State<RankingVendedores> {
   @override
   Widget build(BuildContext context) {
     final conVentas = _ranking
-        .where((v) => v.montoAnio > 0 || v.cierresAnio > 0 || v.totalHistorico > 0)
+        .where(
+          (v) => v.montoAnio > 0 || v.cierresAnio > 0 || v.totalHistorico > 0,
+        )
         .toList();
 
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black87),
-        title: Text(
-          'Ranking de vendedores',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            color: AppColors.primaryLight,
-          ),
-        ),
+        title: const Text('Ranking de vendedores'),
         actions: [
           IconButton(
+            tooltip: 'Actualizar',
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : _cargar,
           ),
@@ -96,154 +92,142 @@ class _RankingVendedoresState extends State<RankingVendedores> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      'Error: $_error',
-                      style: GoogleFonts.poppins(color: Colors.red),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _cargar,
-                  child: ListView(
-                    padding: conMargenInferior(context, const EdgeInsets.all(16)),
+          ? ErrorAmable(
+              titulo: 'No pudimos cargar el ranking',
+              detalle: 'Error: $_error',
+              onReintentar: _cargar,
+            )
+          : RefreshIndicator(
+              onRefresh: _cargar,
+              child: ListView(
+                padding: conMargenInferior(context, const EdgeInsets.all(16)),
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Text(
-                            'Año',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primaryLight,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          if (_aniosDisponibles.length == 1)
-                            Text(
-                              '$_anioSeleccionado',
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.secondary,
-                              ),
-                            )
-                          else
-                            DropdownButton<int>(
-                              value: _anioSeleccionado,
-                              items: _aniosDisponibles
-                                  .map(
-                                    (y) => DropdownMenuItem(
-                                      value: y,
-                                      child: Text('$y'),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (y) {
-                                if (y == null) return;
-                                setState(() => _anioSeleccionado = y);
-                                _cargar();
-                              },
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
                       Text(
-                        'Suma el monto vendido en cada cierre de turno del punto '
-                        '(inventario inicial vs final). No incluye bandejeo.',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: AppColors.onSurfaceVariant,
-                          height: 1.35,
+                        'Año',
+                        style: AppFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryLight,
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      if (conVentas.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 32),
-                          child: Center(
-                            child: Text(
-                              'Sin cierres registrados en $_anioSeleccionado',
-                              style: GoogleFonts.poppins(
-                                color: AppColors.onSurfaceVariant,
-                              ),
-                            ),
+                      const SizedBox(width: 12),
+                      if (_aniosDisponibles.length == 1)
+                        Text(
+                          '$_anioSeleccionado',
+                          style: AppFonts.inter(
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.secondary,
                           ),
                         )
                       else
-                        ...conVentas.asMap().entries.map((e) {
-                          final pos = e.key + 1;
-                          final v = e.value;
-                          final esTop = pos == 1;
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            elevation: esTop ? 3 : 1,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: esTop
-                                  ? BorderSide(
-                                      color: AppColors.accent
-                                          .withValues(alpha: 0.6),
-                                      width: 2,
-                                    )
-                                  : BorderSide.none,
-                            ),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: esTop
-                                    ? AppColors.accent
-                                    : AppColors.accent
-                                        .withValues(alpha: 0.25),
-                                child: Text(
-                                  '$pos',
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.bold,
-                                    color: esTop
-                                        ? AppColors.primaryLight
-                                        : AppColors.secondary,
-                                  ),
+                        DropdownButton<int>(
+                          value: _anioSeleccionado,
+                          items: _aniosDisponibles
+                              .map(
+                                (y) => DropdownMenuItem(
+                                  value: y,
+                                  child: Text('$y'),
                                 ),
-                              ),
-                              title: Text(
-                                v.nombre,
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              subtitle: Text(
-                                '${v.cierresAnio} cierre${v.cierresAnio == 1 ? '' : 's'} · '
-                                '${v.unidadesAnio} u.',
-                                style: GoogleFonts.poppins(fontSize: 12),
-                              ),
-                              trailing: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    '\$${_fmtMonto(v.montoAnio)}',
-                                    style: GoogleFonts.poppins(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                      color: AppColors.primaryLight,
-                                    ),
-                                  ),
-                                  if (v.totalHistorico > v.montoAnio)
-                                    Text(
-                                      'Hist. \$${_fmtMonto(v.totalHistorico)}',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 10,
-                                        color: AppColors.onSurfaceVariant,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }),
+                              )
+                              .toList(),
+                          onChanged: (y) {
+                            if (y == null) return;
+                            setState(() => _anioSeleccionado = y);
+                            _cargar();
+                          },
+                        ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Suma el monto vendido en cada cierre de turno del punto '
+                    '(inventario inicial vs final). No incluye bandejeo.',
+                    style: AppFonts.inter(
+                      fontSize: 14,
+                      color: AppColors.onSurfaceVariant,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (conVentas.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 32),
+                      child: EstadoVacio(
+                        titulo: 'Sin cierres registrados en $_anioSeleccionado',
+                      ),
+                    )
+                  else
+                    ...conVentas.asMap().entries.map((e) {
+                      final pos = e.key + 1;
+                      final v = e.value;
+                      final esTop = pos == 1;
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        elevation: esTop ? 3 : 1,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: esTop
+                              ? BorderSide(
+                                  color: AppColors.accent.withValues(
+                                    alpha: 0.6,
+                                  ),
+                                  width: 2,
+                                )
+                              : BorderSide.none,
+                        ),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: esTop
+                                ? AppColors.accent
+                                : AppColors.accent.withValues(alpha: 0.25),
+                            child: Text(
+                              '$pos',
+                              style: AppFonts.inter(
+                                fontWeight: FontWeight.bold,
+                                color: esTop
+                                    ? AppColors.primaryLight
+                                    : AppColors.secondary,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            v.nombre,
+                            style: AppFonts.inter(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            '${v.cierresAnio} cierre${v.cierresAnio == 1 ? '' : 's'} · '
+                            '${v.unidadesAnio} u.',
+                            style: AppFonts.inter(fontSize: 14),
+                          ),
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '\$${_fmtMonto(v.montoAnio)}',
+                                style: AppFonts.inter(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: AppColors.primaryLight,
+                                ),
+                              ),
+                              if (v.totalHistorico > v.montoAnio)
+                                Text(
+                                  'Hist. \$${_fmtMonto(v.totalHistorico)}',
+                                  style: AppFonts.inter(
+                                    fontSize: 14,
+                                    color: AppColors.onSurfaceVariant,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                ],
+              ),
+            ),
     );
   }
 }

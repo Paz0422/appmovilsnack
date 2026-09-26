@@ -3,8 +3,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/core/app_theme.dart';
 
 const _sectoresEventoDefault = [
   'Galeria Sur',
@@ -21,11 +23,11 @@ class _SectorEnEdicion {
 }
 
 Map<String, dynamic> _datosSectorNuevo(String nombre) => {
-      'nombre': nombre,
-      'totalVendido': 0.0,
-      'productosVendidos': 0,
-      'vendedoresasignados': <dynamic>[],
-    };
+  'nombre': nombre,
+  'totalVendido': 0.0,
+  'productosVendidos': 0,
+  'vendedoresasignados': <dynamic>[],
+};
 
 String _normalizarNombreSector(String nombre) => nombre.trim().toLowerCase();
 
@@ -66,9 +68,9 @@ void _mostrarErrorSectorDuplicado(BuildContext context) {
     SnackBar(
       content: Text(
         'Ya existe un sector con ese nombre.',
-        style: GoogleFonts.poppins(),
+        style: AppFonts.inter(),
       ),
-      backgroundColor: Colors.red,
+      backgroundColor: AppColors.errorFuerte,
       behavior: SnackBarBehavior.floating,
     ),
   );
@@ -100,17 +102,14 @@ const _msgSectorDuplicado = 'Ya existe un sector con ese nombre.';
 const _msgEventoActivoDuplicado =
     'Ya hay un evento activo con ese nombre. Desactive el otro o use otro nombre.';
 
-Widget _bannerDialogo({
-  required String mensaje,
-  required bool esError,
-}) {
+Widget _bannerDialogo({required String mensaje, required bool esError}) {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     decoration: BoxDecoration(
       color: esError ? const Color(0xFFFFEBEE) : const Color(0xFFE8F5E9),
       borderRadius: BorderRadius.circular(8),
       border: Border.all(
-        color: esError ? Colors.red.shade300 : Colors.green.shade300,
+        color: esError ? AppColors.error : AppColors.exito,
       ),
     ),
     child: Row(
@@ -118,16 +117,16 @@ Widget _bannerDialogo({
       children: [
         Icon(
           esError ? Icons.error_outline : Icons.check_circle_outline,
-          color: esError ? Colors.red.shade700 : Colors.green.shade700,
+          color: esError ? AppColors.error : AppColors.exito,
           size: 20,
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             mensaje,
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: esError ? Colors.red.shade900 : Colors.green.shade900,
+            style: AppFonts.inter(
+              fontSize: 14,
+              color: esError ? AppColors.error : AppColors.exito,
             ),
           ),
         ),
@@ -189,10 +188,9 @@ Future<void> _sincronizarSectoresEvento({
     final trimmed = sector.nombre.trim();
     if (trimmed.isEmpty) continue;
     if (sector.id != null) {
-      batch.update(
-        eventoRef.collection('sectores').doc(sector.id),
-        {'nombre': trimmed},
-      );
+      batch.update(eventoRef.collection('sectores').doc(sector.id), {
+        'nombre': trimmed,
+      });
     } else {
       batch.set(
         eventoRef.collection('sectores').doc(),
@@ -220,10 +218,10 @@ class _EventosManagementState extends State<EventosManagement> {
   String? _eventoSeleccionadoId;
   String? _nombreEventoSeleccionado;
 
-  final Color primaryColor = const Color(0xFF2B2B2B);
-  final Color accentColor = const Color(0xFFDABF41);
-  final Color secondaryColor = const Color(0xFF6B4D2F);
-  final Color backgroundColor = const Color(0xFFFDFBF7);
+  final Color primaryColor = AppColors.primaryLight;
+  final Color accentColor = AppColors.accent;
+  final Color secondaryColor = AppColors.secondary;
+  final Color backgroundColor = AppColors.surface;
 
   @override
   void initState() {
@@ -240,8 +238,9 @@ class _EventosManagementState extends State<EventosManagement> {
 
   Future<void> _cargarEventos() async {
     try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('eventos').get();
+      final snapshot = await FirebaseFirestore.instance
+          .collection('eventos')
+          .get();
 
       final docs = snapshot.docs.toList()
         ..sort((a, b) {
@@ -291,7 +290,7 @@ class _EventosManagementState extends State<EventosManagement> {
       tooltip: tooltip,
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      constraints: const BoxConstraints(minWidth: AppTamanos.toque, minHeight: AppTamanos.toque),
       onPressed: onPressed,
     );
   }
@@ -316,8 +315,7 @@ class _EventosManagementState extends State<EventosManagement> {
           .toList();
     } else {
       try {
-        final snapshot =
-            await evento.reference.collection('sectores').get();
+        final snapshot = await evento.reference.collection('sectores').get();
         for (final doc in snapshot.docs) {
           final data = doc.data();
           sectores.add(
@@ -334,9 +332,9 @@ class _EventosManagementState extends State<EventosManagement> {
             SnackBar(
               content: Text(
                 'No se pudieron cargar los sectores: $e',
-                style: GoogleFonts.poppins(),
+                style: AppFonts.inter(),
               ),
-              backgroundColor: Colors.red,
+              backgroundColor: AppColors.errorFuerte,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -385,7 +383,7 @@ class _EventosManagementState extends State<EventosManagement> {
               backgroundColor: backgroundColor,
               title: Text(
                 evento == null ? 'Agregar Evento' : 'Editar Evento',
-                style: GoogleFonts.poppins(
+                style: AppFonts.inter(
                   fontWeight: FontWeight.bold,
                   color: primaryColor,
                 ),
@@ -406,26 +404,24 @@ class _EventosManagementState extends State<EventosManagement> {
                         onChanged: (_) => limpiarError(),
                         decoration: InputDecoration(
                           labelText: 'Nombre del Evento',
-                          labelStyle: GoogleFonts.poppins(
-                            color: secondaryColor,
-                          ),
+                          labelStyle: AppFonts.inter(color: secondaryColor),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide(
-                              color: accentColor,
+                              color: AppColors.dorado,
                               width: 2,
                             ),
                           ),
                         ),
-                        style: GoogleFonts.poppins(),
+                        style: AppFonts.inter(),
                       ),
                       const SizedBox(height: 16),
                       Text(
                         'Sectores',
-                        style: GoogleFonts.poppins(
+                        style: AppFonts.inter(
                           color: secondaryColor,
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -439,7 +435,7 @@ class _EventosManagementState extends State<EventosManagement> {
                               controller: sectorController,
                               decoration: InputDecoration(
                                 labelText: 'Nombre del Sector',
-                                labelStyle: GoogleFonts.poppins(
+                                labelStyle: AppFonts.inter(
                                   color: secondaryColor,
                                 ),
                                 border: OutlineInputBorder(
@@ -448,18 +444,22 @@ class _EventosManagementState extends State<EventosManagement> {
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(10),
                                   borderSide: BorderSide(
-                                    color: accentColor,
+                                    color: AppColors.dorado,
                                     width: 2,
                                   ),
                                 ),
                               ),
-                              style: GoogleFonts.poppins(),
-                              onSubmitted: (value) => agregarSectorALista(value),
+                              style: AppFonts.inter(),
+                              onSubmitted: (value) =>
+                                  agregarSectorALista(value),
                             ),
                           ),
                           const SizedBox(width: 8),
                           IconButton(
-                            icon: Icon(Icons.add_circle, color: accentColor),
+                            icon: Icon(
+                              Icons.add_circle,
+                              color: AppColors.dorado,
+                            ),
                             onPressed: () =>
                                 agregarSectorALista(sectorController.text),
                           ),
@@ -479,8 +479,8 @@ class _EventosManagementState extends State<EventosManagement> {
                                 padding: const EdgeInsets.all(16),
                                 child: Text(
                                   'Agregue al menos un sector',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 13,
+                                  style: AppFonts.inter(
+                                    fontSize: 14,
                                     color: secondaryColor.withValues(
                                       alpha: 0.7,
                                     ),
@@ -490,22 +490,21 @@ class _EventosManagementState extends State<EventosManagement> {
                             : SingleChildScrollView(
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
-                                  children:
-                                      sectores.asMap().entries.map((entry) {
+                                  children: sectores.asMap().entries.map((
+                                    entry,
+                                  ) {
                                     final index = entry.key;
                                     final sector = entry.value;
                                     return ListTile(
                                       dense: true,
                                       contentPadding:
                                           const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
+                                            horizontal: 8,
+                                            vertical: 2,
+                                          ),
                                       title: Text(
                                         sector.nombre,
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 14,
-                                        ),
+                                        style: AppFonts.inter(fontSize: 14),
                                       ),
                                       trailing: Row(
                                         mainAxisSize: MainAxisSize.min,
@@ -513,26 +512,29 @@ class _EventosManagementState extends State<EventosManagement> {
                                           IconButton(
                                             icon: Icon(
                                               Icons.edit_outlined,
-                                              color: accentColor,
+                                              color: AppColors.dorado,
                                               size: 20,
                                             ),
                                             tooltip: 'Renombrar',
                                             onPressed: () async {
                                               final nuevo =
                                                   await showDialog<String>(
-                                                context: context,
-                                                useRootNavigator: true,
-                                                builder: (ctx) =>
-                                                    _DialogRenombrarSector(
-                                                  nombreInicial: sector.nombre,
-                                                  backgroundColor:
-                                                      backgroundColor,
-                                                  primaryColor: primaryColor,
-                                                  accentColor: accentColor,
-                                                  secondaryColor:
-                                                      secondaryColor,
-                                                ),
-                                              );
+                                                    context: context,
+                                                    useRootNavigator: true,
+                                                    builder: (ctx) =>
+                                                        _DialogRenombrarSector(
+                                                          nombreInicial:
+                                                              sector.nombre,
+                                                          backgroundColor:
+                                                              backgroundColor,
+                                                          primaryColor:
+                                                              primaryColor,
+                                                          accentColor:
+                                                              accentColor,
+                                                          secondaryColor:
+                                                              secondaryColor,
+                                                        ),
+                                                  );
                                               if (nuevo != null &&
                                                   nuevo.isNotEmpty) {
                                                 if (_listaContieneSector(
@@ -547,8 +549,8 @@ class _EventosManagementState extends State<EventosManagement> {
                                                 }
                                                 setDialogState(() {
                                                   mensajeError = null;
-                                                  sectores[index].nombre =
-                                                      nuevo.trim();
+                                                  sectores[index].nombre = nuevo
+                                                      .trim();
                                                 });
                                               }
                                             },
@@ -556,7 +558,7 @@ class _EventosManagementState extends State<EventosManagement> {
                                           IconButton(
                                             icon: const Icon(
                                               Icons.delete_outline,
-                                              color: Colors.red,
+                                              color: AppColors.error,
                                               size: 20,
                                             ),
                                             tooltip: 'Eliminar',
@@ -579,7 +581,7 @@ class _EventosManagementState extends State<EventosManagement> {
                           Expanded(
                             child: Text(
                               'Evento Activo',
-                              style: GoogleFonts.poppins(
+                              style: AppFonts.inter(
                                 color: secondaryColor,
                                 fontSize: 14,
                               ),
@@ -606,86 +608,90 @@ class _EventosManagementState extends State<EventosManagement> {
                   onPressed: () => Navigator.of(context).pop(),
                   child: Text(
                     'Cancelar',
-                    style: GoogleFonts.poppins(color: secondaryColor),
+                    style: AppFonts.inter(color: secondaryColor),
                   ),
                 ),
                 ElevatedButton(
                   onPressed: guardando
                       ? null
                       : () async {
-                    final nombre = nombreController.text.trim();
+                          final nombre = nombreController.text.trim();
 
-                    if (nombre.isEmpty) {
-                      mostrarError(_msgEventoSinNombre);
-                      return;
-                    }
+                          if (nombre.isEmpty) {
+                            mostrarError(_msgEventoSinNombre);
+                            return;
+                          }
 
-                    if (sectores.isEmpty) {
-                      mostrarError(_msgEventoSinSectores);
-                      return;
-                    }
+                          if (sectores.isEmpty) {
+                            mostrarError(_msgEventoSinSectores);
+                            return;
+                          }
 
-                    try {
-                      setDialogState(() {
-                        guardando = true;
-                        mensajeError = null;
-                      });
+                          try {
+                            setDialogState(() {
+                              guardando = true;
+                              mensajeError = null;
+                            });
 
-                      if (activo) {
-                        final duplicado = await _existeOtroEventoActivoConNombre(
-                          nombre,
-                          exceptoEventoId: evento?.id,
-                        );
-                        if (!context.mounted) return;
-                        if (duplicado) {
-                          mostrarError(_msgEventoActivoDuplicado);
-                          return;
-                        }
-                      }
+                            if (activo) {
+                              final duplicado =
+                                  await _existeOtroEventoActivoConNombre(
+                                    nombre,
+                                    exceptoEventoId: evento?.id,
+                                  );
+                              if (!context.mounted) return;
+                              if (duplicado) {
+                                mostrarError(_msgEventoActivoDuplicado);
+                                return;
+                              }
+                            }
 
-                      if (evento == null) {
-                        await _guardarEventoNuevo(
-                          nombre: nombre,
-                          activo: activo,
-                          sectores: sectores,
-                        );
-                      } else {
-                        await evento.reference.update({
-                          'nombre': nombre,
-                          'activo': activo,
-                        });
-                        await _sincronizarSectoresEvento(
-                          eventoRef: evento.reference
-                              as DocumentReference<Map<String, dynamic>>,
-                          sectores: sectores,
-                          idsOriginales: idsSectoresOriginales,
-                        );
-                      }
+                            if (evento == null) {
+                              await _guardarEventoNuevo(
+                                nombre: nombre,
+                                activo: activo,
+                                sectores: sectores,
+                              );
+                            } else {
+                              await evento.reference.update({
+                                'nombre': nombre,
+                                'activo': activo,
+                              });
+                              await _sincronizarSectoresEvento(
+                                eventoRef:
+                                    evento.reference
+                                        as DocumentReference<
+                                          Map<String, dynamic>
+                                        >,
+                                sectores: sectores,
+                                idsOriginales: idsSectoresOriginales,
+                              );
+                            }
 
-                      await _cargarEventos();
-                      if (!context.mounted) return;
-                      Navigator.of(context).pop();
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            evento == null
-                                ? 'Evento agregado exitosamente'
-                                : 'Evento actualizado exitosamente',
-                            style: GoogleFonts.poppins(),
-                          ),
-                          backgroundColor: Colors.green,
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    } catch (e) {
-                      mostrarError('Error al guardar el evento: $e');
-                    } finally {
-                      setDialogState(() => guardando = false);
-                    }
-                  },
+                            await _cargarEventos();
+                            if (!context.mounted) return;
+                            Navigator.of(context).pop();
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  evento == null
+                                      ? 'Evento agregado exitosamente'
+                                      : 'Evento actualizado exitosamente',
+                                  style: AppFonts.inter(),
+                                ),
+                                backgroundColor: AppColors.exitoFuerte,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          } catch (e) {
+                            mostrarError('Error al guardar el evento: $e');
+                          } finally {
+                            setDialogState(() => guardando = false);
+                          }
+                        },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: accentColor,
-                    foregroundColor: primaryColor,
+                    backgroundColor: AppColors.dorado,
+                    foregroundColor: AppColors.negro,
                   ),
                   child: guardando
                       ? SizedBox(
@@ -698,9 +704,7 @@ class _EventosManagementState extends State<EventosManagement> {
                         )
                       : Text(
                           evento == null ? 'Agregar' : 'Guardar',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: AppFonts.inter(fontWeight: FontWeight.bold),
                         ),
                 ),
               ],
@@ -723,32 +727,32 @@ class _EventosManagementState extends State<EventosManagement> {
           backgroundColor: backgroundColor,
           title: Text(
             'Confirmar Eliminación',
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontWeight: FontWeight.bold,
-              color: Colors.red,
+              color: AppColors.error,
             ),
           ),
           content: Text(
             '¿Está seguro de que desea eliminar "$nombre"? Esta acción eliminará todos los sectores y datos asociados. Esta acción no se puede deshacer.',
-            style: GoogleFonts.poppins(),
+            style: AppFonts.inter(),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: Text(
                 'Cancelar',
-                style: GoogleFonts.poppins(color: secondaryColor),
+                style: AppFonts.inter(color: secondaryColor),
               ),
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
+                backgroundColor: AppColors.error,
+                foregroundColor: AppColors.negro,
               ),
               child: Text(
                 'Eliminar',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                style: AppFonts.inter(fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -774,9 +778,9 @@ class _EventosManagementState extends State<EventosManagement> {
             SnackBar(
               content: Text(
                 'Evento eliminado exitosamente',
-                style: GoogleFonts.poppins(),
+                style: AppFonts.inter(),
               ),
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.exitoFuerte,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -788,9 +792,9 @@ class _EventosManagementState extends State<EventosManagement> {
             SnackBar(
               content: Text(
                 'Error al eliminar el evento: $e',
-                style: GoogleFonts.poppins(),
+                style: AppFonts.inter(),
               ),
-              backgroundColor: Colors.red,
+              backgroundColor: AppColors.errorFuerte,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -826,17 +830,15 @@ class _EventosManagementState extends State<EventosManagement> {
       backgroundColor: backgroundColor,
       appBar: AppBar(
         title: Text(
-          'Gestión de Eventos',
-          style: GoogleFonts.poppins(
+          'Eventos y sectores',
+          style: AppFonts.inter(
             fontWeight: FontWeight.bold,
             color: accentColor,
           ),
         ),
-        backgroundColor: primaryColor,
-        foregroundColor: accentColor,
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: accentColor))
+          ? Center(child: CircularProgressIndicator())
           : _errorMessage != null
           ? Center(
               child: Padding(
@@ -844,12 +846,12 @@ class _EventosManagementState extends State<EventosManagement> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.error_outline, size: 64, color: Colors.red),
+                    Icon(Icons.error_outline, size: 64, color: AppColors.error),
                     const SizedBox(height: 16),
                     Text(
                       _errorMessage!,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
+                      style: AppFonts.inter(
                         color: secondaryColor,
                         fontSize: 16,
                       ),
@@ -858,12 +860,12 @@ class _EventosManagementState extends State<EventosManagement> {
                     ElevatedButton(
                       onPressed: _cargarEventos,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: accentColor,
-                        foregroundColor: primaryColor,
+                        backgroundColor: AppColors.dorado,
+                        foregroundColor: AppColors.negro,
                       ),
                       child: Text(
                         'Reintentar',
-                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                        style: AppFonts.inter(fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -886,7 +888,7 @@ class _EventosManagementState extends State<EventosManagement> {
                               color: secondaryColor,
                             ),
                             filled: true,
-                            fillColor: Colors.white,
+                            fillColor: AppColors.tarjetaAlta,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: BorderSide.none,
@@ -901,8 +903,8 @@ class _EventosManagementState extends State<EventosManagement> {
                       const SizedBox(width: 12),
                       FloatingActionButton(
                         onPressed: () => _mostrarDialogoEvento(),
-                        backgroundColor: accentColor,
-                        foregroundColor: primaryColor,
+                        backgroundColor: AppColors.dorado,
+                        foregroundColor: AppColors.negro,
                         child: const Icon(Icons.add),
                       ),
                     ],
@@ -910,48 +912,31 @@ class _EventosManagementState extends State<EventosManagement> {
                 ),
                 Expanded(
                   child: _eventosFiltrados.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.event_outlined,
-                                size: 64,
-                                color: secondaryColor.withValues(alpha: 0.5),
+                      ? EstadoVacio(
+                          titulo: _searchController.text.isEmpty
+                              ? 'No hay eventos registrados'
+                              : 'No se encontraron eventos',
+                          accion: ElevatedButton.icon(
+                            onPressed: () => _mostrarDialogoEvento(),
+                            icon: const Icon(Icons.add),
+                            label: Text(
+                              'Agregar Primer Evento',
+                              style: AppFonts.inter(
+                                fontWeight: FontWeight.bold,
                               ),
-                              const SizedBox(height: 16),
-                              Text(
-                                _searchController.text.isEmpty
-                                    ? 'No hay eventos registrados'
-                                    : 'No se encontraron eventos',
-                                style: GoogleFonts.poppins(
-                                  color: secondaryColor,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              if (_searchController.text.isEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 16),
-                                  child: ElevatedButton.icon(
-                                    onPressed: () => _mostrarDialogoEvento(),
-                                    icon: const Icon(Icons.add),
-                                    label: Text(
-                                      'Agregar Primer Evento',
-                                      style: GoogleFonts.poppins(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: accentColor,
-                                      foregroundColor: primaryColor,
-                                    ),
-                                  ),
-                                ),
-                            ],
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.dorado,
+                              foregroundColor: AppColors.negro,
+                            ),
                           ),
                         )
                       : ListView.builder(
-                          padding: conMargenInferior(context, const EdgeInsets.symmetric(horizontal: 16), extra: espacioBotonFlotante),
+                          padding: conMargenInferior(
+                            context,
+                            const EdgeInsets.symmetric(horizontal: 16),
+                            extra: espacioBotonFlotante,
+                          ),
                           itemCount: _eventosFiltrados.length,
                           itemBuilder: (context, index) {
                             final evento = _eventosFiltrados[index];
@@ -959,9 +944,9 @@ class _EventosManagementState extends State<EventosManagement> {
 
                             final String nombreEvento =
                                 data?['nombre']?.toString().trim().isNotEmpty ==
-                                        true
-                                    ? data!['nombre'].toString()
-                                    : 'Evento sin nombre (${evento.id.substring(0, 6)}...)';
+                                    true
+                                ? data!['nombre'].toString()
+                                : 'Evento sin nombre (${evento.id.substring(0, 6)}...)';
                             final bool activo = data?['activo'] == true;
 
                             return Card(
@@ -971,13 +956,18 @@ class _EventosManagementState extends State<EventosManagement> {
                                 borderRadius: BorderRadius.circular(12),
                                 side: BorderSide(
                                   color: activo
-                                      ? Colors.green
+                                      ? AppColors.exito
                                       : Colors.transparent,
                                   width: activo ? 2 : 0,
                                 ),
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  10,
+                                  4,
+                                  10,
+                                ),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
@@ -986,13 +976,19 @@ class _EventosManagementState extends State<EventosManagement> {
                                       height: 50,
                                       decoration: BoxDecoration(
                                         color: activo
-                                            ? Colors.green.withValues(alpha: 0.2)
-                                            : accentColor.withValues(alpha: 0.2),
+                                            ? AppColors.exito.withValues(
+                                                alpha: 0.2,
+                                              )
+                                            : accentColor.withValues(
+                                                alpha: 0.2,
+                                              ),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Icon(
                                         activo ? Icons.event : Icons.event_busy,
-                                        color: activo ? Colors.green : accentColor,
+                                        color: activo
+                                            ? AppColors.exito
+                                            : accentColor,
                                         size: 28,
                                       ),
                                     ),
@@ -1006,7 +1002,7 @@ class _EventosManagementState extends State<EventosManagement> {
                                             nombreEvento,
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
-                                            style: GoogleFonts.poppins(
+                                            style: AppFonts.inter(
                                               fontWeight: FontWeight.w600,
                                               fontSize: 16,
                                               color: primaryColor,
@@ -1017,21 +1013,21 @@ class _EventosManagementState extends State<EventosManagement> {
                                             Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 4,
-                                              ),
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
                                               decoration: BoxDecoration(
-                                                color: Colors.green
+                                                color: AppColors.exito
                                                     .withValues(alpha: 0.2),
                                                 borderRadius:
                                                     BorderRadius.circular(12),
                                               ),
                                               child: Text(
                                                 'Activo',
-                                                style: GoogleFonts.poppins(
-                                                  fontSize: 10,
+                                                style: AppFonts.inter(
+                                                  fontSize: 14,
                                                   fontWeight: FontWeight.bold,
-                                                  color: Colors.green,
+                                                  color: AppColors.exito,
                                                 ),
                                               ),
                                             ),
@@ -1044,14 +1040,14 @@ class _EventosManagementState extends State<EventosManagement> {
                                       children: [
                                         _iconoAccionEvento(
                                           icon: Icons.location_on,
-                                          color: accentColor,
+                                          color: AppColors.dorado,
                                           tooltip: 'Gestionar Sectores',
                                           onPressed: () =>
                                               _gestionarSectores(evento),
                                         ),
                                         _iconoAccionEvento(
                                           icon: Icons.edit,
-                                          color: accentColor,
+                                          color: AppColors.dorado,
                                           onPressed: () =>
                                               _mostrarDialogoEvento(
                                                 evento: evento,
@@ -1059,7 +1055,7 @@ class _EventosManagementState extends State<EventosManagement> {
                                         ),
                                         _iconoAccionEvento(
                                           icon: Icons.delete,
-                                          color: Colors.red,
+                                          color: AppColors.error,
                                           onPressed: () =>
                                               _eliminarEvento(evento),
                                         ),
@@ -1076,12 +1072,12 @@ class _EventosManagementState extends State<EventosManagement> {
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _mostrarDialogoEvento(),
-        backgroundColor: accentColor,
-        foregroundColor: primaryColor,
+        backgroundColor: AppColors.dorado,
+        foregroundColor: AppColors.negro,
         icon: const Icon(Icons.add),
         label: Text(
           'Agregar Evento',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          style: AppFonts.inter(fontWeight: FontWeight.bold),
         ),
       ),
     );
@@ -1105,10 +1101,10 @@ class _GestionSectores extends StatefulWidget {
 
 class _GestionSectoresState extends State<_GestionSectores> {
   final TextEditingController _searchController = TextEditingController();
-  final Color primaryColor = const Color(0xFF2B2B2B);
-  final Color accentColor = const Color(0xFFDABF41);
-  final Color secondaryColor = const Color(0xFF6B4D2F);
-  final Color backgroundColor = const Color(0xFFFDFBF7);
+  final Color primaryColor = AppColors.primaryLight;
+  final Color accentColor = AppColors.accent;
+  final Color secondaryColor = AppColors.secondary;
+  final Color backgroundColor = AppColors.surface;
 
   @override
   void dispose() {
@@ -1131,7 +1127,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
           backgroundColor: backgroundColor,
           title: Text(
             sector == null ? 'Agregar Sector' : 'Editar Sector',
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontWeight: FontWeight.bold,
               color: primaryColor,
             ),
@@ -1144,16 +1140,19 @@ class _GestionSectoresState extends State<_GestionSectores> {
                   controller: nombreController,
                   decoration: InputDecoration(
                     labelText: 'Nombre del Sector',
-                    labelStyle: GoogleFonts.poppins(color: secondaryColor),
+                    labelStyle: AppFonts.inter(color: secondaryColor),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: accentColor, width: 2),
+                      borderSide: BorderSide(
+                        color: AppColors.dorado,
+                        width: 2,
+                      ),
                     ),
                   ),
-                  style: GoogleFonts.poppins(),
+                  style: AppFonts.inter(),
                 ),
               ],
             ),
@@ -1163,7 +1162,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
               onPressed: () => Navigator.of(context).pop(),
               child: Text(
                 'Cancelar',
-                style: GoogleFonts.poppins(color: secondaryColor),
+                style: AppFonts.inter(color: secondaryColor),
               ),
             ),
             ElevatedButton(
@@ -1175,9 +1174,9 @@ class _GestionSectoresState extends State<_GestionSectores> {
                     SnackBar(
                       content: Text(
                         'Por favor, ingrese un nombre para el sector.',
-                        style: GoogleFonts.poppins(),
+                        style: AppFonts.inter(),
                       ),
-                      backgroundColor: Colors.red,
+                      backgroundColor: AppColors.errorFuerte,
                     ),
                   );
                   return;
@@ -1210,9 +1209,9 @@ class _GestionSectoresState extends State<_GestionSectores> {
                         SnackBar(
                           content: Text(
                             'Sector agregado exitosamente',
-                            style: GoogleFonts.poppins(),
+                            style: AppFonts.inter(),
                           ),
-                          backgroundColor: Colors.green,
+                          backgroundColor: AppColors.exitoFuerte,
                           behavior: SnackBarBehavior.floating,
                         ),
                       );
@@ -1224,9 +1223,9 @@ class _GestionSectoresState extends State<_GestionSectores> {
                         SnackBar(
                           content: Text(
                             'Sector actualizado exitosamente',
-                            style: GoogleFonts.poppins(),
+                            style: AppFonts.inter(),
                           ),
-                          backgroundColor: Colors.green,
+                          backgroundColor: AppColors.exitoFuerte,
                           behavior: SnackBarBehavior.floating,
                         ),
                       );
@@ -1238,9 +1237,9 @@ class _GestionSectoresState extends State<_GestionSectores> {
                       SnackBar(
                         content: Text(
                           'Error al guardar el sector: $e',
-                          style: GoogleFonts.poppins(),
+                          style: AppFonts.inter(),
                         ),
-                        backgroundColor: Colors.red,
+                        backgroundColor: AppColors.errorFuerte,
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
@@ -1248,12 +1247,12 @@ class _GestionSectoresState extends State<_GestionSectores> {
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: accentColor,
-                foregroundColor: primaryColor,
+                backgroundColor: AppColors.dorado,
+                foregroundColor: AppColors.negro,
               ),
               child: Text(
                 sector == null ? 'Agregar' : 'Guardar',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                style: AppFonts.inter(fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -1277,9 +1276,9 @@ class _GestionSectoresState extends State<_GestionSectores> {
           SnackBar(
             content: Text(
               'Sector reabierto. Ya puede ser seleccionado por vendedores.',
-              style: GoogleFonts.poppins(),
+              style: AppFonts.inter(),
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.exitoFuerte,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -1288,8 +1287,8 @@ class _GestionSectoresState extends State<_GestionSectores> {
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text('Error al reabrir: $e', style: GoogleFonts.poppins()),
-            backgroundColor: Colors.red,
+            content: Text('Error al reabrir: $e', style: AppFonts.inter()),
+            backgroundColor: AppColors.errorFuerte,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -1309,32 +1308,32 @@ class _GestionSectoresState extends State<_GestionSectores> {
           backgroundColor: backgroundColor,
           title: Text(
             'Confirmar Eliminación',
-            style: GoogleFonts.poppins(
+            style: AppFonts.inter(
               fontWeight: FontWeight.bold,
-              color: Colors.red,
+              color: AppColors.error,
             ),
           ),
           content: Text(
             '¿Está seguro de que desea eliminar "$nombre"? Esta acción eliminará todos los datos asociados (stock, personal asignado, etc.). Esta acción no se puede deshacer.',
-            style: GoogleFonts.poppins(),
+            style: AppFonts.inter(),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: Text(
                 'Cancelar',
-                style: GoogleFonts.poppins(color: secondaryColor),
+                style: AppFonts.inter(color: secondaryColor),
               ),
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
+                backgroundColor: AppColors.error,
+                foregroundColor: AppColors.negro,
               ),
               child: Text(
                 'Eliminar',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                style: AppFonts.inter(fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -1353,9 +1352,9 @@ class _GestionSectoresState extends State<_GestionSectores> {
             SnackBar(
               content: Text(
                 'Sector eliminado exitosamente',
-                style: GoogleFonts.poppins(),
+                style: AppFonts.inter(),
               ),
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.exitoFuerte,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -1366,9 +1365,9 @@ class _GestionSectoresState extends State<_GestionSectores> {
             SnackBar(
               content: Text(
                 'Error al eliminar el sector: $e',
-                style: GoogleFonts.poppins(),
+                style: AppFonts.inter(),
               ),
-              backgroundColor: Colors.red,
+              backgroundColor: AppColors.errorFuerte,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -1384,13 +1383,11 @@ class _GestionSectoresState extends State<_GestionSectores> {
       appBar: AppBar(
         title: Text(
           'Sectores de ${widget.nombreEvento}',
-          style: GoogleFonts.poppins(
+          style: AppFonts.inter(
             fontWeight: FontWeight.bold,
             color: accentColor,
           ),
         ),
-        backgroundColor: primaryColor,
-        foregroundColor: accentColor,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: widget.onVolver,
@@ -1405,66 +1402,30 @@ class _GestionSectoresState extends State<_GestionSectores> {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator(color: accentColor));
+            return Center(child: CircularProgressIndicator());
           }
 
           if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, size: 64, color: Colors.red),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Error al cargar sectores: ${snapshot.error}',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
-                        color: secondaryColor,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            return ErrorAmable(
+              titulo: 'No pudimos cargar los sectores',
+              detalle: 'Error al cargar sectores: ${snapshot.error}',
+              onReintentar: () => setState(() {}),
             );
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.location_on_outlined,
-                      size: 64,
-                      color: secondaryColor.withValues(alpha: 0.5),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No hay sectores registrados',
-                      style: GoogleFonts.poppins(
-                        color: secondaryColor,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: () => _mostrarDialogoSector(),
-                      icon: const Icon(Icons.add),
-                      label: Text(
-                        'Agregar Primer Sector',
-                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: accentColor,
-                        foregroundColor: primaryColor,
-                      ),
-                    ),
-                  ],
+            return EstadoVacio(
+              titulo: 'No hay sectores registrados',
+              accion: ElevatedButton.icon(
+                onPressed: () => _mostrarDialogoSector(),
+                icon: const Icon(Icons.add),
+                label: Text(
+                  'Agregar Primer Sector',
+                  style: AppFonts.inter(fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.dorado,
+                  foregroundColor: AppColors.negro,
                 ),
               ),
             );
@@ -1485,7 +1446,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                           hintText: 'Buscar sectores...',
                           prefixIcon: Icon(Icons.search, color: secondaryColor),
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: AppColors.tarjetaAlta,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide.none,
@@ -1503,8 +1464,8 @@ class _GestionSectoresState extends State<_GestionSectores> {
                     const SizedBox(width: 12),
                     FloatingActionButton(
                       onPressed: () => _mostrarDialogoSector(),
-                      backgroundColor: accentColor,
-                      foregroundColor: primaryColor,
+                      backgroundColor: AppColors.dorado,
+                      foregroundColor: AppColors.negro,
                       child: const Icon(Icons.add),
                     ),
                   ],
@@ -1512,7 +1473,11 @@ class _GestionSectoresState extends State<_GestionSectores> {
               ),
               Expanded(
                 child: ListView.builder(
-                  padding: conMargenInferior(context, const EdgeInsets.symmetric(horizontal: 16), extra: espacioBotonFlotante),
+                  padding: conMargenInferior(
+                    context,
+                    const EdgeInsets.symmetric(horizontal: 16),
+                    extra: espacioBotonFlotante,
+                  ),
                   itemCount: sectores.length,
                   itemBuilder: (context, index) {
                     final sector = sectores[index];
@@ -1520,8 +1485,8 @@ class _GestionSectoresState extends State<_GestionSectores> {
 
                     final String nombreSector =
                         data?['nombre']?.toString().trim().isNotEmpty == true
-                            ? data!['nombre'].toString()
-                            : 'Sector sin nombre';
+                        ? data!['nombre'].toString()
+                        : 'Sector sin nombre';
                     final bool turnoCerrado = data?['turnoCerrado'] == true;
 
                     final query = _searchController.text.toLowerCase();
@@ -1553,7 +1518,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                                     ? Icons.lock_outline
                                     : Icons.location_on,
                                 color: turnoCerrado
-                                    ? Colors.grey
+                                    ? AppColors.tintaSecundaria
                                     : secondaryColor,
                                 size: 28,
                               ),
@@ -1567,7 +1532,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                                     nombreSector,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.poppins(
+                                    style: AppFonts.inter(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 16,
                                       color: primaryColor,
@@ -1581,15 +1546,16 @@ class _GestionSectoresState extends State<_GestionSectores> {
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: Colors.orange
-                                            .withValues(alpha: 0.2),
+                                        color: AppColors.aviso.withValues(
+                                          alpha: 0.2,
+                                        ),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
                                         'Turno cerrado',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 11,
-                                          color: Colors.orange[800],
+                                        style: AppFonts.inter(
+                                          fontSize: 14,
+                                          color: AppColors.aviso,
                                           fontWeight: FontWeight.w500,
                                         ),
                                       ),
@@ -1606,7 +1572,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                                     icon: const Icon(Icons.lock_open, size: 18),
                                     label: Text(
                                       'Reabrir',
-                                      style: GoogleFonts.poppins(fontSize: 12),
+                                      style: AppFonts.inter(fontSize: 14),
                                     ),
                                     onPressed: () => _reabrirSector(sector),
                                     style: TextButton.styleFrom(
@@ -1617,23 +1583,29 @@ class _GestionSectoresState extends State<_GestionSectores> {
                                     ),
                                   ),
                                 IconButton(
-                                  icon: Icon(Icons.edit, color: accentColor),
+                                  icon: Icon(
+                                    Icons.edit,
+                                    color: AppColors.dorado,
+                                  ),
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(
-                                    minWidth: 40,
-                                    minHeight: 40,
+                                    minWidth: AppTamanos.toque,
+                                    minHeight: AppTamanos.toque,
                                   ),
                                   onPressed: () =>
                                       _mostrarDialogoSector(sector: sector),
                                 ),
                                 IconButton(
-                                  icon: Icon(Icons.delete, color: Colors.red),
+                                  icon: Icon(
+                                    Icons.delete,
+                                    color: AppColors.error,
+                                  ),
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(
-                                    minWidth: 40,
-                                    minHeight: 40,
+                                    minWidth: AppTamanos.toque,
+                                    minHeight: AppTamanos.toque,
                                   ),
                                   onPressed: () => _eliminarSector(sector),
                                 ),
@@ -1652,12 +1624,12 @@ class _GestionSectoresState extends State<_GestionSectores> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _mostrarDialogoSector(),
-        backgroundColor: accentColor,
-        foregroundColor: primaryColor,
+        backgroundColor: AppColors.dorado,
+        foregroundColor: AppColors.negro,
         icon: const Icon(Icons.add),
         label: Text(
           'Agregar Sector',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          style: AppFonts.inter(fontWeight: FontWeight.bold),
         ),
       ),
     );
@@ -1708,7 +1680,7 @@ class _DialogRenombrarSectorState extends State<_DialogRenombrarSector> {
       backgroundColor: widget.backgroundColor,
       title: Text(
         'Renombrar sector',
-        style: GoogleFonts.poppins(
+        style: AppFonts.inter(
           fontWeight: FontWeight.bold,
           color: widget.primaryColor,
         ),
@@ -1718,11 +1690,9 @@ class _DialogRenombrarSectorState extends State<_DialogRenombrarSector> {
         autofocus: true,
         decoration: InputDecoration(
           labelText: 'Nombre del sector',
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         ),
-        style: GoogleFonts.poppins(),
+        style: AppFonts.inter(),
         onSubmitted: (_) => _guardar(),
       ),
       actions: [
@@ -1730,18 +1700,18 @@ class _DialogRenombrarSectorState extends State<_DialogRenombrarSector> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(
             'Cancelar',
-            style: GoogleFonts.poppins(color: widget.secondaryColor),
+            style: AppFonts.inter(color: widget.secondaryColor),
           ),
         ),
         ElevatedButton(
           onPressed: _guardar,
           style: ElevatedButton.styleFrom(
-            backgroundColor: widget.accentColor,
-            foregroundColor: widget.primaryColor,
+            backgroundColor: AppColors.dorado,
+            foregroundColor: AppColors.negro,
           ),
           child: Text(
             'Guardar',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+            style: AppFonts.inter(fontWeight: FontWeight.bold),
           ),
         ),
       ],

@@ -1,19 +1,14 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/firebase_auth_messages.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/auth/auth_layout.dart';
+import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 
 // Paleta de cores baseada no logo "Fusión"
-const Color primaryColor = Color(0xFF2B2B2B); // Preto/marrón oscuro
-const Color accentColor = Color(0xFFDABF41); // Dorado brillante
-const Color secondaryColor = Color(0xFF6B4D2F); // Marrón medio
-const Color backgroundColorStart = Color(
-  0xFFFDFBF7,
-); // Fundo claro elegante (anteriormente backgroundColorEnd)
-const Color backgroundColorEnd = Color(
-  0xFFFDFBF7,
-); // Usamos o mesmo para um fundo uniforme se só quiser uma cor
+const Color primaryColor = AppColors.primaryLight; // Preto/marrón oscuro
+const Color accentColor = AppColors.accent; // Dorado brillante
+const Color secondaryColor = AppColors.secondary; // Marrón medio
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});
@@ -30,8 +25,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: GoogleFonts.lato()),
-        backgroundColor: isError ? Colors.redAccent : Colors.green,
+        content: Text(message, style: AppFonts.inter()),
+        backgroundColor: isError ? AppColors.errorFuerte : AppColors.exitoFuerte,
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: isError ? 6 : 4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -81,105 +76,30 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Restablecer Contraseña',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.bold,
-            color: accentColor,
+    return PantallaAcceso(
+      titulo: 'Restablecer Contraseña',
+      descripcion:
+          'Ingrese su correo electrónico para restablecer su contraseña.',
+      children: [
+        TextField(
+          controller: _emailController,
+          autofocus: true,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _resetPassword(),
+          style: estiloCampoAcceso,
+          decoration: const InputDecoration(
+            labelText: 'Correo Electrónico',
+            prefixIcon: Icon(Icons.email_outlined),
           ),
         ),
-        backgroundColor: primaryColor,
-        iconTheme: const IconThemeData(
-          color: Colors.white,
-        ), // Color del icono de retroceso
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [backgroundColorStart, backgroundColorEnd],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+        const SizedBox(height: 28),
+        ElevatedButton.icon(
+          onPressed: _resetPassword,
+          icon: const Icon(Icons.send),
+          label: const Text('Enviar Correo de Restablecimiento'),
         ),
-        child: Center(
-          child: SingleChildScrollView(
-            padding: conMargenInferior(context, const EdgeInsets.all(24.0)),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Ingrese su correo electrónico para restablecer su contraseña.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.lato(
-                    fontSize: 18,
-                    color: primaryColor,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 30),
-                TextField(
-                  controller: _emailController,
-                  autofocus: true,
-                  keyboardType: TextInputType.emailAddress,
-                  style: GoogleFonts.lato(fontStyle: FontStyle.italic),
-                  decoration: _buildInputDecoration(
-                    'Correo Electrónico',
-                    Icons.email_outlined,
-                  ),
-                ),
-                const SizedBox(height: 30),
-                ElevatedButton.icon(
-                  onPressed: _resetPassword,
-                  icon: const Icon(Icons.send),
-                  label: Text(
-                    'Enviar Correo de Restablecimiento',
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accentColor,
-                    foregroundColor: primaryColor,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 30,
-                      vertical: 15,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                    elevation: 8,
-                    shadowColor: Colors.black.withValues(alpha: 0.5),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  InputDecoration _buildInputDecoration(String label, IconData prefixIcon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(prefixIcon, color: const Color.fromARGB(137, 0, 0, 0)),
-      filled: true,
-      fillColor: Colors.white.withValues(alpha: 0.8),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12.0),
-        borderSide: BorderSide(
-          color: primaryColor.withValues(alpha: 0.5),
-          width: 1.0,
-        ), // Borde por defecto
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12.0),
-        borderSide: const BorderSide(color: primaryColor, width: 2.5),
-      ),
-      labelStyle: GoogleFonts.lato(fontStyle: FontStyle.italic),
+      ],
     );
   }
 }

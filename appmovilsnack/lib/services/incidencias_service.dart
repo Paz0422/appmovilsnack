@@ -39,15 +39,19 @@ class IncidenciasService {
     String? tipo,
   }) async {
     final eventos = await _db.collection('eventos').get();
-    final lista = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-    for (final evento in eventos.docs) {
-      final snap =
-          await _col(evento.id).where('estado', isEqualTo: 'pendiente').get();
-      // Filtro en el cliente: evita un índice compuesto estado + tipo.
-      lista.addAll(
-        snap.docs.where((d) => tipo == null || TipoIncidencia.de(d.data()) == tipo),
-      );
-    }
+    // Una consulta por evento, en paralelo.
+    final snaps = await Future.wait(
+      eventos.docs.map(
+        (e) => _col(e.id).where('estado', isEqualTo: 'pendiente').get(),
+      ),
+    );
+    // Filtro en el cliente: evita un índice compuesto estado + tipo.
+    final lista = [
+      for (final snap in snaps)
+        ...snap.docs.where(
+          (d) => tipo == null || TipoIncidencia.de(d.data()) == tipo,
+        ),
+    ];
     lista.sort((a, b) {
       final fa = a.data()['fecha'];
       final fb = b.data()['fecha'];

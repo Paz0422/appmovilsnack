@@ -1,41 +1,34 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/core/tipografia.dart';
 
-/// Tarjeta reutilizable para KPIs y métricas del dashboard (tema Fusión).
+/// Tarjetas del panel de estadísticas del admin.
+///
+/// - [DashboardCard.kpi]: dato principal sobre degradado dorado, con el texto
+///   en azul noche (≥ 9:1).
+/// - [DashboardCard.stat]: métrica secundaria sobre pizarra, con un ícono de
+///   color ([acento]) para distinguirlas de un vistazo.
 class DashboardCard extends StatelessWidget {
   final String title;
   final String value;
   final IconData icon;
   final Color? iconColor;
   final VoidCallback? onTap;
-  final bool darkText;
-  final Color? backgroundColor;
-  final Color? borderColor;
-  final double elevation;
-  final double borderRadius;
-  final bool emphasis;
   final String? subtitle;
-  final bool compact;
+  final bool _destacada;
 
-  const DashboardCard({
+  const DashboardCard._({
     super.key,
     required this.title,
     required this.value,
     required this.icon,
     this.iconColor,
     this.onTap,
-    this.darkText = false,
-    this.backgroundColor,
-    this.borderColor,
-    this.elevation = 1,
-    this.borderRadius = AppRadius.lg,
-    this.emphasis = false,
     this.subtitle,
-    this.compact = false,
-  });
+    required bool destacada,
+  }) : _destacada = destacada;
 
-  /// KPI principal (vertical, destacado).
+  /// KPI principal (total vendido).
   factory DashboardCard.kpi({
     Key? key,
     required String title,
@@ -44,258 +37,230 @@ class DashboardCard extends StatelessWidget {
     String? subtitle,
     Color? iconColor,
     VoidCallback? onTap,
-  }) {
-    return DashboardCard(
-      key: key,
-      title: title,
-      value: value,
-      icon: icon,
-      subtitle: subtitle,
-      iconColor: iconColor ?? AppColors.accent,
-      onTap: onTap,
-      darkText: true,
-      backgroundColor: AppColors.surfaceCard,
-      elevation: 1,
-      emphasis: true,
-    );
-  }
+  }) => DashboardCard._(
+    key: key,
+    title: title,
+    value: value,
+    icon: icon,
+    subtitle: subtitle,
+    iconColor: iconColor,
+    onTap: onTap,
+    destacada: true,
+  );
 
-  /// Estadística compacta para grillas (borde outline, sin sombra fuerte).
+  /// Métrica para la grilla. [acento] colorea el ícono (dorado si se omite).
   factory DashboardCard.stat({
     Key? key,
     required String title,
     required String value,
     required IconData icon,
     String? subtitle,
+    Color? acento,
     VoidCallback? onTap,
-  }) {
-    return DashboardCard(
-      key: key,
-      title: title,
-      value: value,
-      icon: icon,
-      subtitle: subtitle,
-      onTap: onTap,
-      iconColor: AppColors.onSurfaceVariant,
-      darkText: true,
-      backgroundColor: AppColors.surfaceCard,
-      borderColor: AppColors.outline,
-      elevation: 0,
-      compact: true,
-    );
-  }
-
-  Color get _resolvedIconColor => iconColor ?? AppColors.accent;
-
-  Color get _titleColor => darkText
-      ? AppColors.onSurfaceVariant
-      : AppColors.onPrimary.withValues(alpha: 0.85);
-
-  Color get _valueColor => darkText ? AppColors.onSurface : AppColors.onPrimary;
-
-  Color get _subtitleColor => darkText
-      ? AppColors.onSurfaceVariant.withValues(alpha: 0.9)
-      : AppColors.onPrimary.withValues(alpha: 0.75);
-
-  BoxDecoration get _decoration => BoxDecoration(
-        color: backgroundColor ?? AppColors.surfaceCard,
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: borderColor != null ? Border.all(color: borderColor!) : null,
-        boxShadow: elevation > 0 ? AppShadows.card : null,
-      );
+  }) => DashboardCard._(
+    key: key,
+    title: title,
+    value: value,
+    icon: icon,
+    subtitle: subtitle,
+    iconColor: acento,
+    onTap: onTap,
+    destacada: false,
+  );
 
   @override
   Widget build(BuildContext context) {
-    if (compact) {
-      return _buildCompact();
-    }
-    return _buildVertical();
-  }
-
-  Widget _buildCompact() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(borderRadius),
-        onTap: onTap,
-        child: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: _decoration,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(icon, size: 20, color: _resolvedIconColor),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.max,
-                  children: [
-                    Text(
-                      title,
-                      style: GoogleFonts.poppins(
-                        color: _titleColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        height: 1.15,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (subtitle != null) ...[
-                      Text(
-                        subtitle!,
-                        style: GoogleFonts.poppins(
-                          color: _subtitleColor,
-                          fontSize: 10,
-                          height: 1.1,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        value,
-                        style: GoogleFonts.poppins(
-                          color: _valueColor,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
-                          height: 1.1,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+    return Semantics(
+      container: true,
+      label: '$title: $value${subtitle == null ? '' : '. $subtitle'}',
+      excludeSemantics: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          onTap: onTap,
+          child: _destacada ? _buildKpi() : _buildStat(),
         ),
       ),
     );
   }
 
-  Widget _buildVertical() {
-    if (emphasis) {
-      return Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(borderRadius),
-          onTap: onTap,
-          child: Container(
-            width: double.infinity,
-            decoration: _decoration,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(icon, size: 36, color: _resolvedIconColor),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        title,
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: _titleColor,
+  Widget _buildKpi() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        gradient: AppGradientes.dorado,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        boxShadow: AppShadows.dorado,
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Círculos decorativos, como las tarjetas de las apps de finanzas.
+          Positioned(
+            right: -40,
+            top: -46,
+            child: _circulo(130, 0.14),
+          ),
+          Positioned(
+            right: 30,
+            bottom: -60,
+            child: _circulo(90, 0.10),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: AppFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.negro.withValues(alpha: 0.8),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        value,
+                        style: AppFonts.inter(
+                          fontSize: 40,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.negro,
+                          height: 1.05,
+                          letterSpacing: -0.5,
                         ),
                       ),
-                      if (subtitle != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle!,
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            color: _subtitleColor,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
                         ),
-                      ],
-                      const SizedBox(height: 6),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
+                        decoration: BoxDecoration(
+                          color: AppColors.negro.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
                         child: Text(
-                          value,
-                          style: GoogleFonts.poppins(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            color: _valueColor,
+                          subtitle!,
+                          style: AppFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.negro,
+                            height: 1.3,
                           ),
                         ),
                       ),
                     ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                width: 56,
+                height: 56,
+                decoration: const BoxDecoration(
+                  color: AppColors.negro,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  size: 30,
+                  color: iconColor ?? AppColors.dorado,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _circulo(double tamano, double alfa) => Container(
+    width: tamano,
+    height: tamano,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: Colors.white.withValues(alpha: alfa),
+    ),
+  );
+
+  Widget _buildStat() {
+    final acento = iconColor ?? AppColors.dorado;
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: AppGradientes.tarjeta,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: AppColors.separador),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: acento.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            child: Icon(icon, size: 24, color: acento),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: AppFonts.inter(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.tinta,
+                      height: 1.1,
+                    ),
                   ),
                 ),
+                const SizedBox(height: 2),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.tintaSecundaria,
+                    height: 1.15,
+                  ),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppFonts.inter(
+                      fontSize: 14,
+                      color: AppColors.tintaSecundaria,
+                    ),
+                  ),
               ],
             ),
           ),
-        ),
-      );
-    }
-
-    final valueSize = 22.0;
-    const iconSize = 40.0;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(borderRadius),
-        onTap: onTap,
-        child: Container(
-          decoration: _decoration,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: iconSize, color: _resolvedIconColor),
-              const SizedBox(height: 10),
-              Text(
-                value,
-                style: GoogleFonts.poppins(
-                  fontSize: valueSize,
-                  fontWeight: FontWeight.w800,
-                  color: _valueColor,
-                  letterSpacing: 0.2,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: _titleColor,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  subtitle!,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12.5,
-                    color: _subtitleColor,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }

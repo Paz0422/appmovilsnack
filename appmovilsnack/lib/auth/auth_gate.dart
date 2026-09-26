@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/auth/login_screen.dart';
-import 'package:front_appsnack/core/app_theme.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -114,7 +113,7 @@ class _AuthGateState extends State<AuthGate> {
     if (_resolviendo || _pantalla == null) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(color: AppColors.accent),
+          child: CircularProgressIndicator(),
         ),
       );
     }

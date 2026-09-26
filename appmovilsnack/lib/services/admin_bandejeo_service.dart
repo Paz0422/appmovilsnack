@@ -180,43 +180,45 @@ class AdminBandejeoService {
     }
 
     final eventosSnap = await q.get();
-    final sectores = <AdminBandejeoSectorResumen>[];
 
-    for (final eventoDoc in eventosSnap.docs) {
-      final eventoData = eventoDoc.data();
-      final eventoNombre =
-          eventoData['nombre']?.toString() ?? 'Evento sin nombre';
+    // Eventos, sectores y bandejeros se leen en paralelo.
+    final porEvento = await Future.wait(
+      eventosSnap.docs.map((eventoDoc) async {
+        final eventoNombre =
+            eventoDoc.data()['nombre']?.toString() ?? 'Evento sin nombre';
+        final sectoresSnap =
+            await eventoDoc.reference.collection('sectores').get();
 
-      final sectoresSnap = await eventoDoc.reference.collection('sectores').get();
+        return Future.wait(
+          sectoresSnap.docs.map((sectorDoc) async {
+            final bandejerosSnap =
+                await sectorDoc.reference.collection('bandejeros').get();
+            if (bandejerosSnap.docs.isEmpty) return null;
 
-      for (final sectorDoc in sectoresSnap.docs) {
-        final sectorData = sectorDoc.data();
-        final sectorNombre =
-            sectorData['nombre']?.toString() ?? 'Sector sin nombre';
+            final bandejeros = await Future.wait(
+              bandejerosSnap.docs.map(_cargarBandejero),
+            );
+            bandejeros.sort(
+              (a, b) =>
+                  a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()),
+            );
 
-        final bandejerosSnap =
-            await sectorDoc.reference.collection('bandejeros').get();
-
-        if (bandejerosSnap.docs.isEmpty) continue;
-
-        final bandejeros = await Future.wait(
-          bandejerosSnap.docs.map(_cargarBandejero),
+            return AdminBandejeoSectorResumen(
+              eventoId: eventoDoc.id,
+              eventoNombre: eventoNombre,
+              sectorId: sectorDoc.id,
+              sectorNombre:
+                  sectorDoc.data()['nombre']?.toString() ?? 'Sector sin nombre',
+              bandejeros: bandejeros,
+            );
+          }),
         );
-        bandejeros.sort(
-          (a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()),
-        );
-
-        sectores.add(
-          AdminBandejeoSectorResumen(
-            eventoId: eventoDoc.id,
-            eventoNombre: eventoNombre,
-            sectorId: sectorDoc.id,
-            sectorNombre: sectorNombre,
-            bandejeros: bandejeros,
-          ),
-        );
-      }
-    }
+      }),
+    );
+    final sectores = porEvento
+        .expand((s) => s)
+        .whereType<AdminBandejeoSectorResumen>()
+        .toList();
 
     sectores.sort((a, b) {
       final ea = a.eventoNombre.toLowerCase();
