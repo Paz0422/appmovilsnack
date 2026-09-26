@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/traspaso_service.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 class _LineaPedido {
   final String productoId;
@@ -257,6 +258,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
     if (_pedido.isEmpty) return;
 
     await showModalBottomSheet<void>(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -575,7 +577,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
                           accentColor: accentColor,
                           primaryColor: primaryColor,
                           secondaryColor: secondaryColor,
-                          bottomPadding: tienePedido ? 88 : 16,
+                          bottomPadding: tienePedido ? 88 : 16 + margenSistemaInferior(context),
                           onAgregar: _agregarAlPedido,
                         ),
                 ),

@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
+import 'package:front_appsnack/services/stock_service.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 // Paleta de colores basada en el logo "Fusión"
 const Color _primaryColor = Color(0xFF2B2B2B);
@@ -74,6 +76,10 @@ class _GestionStockState extends State<GestionStock> {
   final Map<String, TextEditingController> _cantidadControllers = {};
   bool _dirty = false;
   bool _loading = true;
+  final _stockService = StockService();
+  /// Motivos por los que ya no se puede cargar stock inicial (ver
+  /// StockService.bloqueosStockInicial). Si hay alguno, no se muestra el editor.
+  List<String> _bloqueos = const [];
   Timer? _debounceBorrador;
   bool _mostroAvisoBorrador = false;
 
@@ -288,6 +294,23 @@ class _GestionStockState extends State<GestionStock> {
 
   Future<void> _cargarStock() async {
     try {
+      // La carga inicial escribe cantidades absolutas: con movimientos en el
+      // sector borraría ventas, traspasos o mermas.
+      if (widget.esIngresoInicial && !widget.soloLectura) {
+        final bloqueos = await _stockService.bloqueosStockInicial(
+          widget.eventoId,
+          widget.sectorId,
+        );
+        if (!mounted) return;
+        if (bloqueos.isNotEmpty) {
+          setState(() {
+            _bloqueos = bloqueos;
+            _loading = false;
+          });
+          return;
+        }
+      }
+
       final sectorSnap = await _sectorRef.get();
       final sectorData = sectorSnap.data();
       final borrador = sectorData?['borradorStockInicial'];
@@ -504,12 +527,6 @@ class _GestionStockState extends State<GestionStock> {
           'categoria': item['categoria'] ?? categoriaDefault,
         });
       }
-      final existing = await col.get();
-      for (final doc in existing.docs) {
-        if (!itemsPersistir.any((i) => i['productoId'] == doc.id)) {
-          batch.delete(doc.reference);
-        }
-      }
       await batch.commit();
       await _sectorRef.set({
         'stockInicialIngresado': true,
@@ -620,6 +637,19 @@ class _GestionStockState extends State<GestionStock> {
         ),
       );
       if (confirmar != true || !mounted) return;
+    }
+
+    // Pudo haber movimientos mientras se completaba la carga.
+    if (widget.esIngresoInicial) {
+      final bloqueos = await _stockService.bloqueosStockInicial(
+        widget.eventoId,
+        widget.sectorId,
+      );
+      if (!mounted) return;
+      if (bloqueos.isNotEmpty) {
+        setState(() => _bloqueos = bloqueos);
+        return;
+      }
     }
 
     final ok = await _persistirStock();
@@ -789,7 +819,10 @@ class _GestionStockState extends State<GestionStock> {
       onCantidadChanged: widget.soloLectura
           ? null
           : (n) => _setCantidadItem(productoId, n),
-      onEliminar: widget.esIngresoInicial ||
+      // Solo el admin elimina stock (reglas). En "Ver stock" no hay opción, y en
+      // la carga inicial los productos quedan con cantidad 0 en vez de borrarse.
+      onEliminar: widget.soloLectura ||
+              widget.esIngresoInicial ||
               (item['cantidadPorTraspaso'] as int? ?? 0) > 0
           ? null
           : () => _eliminarItemLocal(productoId),
@@ -830,7 +863,7 @@ class _GestionStockState extends State<GestionStock> {
             16,
             16,
             16,
-            widget.soloLectura ? 16 : 88,
+            (widget.soloLectura ? 16 : 88) + margenSistemaInferior(context),
           ),
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
@@ -852,10 +885,65 @@ class _GestionStockState extends State<GestionStock> {
     _programarGuardadoBorrador();
   }
 
+  Widget _buildBloqueado() {
+    return SingleChildScrollView(
+      padding: conMargenInferior(context, const EdgeInsets.all(24)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(Icons.lock_outline, size: 48, color: Colors.orange[800]),
+          const SizedBox(height: 12),
+          Text(
+            'El stock inicial ya no se puede modificar',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: _primaryColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'El sector ya tiene movimientos y la carga inicial los borraría.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(fontSize: 13, color: _secondaryColor),
+          ),
+          const SizedBox(height: 16),
+          ..._bloqueos.map(
+            (b) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: Icon(Icons.info_outline, color: Colors.orange[800]),
+                title: Text(b, style: GoogleFonts.poppins(fontSize: 14)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            StockService.mensajeUsarAgregarStock,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: _primaryColor,
+            ),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Volver'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bool popLibre =
-        widget.soloLectura || (!widget.esIngresoInicial && !_dirty);
+    final bloqueado = _bloqueos.isNotEmpty;
+    final bool popLibre = widget.soloLectura ||
+        bloqueado ||
+        (!widget.esIngresoInicial && !_dirty);
 
     return PopScope(
       canPop: popLibre,
@@ -870,7 +958,9 @@ class _GestionStockState extends State<GestionStock> {
             ? null
             : IconButton(
                 icon: const Icon(Icons.arrow_back),
-                onPressed: _retrocederPantalla,
+                onPressed: bloqueado
+                    ? () => Navigator.of(context).pop()
+                    : _retrocederPantalla,
               ),
         title: Text(
           widget.soloLectura ? 'Ver stock' : 'Stock inicial del punto',
@@ -882,7 +972,7 @@ class _GestionStockState extends State<GestionStock> {
         backgroundColor: _primaryColor,
         foregroundColor: _accentColor,
       ),
-      bottomNavigationBar: widget.soloLectura
+      bottomNavigationBar: widget.soloLectura || bloqueado
           ? null
           : SafeArea(
               child: Padding(
@@ -910,7 +1000,9 @@ class _GestionStockState extends State<GestionStock> {
             ),
       body: _loading
           ? Center(child: CircularProgressIndicator(color: _accentColor))
-          : _buildCuerpoLista(),
+          : bloqueado
+              ? _buildBloqueado()
+              : _buildCuerpoLista(),
       floatingActionButton: widget.soloLectura || widget.esIngresoInicial
           ? null
           : FloatingActionButton.extended(
@@ -930,6 +1022,7 @@ class _GestionStockState extends State<GestionStock> {
   void _mostrarModalAgregarProducto(BuildContext context) {
     final idsEnStock = _items.map((e) => e['productoId'] as String).toSet();
     showModalBottomSheet(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

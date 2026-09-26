@@ -22,6 +22,51 @@ class AdminEstadisticasService {
     return 0;
   }
 
+  /// Cierres de turno de un sector, del más antiguo al más reciente. Usa el
+  /// historial `sectores/{id}/cierres` (un documento por turno cerrado); en
+  /// sectores cerrados antes de que existiera, el único dato es `ultimoCierre`.
+  static List<Map<String, dynamic>> cierresDelSector({
+    required List<Map<String, dynamic>> historial,
+    Map<String, dynamic>? sectorData,
+  }) {
+    if (historial.isNotEmpty) {
+      return [...historial]..sort((a, b) {
+          final fa = a['fecha'];
+          final fb = b['fecha'];
+          if (fa is Timestamp && fb is Timestamp) return fa.compareTo(fb);
+          return 0;
+        });
+    }
+    final ultimo = sectorData?['ultimoCierre'];
+    return ultimo is Map ? [Map<String, dynamic>.from(ultimo)] : [];
+  }
+
+  /// Dinero de todos los turnos cerrados del sector. Cada cierre trae solo las
+  /// ventas de su turno (stock al abrir el conteo − contado), así que sumarlos
+  /// no cuenta dos veces un turno anterior.
+  static double montoCierres(List<Map<String, dynamic>> cierres) => cierres
+      .fold(0.0, (t, c) => t + ((c['totalEstimado'] as num?)?.toDouble() ?? 0));
+
+  /// Las ventas de bandejeo hasta el último cierre ya están dentro de él.
+  static Timestamp? fechaUltimoCierre(List<Map<String, dynamic>> cierres) {
+    final fecha = cierres.isEmpty ? null : cierres.last['fecha'];
+    return fecha is Timestamp ? fecha : null;
+  }
+
+  static bool _posteriorA(dynamic fecha, Timestamp? corte) =>
+      corte == null || fecha is! Timestamp || fecha.compareTo(corte) > 0;
+
+  static Future<List<Map<String, dynamic>>> _leerCierresDelSector(
+    DocumentReference sectorRef,
+    Map<String, dynamic> sectorData,
+  ) async {
+    final snap = await sectorRef.collection('cierres').get();
+    return cierresDelSector(
+      historial: snap.docs.map((d) => d.data()).toList(),
+      sectorData: sectorData,
+    );
+  }
+
   static Future<Map<String, String>> _nombresEventos({
     bool soloActivos = false,
   }) async {
@@ -40,11 +85,11 @@ class AdminEstadisticasService {
     return snap.docs.length;
   }
 
-  /// Transacciones de bandejeo por sector (turno aún abierto).
-  static Future<Map<String, double>> _montoBandejeoPorSector(
-    Set<String> eventosActivos,
-  ) async {
-    final map = <String, double>{};
+  /// Transacciones de bandejeo por sector (turno aún abierto), con su fecha
+  /// para descontar las que ya entraron en un cierre anterior.
+  static Future<Map<String, List<({dynamic fecha, double monto})>>>
+      _montoBandejeoPorSector(Set<String> eventosActivos) async {
+    final map = <String, List<({dynamic fecha, double monto})>>{};
     for (final eventoId in eventosActivos) {
       final qs = await _db
           .collection('transacciones')
@@ -57,7 +102,7 @@ class AdminEstadisticasService {
         final monto = (d['montoTotal'] as num?)?.toDouble() ?? 0;
         if (monto <= 0) continue;
         final key = '$eventoId|$sectorId';
-        map[key] = (map[key] ?? 0) + monto;
+        (map[key] ??= []).add((fecha: d['fecha'], monto: monto));
       }
     }
     return map;
@@ -66,9 +111,12 @@ class AdminEstadisticasService {
   static double _montoSectorAbierto(
     String eventoId,
     String sectorId,
-    Map<String, double> bandejeoPorSector,
-  ) {
-    return bandejeoPorSector['$eventoId|$sectorId'] ?? 0;
+    Map<String, List<({dynamic fecha, double monto})>> bandejeoPorSector, {
+    Timestamp? desde,
+  }) {
+    return (bandejeoPorSector['$eventoId|$sectorId'] ?? const [])
+        .where((t) => _posteriorA(t.fecha, desde))
+        .fold(0.0, (total, t) => total + t.monto);
   }
 
   /// KPIs y totales (cierres de turno + bandejeo en sectores abiertos).
@@ -106,17 +154,30 @@ class AdminEstadisticasService {
         double monto = 0;
         String fuente = '';
 
-        if (turnoCerrado) {
-          monto = montoDesdeUltimoCierre(data);
-          if (monto > 0) {
-            cierres++;
-            fuente = 'cierre_turno';
-          }
-        } else {
-          monto = _montoSectorAbierto(eventoId, sectorId, bandejeoPorSector);
-          if (monto > 0) {
-            fuente = 'bandejeo';
-            montoBandejeoTurnoAbierto += monto;
+        // Turnos ya cerrados (más de uno si el sector se reabrió).
+        final cierresSector =
+            await _leerCierresDelSector(sectorDoc.reference, data);
+        final montoTurnosCerrados = cierresSector.isNotEmpty
+            ? montoCierres(cierresSector)
+            : montoDesdeUltimoCierre(data);
+        if (montoTurnosCerrados > 0) {
+          monto += montoTurnosCerrados;
+          cierres += cierresSector.isEmpty ? 1 : cierresSector.length;
+          fuente = 'cierre_turno';
+        }
+
+        // Turno en curso: solo el bandejeo posterior al último cierre.
+        if (!turnoCerrado) {
+          final montoAbierto = _montoSectorAbierto(
+            eventoId,
+            sectorId,
+            bandejeoPorSector,
+            desde: fechaUltimoCierre(cierresSector),
+          );
+          if (montoAbierto > 0) {
+            monto += montoAbierto;
+            montoBandejeoTurnoAbierto += montoAbierto;
+            fuente = fuente.isEmpty ? 'bandejeo' : 'cierre_turno+bandejeo';
           }
         }
 
@@ -215,7 +276,7 @@ class AdminEstadisticasService {
     final eventosIds = eventosSnap.docs.map((d) => d.id).toSet();
     final bandejeoPorSector = soloEventosActivos
         ? await _montoBandejeoPorSector(eventosIds)
-        : <String, double>{};
+        : <String, List<({dynamic fecha, double monto})>>{};
 
     double montoTotal = 0;
     int cierres = 0;
@@ -229,9 +290,9 @@ class AdminEstadisticasService {
         final sectorId = sectorDoc.id;
         final turnoCerrado = sectorData['turnoCerrado'] == true;
 
-        if (turnoCerrado) {
-          final cierre = sectorData['ultimoCierre'];
-          if (cierre is! Map<String, dynamic>) continue;
+        final cierresSector =
+            await _leerCierresDelSector(sectorDoc.reference, sectorData);
+        for (final cierre in cierresSector) {
           cierres++;
           final productos = cierre['productos'] as List<dynamic>? ?? [];
           for (final raw in productos) {
@@ -250,10 +311,18 @@ class AdminEstadisticasService {
             acumular(key, subtotal, vendido);
             montoTotal += subtotal;
           }
-        } else {
+        }
+
+        if (!turnoCerrado) {
+          final desde = fechaUltimoCierre(cierresSector);
           final montoSector = soloEventosActivos
-              ? _montoSectorAbierto(eventoId, sectorId, bandejeoPorSector)
-              : await _montoBandejeoSectorDirecto(eventoId, sectorId);
+              ? _montoSectorAbierto(
+                  eventoId,
+                  sectorId,
+                  bandejeoPorSector,
+                  desde: desde,
+                )
+              : await _montoBandejeoSectorDirecto(eventoId, sectorId, desde: desde);
           if (montoSector <= 0) continue;
 
           final qs = await _db
@@ -264,6 +333,7 @@ class AdminEstadisticasService {
 
           for (final tDoc in qs.docs) {
             final t = tDoc.data();
+            if (!_posteriorA(t['fecha'], desde)) continue;
             final productos = t['productos'] as List<dynamic>? ?? [];
             for (final raw in productos) {
               if (raw is! Map) continue;
@@ -293,8 +363,9 @@ class AdminEstadisticasService {
 
   static Future<double> _montoBandejeoSectorDirecto(
     String eventoId,
-    String sectorId,
-  ) async {
+    String sectorId, {
+    Timestamp? desde,
+  }) async {
     final qs = await _db
         .collection('transacciones')
         .where('eventoId', isEqualTo: eventoId)
@@ -302,6 +373,7 @@ class AdminEstadisticasService {
         .get();
     var total = 0.0;
     for (final doc in qs.docs) {
+      if (!_posteriorA(doc.data()['fecha'], desde)) continue;
       total += (doc.data()['montoTotal'] as num?)?.toDouble() ?? 0;
     }
     return total;

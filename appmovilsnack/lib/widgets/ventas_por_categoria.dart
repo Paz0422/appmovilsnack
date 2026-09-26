@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:front_appsnack/services/admin_estadisticas_service.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 class VentasPorCategoria extends StatefulWidget {
   const VentasPorCategoria({super.key});
@@ -328,7 +329,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
               : RefreshIndicator(
                   onRefresh: _cargar,
                   child: ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: conMargenInferior(context, const EdgeInsets.all(16)),
                     children: [
                       Card(
                         color: AppColors.accent.withValues(alpha: 0.15),

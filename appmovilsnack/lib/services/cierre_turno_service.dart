@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:front_appsnack/services/incidencias_service.dart';
 
 /// Cierre de turno de un sector: el conteo físico del vendedor pasa a ser el
 /// stock, pero solo si nadie movió el stock mientras contaba.
@@ -78,6 +79,47 @@ class CierreTurnoService {
 
   /// Productos cuya cantidad difiere entre [antes] y [ahora], incluidos los
   /// que aparecieron o desaparecieron.
+  /// Stock con que empezó el turno actual de un sector reabierto: el conteo
+  /// final del cierre anterior ({productoId: cantidadFinal}). `null` si el
+  /// sector nunca cerró (el turno empezó con el stock inicial).
+  static Map<String, int>? inicioDelTurno(Map<String, dynamic>? sectorData) {
+    if (sectorData == null || sectorData['turnoCerrado'] == true) return null;
+    final cierre = sectorData['ultimoCierre'];
+    if (cierre is! Map) return null;
+    final productos = cierre['productos'];
+    return {
+      if (productos is List)
+        for (final p in productos.whereType<Map>())
+          if (p['productoId'] != null)
+            p['productoId'].toString(): (p['cantidadFinal'] as num?)?.toInt() ?? 0,
+    };
+  }
+
+  /// Unidades vendidas según el conteo. Nunca negativas: si se contó más que
+  /// el stock del sistema (sobrante), las ventas son 0.
+  static int unidadesVendidas({required int stockSistema, required int contado}) =>
+      contado >= stockSistema ? 0 : stockSistema - contado;
+
+  /// Unidades contadas por sobre el stock del sistema.
+  static int sobrante({required int stockSistema, required int contado}) =>
+      contado > stockSistema ? contado - stockSistema : 0;
+
+  /// Dinero y unidades del cierre (lo que va a `ultimoCierre`, `totalVendido`
+  /// del sector y al ranking del vendedor). Los sobrantes suman 0.
+  static ({double monto, int unidades}) totalesVenta(
+    Iterable<({int stockSistema, int contado, double precio})> productos,
+  ) {
+    var monto = 0.0;
+    var unidades = 0;
+    for (final p in productos) {
+      final vendidas =
+          unidadesVendidas(stockSistema: p.stockSistema, contado: p.contado);
+      monto += vendidas * p.precio;
+      unidades += vendidas;
+    }
+    return (monto: monto, unidades: unidades);
+  }
+
   static Set<String> productosCambiados(
     Map<String, int> antes,
     Map<String, int> ahora,
@@ -91,7 +133,11 @@ class CierreTurnoService {
   ///
   /// Si algún producto cambió, no escribe nada y devuelve sus ids. Si no,
   /// guarda el conteo como stock y marca el sector cerrado; devuelve vacío.
+  /// Cada producto contado por sobre el stock del sistema queda como incidencia
+  /// [TipoIncidencia.sobranteConteo] en la misma transacción.
   /// Lanza [TurnoYaCerradoException] si otro dispositivo cerró antes.
+  ///
+  /// [cierreData] debe traer `cierreId`. [vendedorUid] es el uid de Auth.
   Future<Set<String>> cerrarTurno({
     required String eventoId,
     required String sectorId,
@@ -99,8 +145,15 @@ class CierreTurnoService {
     required Map<String, int> conteoFinal,
     required Map<String, dynamic> cierreData,
     required double totalEstimado,
+    required String vendedorUid,
     String? vendedorNombre,
+    String? sectorNombre,
+    Map<String, String> nombresProductos = const {},
   }) async {
+    final cierreId = cierreData['cierreId']?.toString() ?? '';
+    if (cierreId.isEmpty) {
+      throw ArgumentError('cierreData debe incluir cierreId');
+    }
     final sector = sectorRef(eventoId, sectorId);
     final stockCol = sector.collection('stock');
 
@@ -113,6 +166,9 @@ class CierreTurnoService {
 
     return _db.runTransaction<Set<String>>((tx) async {
       final sectorSnap = await tx.get(sector);
+      if (!sectorSnap.exists) {
+        throw StateError('El sector ya no existe.');
+      }
       if (sectorSnap.data()?['turnoCerrado'] == true) {
         throw TurnoYaCerradoException();
       }
@@ -125,11 +181,11 @@ class CierreTurnoService {
       }
       if (cambiados.isNotEmpty) return cambiados;
 
+      // El sector y cada producto existen (se leyeron arriba): update.
       for (final entry in conteoFinal.entries) {
-        tx.set(
+        tx.update(
           stockCol.doc(entry.key),
           {'cantidad': entry.value, 'cantidadFinal': entry.value},
-          SetOptions(merge: true),
         );
       }
 
@@ -152,7 +208,36 @@ class CierreTurnoService {
         }
         sectorUpdate['vendedoresasignados'] = vendedores;
       }
-      tx.set(sector, sectorUpdate, SetOptions(merge: true));
+      tx.update(sector, sectorUpdate);
+      // Historial de cierres: `ultimoCierre` se sobrescribe si el sector se
+      // reabre y vuelve a cerrar, y las estadísticas necesitan todos los turnos.
+      tx.set(sector.collection('cierres').doc(cierreId), cierreData);
+
+      final discrepancias = _db
+          .collection('eventos')
+          .doc(eventoId)
+          .collection('discrepancias');
+      for (final entry in conteoFinal.entries) {
+        final stockSistema = stockAlIniciar[entry.key] ?? 0;
+        final sobrante = entry.value - stockSistema;
+        if (sobrante <= 0) continue;
+        tx.set(discrepancias.doc('${cierreId}_${entry.key}'), {
+          'tipo': TipoIncidencia.sobranteConteo,
+          'eventoId': eventoId,
+          'cierreId': cierreId,
+          'sectorId': sectorId,
+          'sectorNombre': sectorNombre ?? sectorSnap.data()?['nombre'],
+          'productoId': entry.key,
+          'nombreProducto': nombresProductos[entry.key],
+          'stockSistema': stockSistema,
+          'cantidadContada': entry.value,
+          'diferencia': sobrante,
+          'vendedorUid': vendedorUid,
+          'vendedorNombre': vendedorNombre,
+          'fecha': FieldValue.serverTimestamp(),
+          'estado': 'pendiente',
+        });
+      }
 
       return <String>{};
     });

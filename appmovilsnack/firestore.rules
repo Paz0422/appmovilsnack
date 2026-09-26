@@ -151,31 +151,88 @@ service cloud.firestore {
       // (eventos_management.dart).
       allow write: if esAdmin();
 
-      // Faltantes de traspasos que no pudieron volver al origen porque ya había
-      // cerrado su turno (TraspasoService.confirmarRecepcion). El vendedor que
-      // confirma solo los registra; el admin los revisa y marca resueltos.
+      // Movimientos de stock del evento. Hoy solo reposiciones: el admin suma
+      // unidades a un producto de un sector abierto (StockService.agregarStock).
+      // Todos los leen (la carga de stock inicial los revisa); nadie los edita.
+      match /movimientos/{movimientoId} {
+        function reposicionValida() {
+          let d = request.resource.data;
+          let stock = /databases/$(database)/documents/eventos/$(eventoId)/sectores/$(d.sectorId)/stock/$(d.productoId);
+          return d.tipo == 'reposicion'
+            && d.keys().hasOnly([
+                 'tipo', 'sectorId', 'sectorNombre', 'productoId', 'nombreProducto',
+                 'cantidad', 'motivo', 'adminUid', 'adminNombre', 'fecha'])
+            && d.cantidad is int
+            && d.cantidad > 0
+            && d.adminUid == request.auth.uid
+            && get(/databases/$(database)/documents/eventos/$(eventoId)/sectores/$(d.sectorId))
+                 .data.get('turnoCerrado', false) != true
+            // El registro corresponde a una suma real al stock en la misma escritura.
+            && getAfter(stock).data.cantidad == get(stock).data.cantidad + d.cantidad;
+        }
+
+        allow read: if autenticado();
+        allow create: if esAdmin() && reposicionValida();
+        allow update, delete: if false;
+      }
+
+      // Incidencias que el admin revisa y marca resueltas (IncidenciasService).
+      // El vendedor solo las registra, y solo en el momento en que ocurren:
+      //  - faltante_traspaso: confirma un traspaso con faltante y el origen ya
+      //    cerró su turno (TraspasoService.confirmarRecepcion).
+      //  - sobrante_conteo: al cerrar turno contó más que el stock del sistema
+      //    (CierreTurnoService.cerrarTurno).
       match /discrepancias/{discrepanciaId} {
+        function sectorDoc(id) {
+          return /databases/$(database)/documents/eventos/$(eventoId)/sectores/$(id);
+        }
+
+        function faltanteTraspasoValido() {
+          let d = request.resource.data;
+          return d.tipo == 'faltante_traspaso'
+            && d.keys().hasOnly([
+                 'tipo', 'eventoId', 'traspasoId', 'pedidoId',
+                 'sectorOrigenId', 'sectorOrigenNombre',
+                 'sectorDestinoId', 'sectorDestinoNombre',
+                 'productoId', 'nombreProducto',
+                 'cantidadEnviada', 'cantidadRecibida', 'diferencia',
+                 'comentario', 'vendedorUid', 'vendedorNombre', 'fecha', 'estado'])
+            && d.traspasoId == discrepanciaId
+            && d.diferencia == d.cantidadEnviada - d.cantidadRecibida
+            // Solo si el origen de verdad está cerrado; si no, la diferencia
+            // vuelve a su stock.
+            && get(sectorDoc(d.sectorOrigenId)).data.get('turnoCerrado', false) == true;
+        }
+
+        function sobranteConteoValido() {
+          let d = request.resource.data;
+          let despues = getAfter(sectorDoc(d.sectorId)).data;
+          return d.tipo == 'sobrante_conteo'
+            && d.keys().hasOnly([
+                 'tipo', 'eventoId', 'cierreId', 'sectorId', 'sectorNombre',
+                 'productoId', 'nombreProducto',
+                 'stockSistema', 'cantidadContada', 'diferencia',
+                 'vendedorUid', 'vendedorNombre', 'fecha', 'estado'])
+            && discrepanciaId == d.cierreId + '_' + d.productoId
+            && d.stockSistema is int
+            && d.stockSistema >= 0
+            && d.cantidadContada is int
+            && d.diferencia == d.cantidadContada - d.stockSistema
+            // Solo dentro de la transacción que cierra el turno de ese sector:
+            // antes estaba abierto y después queda cerrado con este cierre.
+            && get(sectorDoc(d.sectorId)).data.get('turnoCerrado', false) != true
+            && despues.get('turnoCerrado', false) == true
+            && despues.ultimoCierre.cierreId == d.cierreId;
+        }
+
         allow read, update: if esAdmin();
         allow create: if autenticado()
-          && request.resource.data.keys().hasOnly([
-               'eventoId', 'traspasoId', 'pedidoId',
-               'sectorOrigenId', 'sectorOrigenNombre',
-               'sectorDestinoId', 'sectorDestinoNombre',
-               'productoId', 'nombreProducto',
-               'cantidadEnviada', 'cantidadRecibida', 'diferencia',
-               'comentario', 'vendedorUid', 'vendedorNombre', 'fecha', 'estado'])
           && request.resource.data.estado == 'pendiente'
           && request.resource.data.eventoId == eventoId
-          && request.resource.data.traspasoId == discrepanciaId
           && request.resource.data.vendedorUid == request.auth.uid
           && request.resource.data.diferencia is int
           && request.resource.data.diferencia > 0
-          && request.resource.data.diferencia
-               == request.resource.data.cantidadEnviada - request.resource.data.cantidadRecibida
-          // Solo cuando el origen de verdad está cerrado; si no, la diferencia
-          // vuelve a su stock.
-          && get(/databases/$(database)/documents/eventos/$(eventoId)/sectores/$(request.resource.data.sectorOrigenId))
-               .data.get('turnoCerrado', false) == true;
+          && (faltanteTraspasoValido() || sobranteConteoValido());
         allow delete: if false;
       }
 
@@ -212,12 +269,32 @@ service cloud.firestore {
         // Stock: ingreso inicial (incluye borrar productos quitados), bandejeo,
         // mermas, traspasos y cierre de turno. Los traspasos escriben el stock
         // del sector de origen y de destino, así que no se limita por sector.
+        // Historial de cierres (CierreTurnoService.cerrarTurno). ultimoCierre se
+        // sobrescribe si el sector se reabre; aquí queda un documento por turno.
+        // Solo se crea en la misma escritura que cierra el turno con ese cierreId.
+        match /cierres/{cierreId} {
+          function cierraConEsteId() {
+            let despues = getAfter(/databases/$(database)/documents/eventos/$(eventoId)/sectores/$(sectorId)).data;
+            return sectorAbierto()
+              && despues.get('turnoCerrado', false) == true
+              && despues.ultimoCierre.cierreId == cierreId;
+          }
+
+          allow read: if autenticado();
+          allow create: if autenticado()
+            && request.resource.data.cierreId == cierreId
+            && cierraConEsteId();
+          allow update, delete: if false;
+        }
+
         // Con el turno cerrado el vendedor ya no toca el stock: bloquea enviar
         // desde el sector y devolverle diferencias de un traspaso (traspaso_service.dart).
         match /stock/{productoId} {
           allow read: if autenticado();
-          allow create, update, delete: if (autenticado() && sectorAbierto())
+          allow create, update: if (autenticado() && sectorAbierto())
             || esAdmin();
+          // Eliminar productos del stock de un sector: solo el admin.
+          allow delete: if esAdmin();
         }
 
         // Mermas: el vendedor solo registra; el historial no se edita.

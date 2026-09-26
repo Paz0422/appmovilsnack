@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 // Paleta de colores basada en el logo "Fusión"
 const Color _primaryColor = Color(0xFF2B2B2B);
@@ -1052,6 +1053,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
     });
 
     final action = await showModalBottomSheet<_AccionRonda>(
+      useSafeArea: true,
       context: context,
       isDismissible: true,
       enableDrag: true,
@@ -1183,6 +1185,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
   /// `true` = cerrar bandejeo sin ventas, `false` = nueva ronda, `null` = cancelar.
   Future<bool?> _mostrarMenuBandejeroSinRondas() {
     return showModalBottomSheet<bool>(
+      useSafeArea: true,
       context: context,
       isDismissible: true,
       enableDrag: true,
@@ -1240,6 +1243,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
 
   Future<_AccionBandejeroTrasRonda?> _mostrarMenuBandejeroTrasRonda() {
     return showModalBottomSheet<_AccionBandejeroTrasRonda>(
+      useSafeArea: true,
       context: context,
       isDismissible: true,
       enableDrag: true,
@@ -2383,7 +2387,7 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
         ),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(16),
+          padding: conMargenInferior(context, const EdgeInsets.all(16)),
           decoration: BoxDecoration(
             color: Colors.white,
             boxShadow: [
@@ -2915,7 +2919,7 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
         ),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(16),
+          padding: conMargenInferior(context, const EdgeInsets.all(16)),
           decoration: BoxDecoration(
             color: Colors.white,
             boxShadow: [
@@ -3069,7 +3073,7 @@ class _PasoResumenRonda extends StatelessWidget {
         ),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(16),
+          padding: conMargenInferior(context, const EdgeInsets.all(16)),
           decoration: BoxDecoration(
             color: Colors.white,
             boxShadow: [
@@ -3302,7 +3306,7 @@ class _PasoRendicion extends StatelessWidget {
         // Botón Confirmar
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(16),
+          padding: conMargenInferior(context, const EdgeInsets.all(16)),
           decoration: BoxDecoration(
             color: Colors.white,
             boxShadow: [

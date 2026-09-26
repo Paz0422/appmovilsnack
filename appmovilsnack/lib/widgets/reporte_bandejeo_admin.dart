@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/admin_bandejeo_service.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 class ReporteBandejeoAdmin extends StatefulWidget {
   const ReporteBandejeoAdmin({super.key});
@@ -166,7 +167,7 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
     if (_error != null) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(24),
+        padding: conMargenInferior(context, const EdgeInsets.all(24)),
         children: [
           Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
           const SizedBox(height: 12),
@@ -189,7 +190,7 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
     if (_sectores.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(32),
+        padding: conMargenInferior(context, const EdgeInsets.all(32)),
         children: [
           Icon(
             Icons.directions_walk_outlined,
@@ -222,7 +223,7 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
 
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: conMargenInferior(context, const EdgeInsets.fromLTRB(16, 8, 16, 24)),
       itemCount: _sectores.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) => _SectorBandejeoCard(

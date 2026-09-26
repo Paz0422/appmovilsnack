@@ -356,6 +356,7 @@ describe('configuración (solo admin)', () => {
 
 describe('operación del vendedor', () => {
   // Replica GestionStock._guardar: muchos productos en un batch + marca en el sector.
+  // Replica GestionStock._persistirStock (ya no borra productos).
   test('ingreso de stock inicial con muchos productos', async () => {
     for (const f of [vendedor(), admin()]) {
       const batch = writeBatch(f);
@@ -365,12 +366,22 @@ describe('operación del vendedor', () => {
           cantidadInicial: 10, cantidadPropio: 10, cantidadPorTraspaso: 0, categoria: 'Bebidas',
         });
       }
-      batch.delete(doc(f, `${SECTOR}/stock/p1`));
       await assertSucceeds(batch.commit());
       await assertSucceeds(setDoc(doc(f, SECTOR), {
         stockInicialIngresado: true, borradorStockInicial: deleteField(),
       }, { merge: true }));
     }
+  });
+
+  test('solo el admin elimina productos del stock de un sector', async () => {
+    await assertFails(deleteDoc(doc(vendedor(), `${SECTOR}/stock/p1`)));
+    // Tampoco dentro de un batch junto con escrituras permitidas.
+    const f = vendedor();
+    const batch = writeBatch(f);
+    batch.update(doc(f, `${SECTOR}/stock/p1`), { cantidad: 5 });
+    batch.delete(doc(f, `${SECTOR_2}/stock/p1`));
+    await assertFails(batch.commit());
+    await assertSucceeds(deleteDoc(doc(admin(), `${SECTOR}/stock/p1`)));
   });
 
   test('registrar merma (y no poder borrarla)', async () => {
@@ -522,7 +533,7 @@ describe('traspasos con sectores de turno cerrado', () => {
   // Replica TraspasoService.confirmarRecepcion con el origen cerrado: suma lo
   // recibido al destino y registra el faltante en discrepancias.
   const discrepancia = (extra = {}) => ({
-    eventoId: 'ev1', traspasoId: 't1', pedidoId: 'ped1',
+    tipo: 'faltante_traspaso', eventoId: 'ev1', traspasoId: 't1', pedidoId: 'ped1',
     sectorOrigenId: 's1', sectorOrigenNombre: 'Sur',
     sectorDestinoId: 's2', sectorDestinoNombre: 'Norte',
     productoId: 'p1', nombreProducto: 'Bebida',
@@ -578,6 +589,10 @@ describe('traspasos con sectores de turno cerrado', () => {
     await assertFails(crear(vendedor(), 't1', discrepancia({ diferencia: 0, cantidadRecibida: 5 })));
     await assertFails(crear(vendedor(), 't2', discrepancia()));
     await assertFails(crear(vendedor(), 't1', discrepancia({ monto: 100000 })));
+    // Sin tipo, o con un tipo que no existe.
+    const { tipo, ...sinTipo } = discrepancia();
+    await assertFails(crear(vendedor(), 't1', sinTipo));
+    await assertFails(crear(vendedor(), 't1', discrepancia({ tipo: 'otro' })));
     await assertFails(crear(env.unauthenticatedContext().firestore(), 't1', discrepancia()));
   });
 
@@ -592,5 +607,220 @@ describe('traspasos con sectores de turno cerrado', () => {
     await assertFails(setDoc(doc(vendedor(), `${SECTOR}/stock/nuevo`), { cantidad: 1 }));
     await assertFails(deleteDoc(doc(vendedor(), `${SECTOR}/stock/p1`)));
     await assertSucceeds(updateDoc(doc(admin(), `${SECTOR}/stock/p1`), { cantidad: 1 }));
+  });
+});
+
+describe('incidencias: sobrante en el conteo del cierre', () => {
+  // Replica CierreTurnoService.cerrarTurno con un sobrante: en s1 el sistema
+  // tiene 20 bebidas y se cuentan 23.
+  const CIERRE = 'ev1_s1_99';
+  const sobrante = (extra = {}) => ({
+    tipo: 'sobrante_conteo', eventoId: 'ev1', cierreId: CIERRE,
+    sectorId: 's1', sectorNombre: 'Norte', productoId: 'p1', nombreProducto: 'Bebida',
+    stockSistema: 20, cantidadContada: 23, diferencia: 3,
+    vendedorUid: 'vend1', vendedorNombre: 'vend1', fecha: serverTimestamp(), estado: 'pendiente',
+    ...extra,
+  });
+  const cerrarConSobrante = (f, { id = `${CIERRE}_p1`, datos = sobrante(), cierreId = CIERRE } = {}) =>
+    runTransaction(f, async (tx) => {
+      await tx.get(doc(f, SECTOR));
+      await tx.get(doc(f, `${SECTOR}/stock/p1`));
+      tx.set(doc(f, `${SECTOR}/stock/p1`), { cantidad: 23, cantidadFinal: 23 }, { merge: true });
+      tx.set(doc(f, SECTOR), {
+        ultimoCierre: { cierreId, vendedorUid: 'vend1', totalEstimado: 0, productos: [] },
+        turnoCerrado: true,
+        turnoCerradoAt: serverTimestamp(),
+        totalVendido: increment(0),
+        borradorCierreTurno: deleteField(),
+        vendedoresasignados: [],
+      }, { merge: true });
+      tx.set(doc(f, `${EVENTO}/discrepancias/${id}`), datos);
+    });
+
+  test('el vendedor registra el sobrante al cerrar su turno', async () => {
+    await assertSucceeds(cerrarConSobrante(vendedor()));
+    await assertFails(getDoc(doc(vendedor(), `${EVENTO}/discrepancias/${CIERRE}_p1`)));
+    await assertSucceeds(getDoc(doc(admin(), `${EVENTO}/discrepancias/${CIERRE}_p1`)));
+  });
+
+  test('solo dentro de la transacción de cierre', async () => {
+    const crear = (f) => setDoc(doc(f, `${EVENTO}/discrepancias/${CIERRE}_p1`), sobrante());
+    // Sector abierto, sin cerrar en la misma operación.
+    await assertFails(crear(vendedor()));
+    // Sector ya cerrado con ese cierre: después del cierre no se agregan más.
+    await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), SECTOR), {
+      turnoCerrado: true, ultimoCierre: { cierreId: CIERRE },
+    }));
+    await assertFails(crear(vendedor()));
+  });
+
+  test('no se puede inventar ni alterar un sobrante', async () => {
+    const f = vendedor();
+    // Cierre distinto del que se escribe en el sector.
+    await assertFails(cerrarConSobrante(f, { cierreId: 'otro_cierre' }));
+    // Id que no es cierreId_productoId.
+    await assertFails(cerrarConSobrante(f, { id: 'cualquiera' }));
+    // Diferencia que no cuadra, cero o negativa.
+    await assertFails(cerrarConSobrante(f, { datos: sobrante({ diferencia: 10 }) }));
+    await assertFails(cerrarConSobrante(f, {
+      datos: sobrante({ cantidadContada: 20, diferencia: 0 }),
+    }));
+    // A nombre de otro, en estado resuelta, con campos extra o de otro sector.
+    await assertFails(cerrarConSobrante(f, { datos: sobrante({ vendedorUid: 'otro' }) }));
+    await assertFails(cerrarConSobrante(f, { datos: sobrante({ estado: 'resuelta' }) }));
+    await assertFails(cerrarConSobrante(f, { datos: sobrante({ monto: 1 }) }));
+    await assertFails(cerrarConSobrante(f, { datos: sobrante({ sectorId: 's2' }) }));
+    // Con los campos de un faltante de traspaso.
+    await assertFails(cerrarConSobrante(f, {
+      datos: sobrante({ tipo: 'faltante_traspaso' }),
+    }));
+    // Y el caso válido sigue pasando.
+    await assertSucceeds(cerrarConSobrante(f));
+  });
+
+  test('un cierre con muchos sobrantes no supera el límite de lecturas de las reglas', async () => {
+    const f = vendedor();
+    const ids = Array.from({ length: 15 }, (_, i) => `q${i}`);
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      for (const id of ids) {
+        await setDoc(doc(ctx.firestore(), `${SECTOR}/stock/${id}`), { cantidad: 5 });
+      }
+    });
+    await assertSucceeds(runTransaction(f, async (tx) => {
+      await tx.get(doc(f, SECTOR));
+      for (const id of ids) await tx.get(doc(f, `${SECTOR}/stock/${id}`));
+      for (const id of ids) {
+        tx.set(doc(f, `${SECTOR}/stock/${id}`), { cantidad: 7, cantidadFinal: 7 }, { merge: true });
+        tx.set(doc(f, `${EVENTO}/discrepancias/${CIERRE}_${id}`), sobrante({
+          productoId: id, stockSistema: 5, cantidadContada: 7, diferencia: 2,
+        }));
+      }
+      tx.set(doc(f, SECTOR), {
+        ultimoCierre: { cierreId: CIERRE }, turnoCerrado: true, turnoCerradoAt: serverTimestamp(),
+      }, { merge: true });
+    }));
+  });
+
+  test('el admin marca resuelto un sobrante; nadie lo borra', async () => {
+    await assertSucceeds(cerrarConSobrante(vendedor()));
+    const ref = (f) => doc(f, `${EVENTO}/discrepancias/${CIERRE}_p1`);
+    await assertFails(updateDoc(ref(vendedor()), { estado: 'resuelta' }));
+    await assertSucceeds(updateDoc(ref(admin()), {
+      estado: 'resuelta', resueltaAt: serverTimestamp(), resueltaPor: 'admin1',
+    }));
+    await assertFails(deleteDoc(ref(admin())));
+  });
+});
+
+describe('reposición de stock (movimientos)', () => {
+  const mov = (extra = {}) => ({
+    tipo: 'reposicion', sectorId: 's1', sectorNombre: 'Norte', productoId: 'p1',
+    nombreProducto: 'Bebida', cantidad: 5, motivo: 'Compra durante el evento',
+    adminUid: 'admin1', adminNombre: 'admin', fecha: serverTimestamp(), ...extra,
+  });
+  // Replica StockService.agregarStock: increment + registro en la misma escritura.
+  const reponer = (f, { suma = 5, datos = mov(), id = 'm1' } = {}) => {
+    const batch = writeBatch(f);
+    if (suma !== 0) batch.update(doc(f, `${SECTOR}/stock/p1`), { cantidad: increment(suma) });
+    batch.set(doc(f, `${EVENTO}/movimientos/${id}`), datos);
+    return batch.commit();
+  };
+
+  test('el admin agrega stock y queda registrado', async () => {
+    await assertSucceeds(reponer(admin()));
+    const stock = (await getDoc(doc(admin(), `${SECTOR}/stock/p1`))).data().cantidad;
+    if (stock !== 25) throw new Error(`stock esperado 25, fue ${stock}`);
+    // Todos leen los movimientos (la carga inicial los revisa).
+    await assertSucceeds(getDocs(query(collection(vendedor(), `${EVENTO}/movimientos`),
+      where('sectorId', '==', 's1'))));
+  });
+
+  test('un vendedor no puede registrar reposiciones', async () => {
+    await assertFails(reponer(vendedor(), { datos: mov({ adminUid: 'vend1' }) }));
+    await assertFails(setDoc(doc(vendedor(), `${EVENTO}/movimientos/m9`), mov({ adminUid: 'vend1' })));
+  });
+
+  test('el registro debe corresponder a una suma real al stock', async () => {
+    const a = admin();
+    await assertFails(reponer(a, { suma: 0 }));
+    await assertFails(reponer(a, { suma: 3 }));
+    await assertFails(reponer(a, { suma: 5, datos: mov({ productoId: 'otro' }) }));
+  });
+
+  test('no se registra una reposición inválida', async () => {
+    const a = admin();
+    await assertFails(reponer(a, { suma: 0, datos: mov({ cantidad: 0 }) }));
+    await assertFails(reponer(a, { suma: -2, datos: mov({ cantidad: -2 }) }));
+    await assertFails(reponer(a, { datos: mov({ cantidad: 5.5 }) }));
+    await assertFails(reponer(a, { datos: mov({ adminUid: 'otro' }) }));
+    await assertFails(reponer(a, { datos: mov({ tipo: 'ajuste' }) }));
+    await assertFails(reponer(a, { datos: mov({ precio: 1 }) }));
+  });
+
+  test('no en un sector con turno cerrado', async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      updateDoc(doc(ctx.firestore(), SECTOR), { turnoCerrado: true }));
+    await assertFails(reponer(admin()));
+  });
+
+  test('los movimientos no se editan ni se borran', async () => {
+    await assertSucceeds(reponer(admin()));
+    for (const f of [admin(), vendedor()]) {
+      await assertFails(updateDoc(doc(f, `${EVENTO}/movimientos/m1`), { cantidad: 50 }));
+      await assertFails(deleteDoc(doc(f, `${EVENTO}/movimientos/m1`)));
+    }
+    // Reescribirlo con el mismo id también es una edición.
+    await assertFails(reponer(admin(), { suma: 5 }));
+  });
+});
+
+describe('cierre, reapertura y segundo cierre (historial)', () => {
+  // Replica CierreTurnoService.cerrarTurno: stock + sector + historial en una transacción.
+  const cerrar = (f, cierreId, contado, monto, { historialId = cierreId } = {}) =>
+    runTransaction(f, async (tx) => {
+      await tx.get(doc(f, SECTOR));
+      await tx.get(doc(f, `${SECTOR}/stock/p1`));
+      const cierre = { cierreId, totalEstimado: monto, totalUnidadesVendidas: monto / 1000 };
+      tx.update(doc(f, `${SECTOR}/stock/p1`), { cantidad: contado, cantidadFinal: contado });
+      tx.update(doc(f, SECTOR), {
+        ultimoCierre: cierre, turnoCerrado: true, turnoCerradoAt: serverTimestamp(),
+        totalVendido: increment(monto), borradorCierreTurno: deleteField(),
+      });
+      tx.set(doc(f, `${SECTOR}/cierres/${historialId}`), cierre);
+    });
+  const reabrir = () => updateDoc(doc(admin(), SECTOR), {
+    turnoCerrado: false, turnoCerradoAt: deleteField(),
+  });
+
+  test('stock 20 → cierre con 16 → reapertura → cierre con 12: el sector suma 8 vendidas', async () => {
+    const f = vendedor();
+    await assertSucceeds(cerrar(f, 'c1', 16, 4000));
+    await assertSucceeds(reabrir());
+    await assertSucceeds(cerrar(f, 'c2', 12, 4000));
+
+    const sector = (await getDoc(doc(admin(), SECTOR))).data();
+    if (sector.totalVendido !== 8000) throw new Error(`totalVendido ${sector.totalVendido}`);
+    const historial = await getDocs(collection(f, `${SECTOR}/cierres`));
+    const ids = historial.docs.map((d) => d.id).sort().join(',');
+    if (ids !== 'c1,c2') throw new Error(`historial ${ids}`);
+  });
+
+  test('el historial solo se escribe al cerrar, con el mismo cierreId', async () => {
+    const f = vendedor();
+    // Fuera de un cierre.
+    await assertFails(setDoc(doc(f, `${SECTOR}/cierres/x`), { cierreId: 'x', totalEstimado: 999 }));
+    // Con un id distinto del cierre que se escribe.
+    await assertFails(cerrar(f, 'c1', 16, 4000, { historialId: 'otro' }));
+    await assertSucceeds(cerrar(f, 'c1', 16, 4000));
+    // Ya cerrado: no se agregan turnos inventados.
+    await assertFails(setDoc(doc(f, `${SECTOR}/cierres/c1b`), { cierreId: 'c1b' }));
+  });
+
+  test('el historial no se edita ni se borra', async () => {
+    await assertSucceeds(cerrar(vendedor(), 'c1', 16, 4000));
+    for (const f of [vendedor(), admin()]) {
+      await assertFails(updateDoc(doc(f, `${SECTOR}/cierres/c1`), { totalEstimado: 0 }));
+      await assertFails(deleteDoc(doc(f, `${SECTOR}/cierres/c1`)));
+    }
   });
 });

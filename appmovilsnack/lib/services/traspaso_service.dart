@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:front_appsnack/services/incidencias_service.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
 
 /// Error de negocio de un traspaso; [toString] es el mensaje para el usuario.
@@ -63,7 +64,7 @@ class TraspasoService {
       'Se registró un faltante de $unidades ${unidades == 1 ? 'unidad' : 'unidades'}. '
       'El administrador lo revisará.';
 
-  CollectionReference<Map<String, dynamic>> discrepancias(String eventoId) =>
+  CollectionReference<Map<String, dynamic>> _discrepancias(String eventoId) =>
       _db.collection('eventos').doc(eventoId).collection('discrepancias');
 
   DocumentReference<Map<String, dynamic>> _sector(
@@ -254,7 +255,7 @@ class TraspasoService {
           origenStockSnap: origenStockSnap,
           salienteSnap: salienteSnap,
           discrepanciaRef:
-              registrarDiscrepancia ? discrepancias(eventoId).doc(id) : null,
+              registrarDiscrepancia ? _discrepancias(eventoId).doc(id) : null,
         ));
       }
 
@@ -281,39 +282,6 @@ class TraspasoService {
       );
     });
   }
-
-  /// Discrepancias pendientes de todos los eventos, más recientes primero.
-  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-      discrepanciasPendientes() async {
-    final eventos = await _db.collection('eventos').get();
-    final pendientes = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-    for (final evento in eventos.docs) {
-      final snap = await discrepancias(evento.id)
-          .where('estado', isEqualTo: 'pendiente')
-          .get();
-      pendientes.addAll(snap.docs);
-    }
-    pendientes.sort((a, b) {
-      final fa = a.data()['fecha'];
-      final fb = b.data()['fecha'];
-      if (fa is Timestamp && fb is Timestamp) return fb.compareTo(fa);
-      return 0;
-    });
-    return pendientes;
-  }
-
-  Future<void> resolverDiscrepancia({
-    required String eventoId,
-    required String discrepanciaId,
-    required String adminUid,
-    String? nota,
-  }) =>
-      discrepancias(eventoId).doc(discrepanciaId).update({
-        'estado': 'resuelta',
-        'resueltaAt': FieldValue.serverTimestamp(),
-        'resueltaPor': adminUid,
-        if (nota != null && nota.trim().isNotEmpty) 'notaResolucion': nota.trim(),
-      });
 
   void _aplicar(
     Transaction tx,
@@ -379,6 +347,7 @@ class TraspasoService {
     if (discrepancia != null) {
       confirmacion['discrepanciaId'] = discrepancia.id;
       tx.set(discrepancia, {
+        'tipo': TipoIncidencia.faltanteTraspaso,
         'eventoId': eventoId,
         'traspasoId': discrepancia.id,
         'pedidoId': tData['pedidoId'],

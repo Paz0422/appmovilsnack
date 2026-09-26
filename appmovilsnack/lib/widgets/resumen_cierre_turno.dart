@@ -10,6 +10,7 @@ import 'package:front_appsnack/utils/categorias_producto.dart';
 import 'package:front_appsnack/services/cierre_turno_service.dart';
 import 'package:front_appsnack/services/vendedor_ventas_service.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 /// Cierre de turno por conciliación de inventario:
 /// stock inicial − inventario final = unidades vendidas → dinero estimado.
@@ -41,7 +42,8 @@ class _ProductoConciliacion {
   final double precio;
   final String categoria;
   final int cantidadInicial;
-  /// Stock disponible al cerrar (inicial + traspasos − mermas, etc.).
+  /// Stock del sistema al abrir el conteo (inicial + traspasos − mermas, etc.).
+  /// Se puede contar más: el exceso es sobrante, no venta.
   final int cantidadMaxima;
   int cantidadFinal;
 
@@ -55,9 +57,18 @@ class _ProductoConciliacion {
     required this.cantidadFinal,
   });
 
-  int get cantidadVendida => cantidadMaxima - cantidadFinal;
+  /// Con sobrante las ventas son 0, nunca negativas: no restan del total ni
+  /// del ranking.
+  int get cantidadVendida => CierreTurnoService.unidadesVendidas(
+        stockSistema: cantidadMaxima,
+        contado: cantidadFinal,
+      );
   double get subtotal => cantidadVendida > 0 ? cantidadVendida * precio : 0;
-  bool get tieneDiscrepancia => cantidadFinal > cantidadMaxima;
+  int get sobrante => CierreTurnoService.sobrante(
+        stockSistema: cantidadMaxima,
+        contado: cantidadFinal,
+      );
+  bool get tieneSobrante => sobrante > 0;
   bool get recibioTraspaso => cantidadMaxima > cantidadInicial;
 }
 
@@ -72,6 +83,15 @@ bool _bandejeroBandejeoCerrado(Map<String, dynamic> data) {
   if (data['bandejeoCerradoEn'] != null) return true;
   return data['activo'] == false;
 }
+
+({double monto, int unidades}) _totalesVenta(
+  Iterable<_ProductoConciliacion> productos,
+) =>
+    CierreTurnoService.totalesVenta(productos.map((p) => (
+          stockSistema: p.cantidadMaxima,
+          contado: p.cantidadFinal,
+          precio: p.precio,
+        )));
 
 class _ResumenBandejeroEnCierre {
   final String nombre;
@@ -144,6 +164,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
   Set<String> _productosCambiados = {};
   /// Traspasos entrantes sin confirmar y rondas abiertas: bloquean el conteo.
   List<String> _movimientosPendientes = [];
+  /// Conteo con sobrante ya confirmado por el vendedor ({productoId: contado}),
+  /// para no volver a preguntar si no lo cambia.
+  final Map<String, int> _sobrantesConfirmados = {};
 
   DocumentReference<Map<String, dynamic>> get _sectorRef =>
       FirebaseFirestore.instance
@@ -177,7 +200,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       if (ctrl == null) continue;
       final n = int.tryParse(ctrl.text.trim());
       if (n == null) continue;
-      p.cantidadFinal = n.clamp(0, p.cantidadMaxima);
+      p.cantidadFinal = n < 0 ? 0 : n;
     }
   }
 
@@ -196,7 +219,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
     for (final p in productos) {
       final guardado = map[p.productoId];
       if (guardado != null) {
-        p.cantidadFinal = guardado.clamp(0, p.cantidadMaxima);
+        p.cantidadFinal = guardado < 0 ? 0 : guardado;
       }
     }
   }
@@ -268,7 +291,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
   }
 
   void _setCantidadFinal(_ProductoConciliacion p, int value) {
-    final clamped = value.clamp(0, p.cantidadMaxima);
+    final clamped = value < 0 ? 0 : value;
     p.cantidadFinal = clamped;
     _productosCambiados.remove(p.productoId);
     final ctrl = _cantidadControllers[p.productoId];
@@ -335,11 +358,15 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         return;
       }
 
+      // Sector reabierto: el turno empezó con el conteo del cierre anterior,
+      // no con el stock inicial original. Las ventas siempre salen del stock
+      // actual (cantidad) menos lo contado; esto solo corrige el "Inicial".
+      final inicioTurno = CierreTurnoService.inicioDelTurno(sectorData);
       final productos = stockSnapshot.docs.map((doc) {
         final d = doc.data();
-        final inicial = (d['cantidadInicial'] as int?) ??
-            (d['cantidad'] as int?) ??
-            0;
+        final inicial = inicioTurno != null
+            ? (inicioTurno[doc.id] ?? 0)
+            : (d['cantidadInicial'] as int?) ?? (d['cantidad'] as int?) ?? 0;
         final maxima = (d['cantidad'] as int?) ?? inicial;
         return _ProductoConciliacion(
           productoId: doc.id,
@@ -383,12 +410,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           ));
         }
         if (borrador['enResumen'] == true && cambiados.isEmpty) {
-          for (final p in productos) {
-            if (p.cantidadVendida > 0) {
-              total += p.subtotal;
-              unidades += p.cantidadVendida;
-            }
-          }
+          final totales = _totalesVenta(productos);
+          total = totales.monto;
+          unidades = totales.unidades;
           bandejeros = await _cargarBandejerosCerrados();
           mostrarResumen = true;
         }
@@ -621,21 +645,45 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         );
         return;
       }
-      if (p.cantidadFinal > p.cantidadMaxima) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '"${p.nombre}": no puede quedar más de ${p.cantidadMaxima} u. '
-              '(inicial ${p.cantidadInicial}${p.recibioTraspaso ? ', incluye traspasos' : ''}).',
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
+    }
+    for (final p in _productos) {
+      if (!p.tieneSobrante ||
+          _sobrantesConfirmados[p.productoId] == p.cantidadFinal) {
+        continue;
       }
+      if (!await _confirmarSobrante(p)) return;
+      _sobrantesConfirmados[p.productoId] = p.cantidadFinal;
     }
     await _calcularResumen();
+  }
+
+  Future<bool> _confirmarSobrante(_ProductoConciliacion p) async {
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          p.nombre,
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
+        content: Text(
+          'Está contando ${p.sobrante} más de lo registrado. ¿Confirma?\n\n'
+          'Sistema: ${p.cantidadMaxima} · Contado: ${p.cantidadFinal}. '
+          'El sobrante se registrará para que el administrador lo revise.',
+          style: GoogleFonts.poppins(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Corregir'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    return confirmado == true;
   }
 
   Future<void> _calcularResumen() async {
@@ -652,28 +700,11 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         );
         return;
       }
-      if (p.cantidadFinal > p.cantidadMaxima) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '"${p.nombre}": la cantidad final no puede superar ${p.cantidadMaxima}.',
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
     }
 
-    double total = 0;
-    int unidades = 0;
-    for (final p in _productos) {
-      if (p.cantidadVendida > 0) {
-        total += p.subtotal;
-        unidades += p.cantidadVendida;
-      }
-    }
+    final totales = _totalesVenta(_productos);
+    final total = totales.monto;
+    final unidades = totales.unidades;
 
     if (!await _verificarSinPendientes()) return;
 
@@ -735,7 +766,8 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       buffer.writeln('• ${p.nombre}');
       buffer.writeln(
         '  Inicial: ${p.cantidadInicial} | Final: ${p.cantidadFinal} | '
-        'Vendido: ${p.cantidadVendida} | Subtotal: \$${p.subtotal.toStringAsFixed(0)}',
+        'Vendido: ${p.cantidadVendida} | Subtotal: \$${p.subtotal.toStringAsFixed(0)}'
+        '${p.tieneSobrante ? ' | Sobrante: ${p.sobrante}' : ''}',
       );
     }
     buffer.writeln();
@@ -796,6 +828,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                 'cantidadFinal': p.cantidadFinal,
                 'cantidadVendida': p.cantidadVendida,
                 'subtotal': p.subtotal,
+                if (p.tieneSobrante) 'sobrante': p.sobrante,
               })
           .toList();
 
@@ -822,7 +855,11 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         conteoFinal: {for (final p in _productos) p.productoId: p.cantidadFinal},
         cierreData: cierreData,
         totalEstimado: _totalEstimado,
+        // Las incidencias de sobrante van a nombre del uid de Auth (reglas).
+        vendedorUid: user?.uid ?? '',
         vendedorNombre: vendedorNombre,
+        sectorNombre: widget.nombreSector,
+        nombresProductos: {for (final p in _productos) p.productoId: p.nombre},
       );
       if (cambiados.isNotEmpty) {
         if (!mounted) return;
@@ -964,7 +1001,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
 
   Widget _buildMovimientosPendientes() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: conMargenInferior(context, const EdgeInsets.all(24)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1032,8 +1069,8 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Ingrese cuántas unidades quedan. No puede superar el stock disponible '
-                '(inicial + traspasos − mermas).',
+                'Ingrese cuántas unidades quedan. Si cuenta más que el stock del '
+                'sistema, se registrará como sobrante para el administrador.',
                 style: GoogleFonts.poppins(
                   fontSize: 13,
                   color: AppColors.secondary,
@@ -1095,7 +1132,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                       ],
                       const SizedBox(height: 4),
                       Text(
-                        'Inicial: ${p.cantidadInicial} · Máximo: ${p.cantidadMaxima}'
+                        'Inicial: ${p.cantidadInicial} · Sistema: ${p.cantidadMaxima}'
                         '${p.recibioTraspaso ? ' (incl. traspaso)' : ''} · '
                         'Precio: \$${p.precio.toStringAsFixed(0)}',
                         style: GoogleFonts.poppins(
@@ -1157,26 +1194,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                                     onChanged: (v) {
                                       final n = int.tryParse(v.trim());
                                       if (n == null) return;
-                                      if (n > p.cantidadMaxima) {
-                                        _setCantidadFinal(
-                                          p,
-                                          p.cantidadMaxima,
-                                        );
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              'Máximo ${p.cantidadMaxima} u. para "${p.nombre}"',
-                                              style: GoogleFonts.poppins(),
-                                            ),
-                                            backgroundColor: Colors.orange,
-                                            duration:
-                                                const Duration(seconds: 2),
-                                          ),
-                                        );
-                                      } else {
-                                        _setCantidadFinal(p, n);
-                                      }
+                                      _setCantidadFinal(p, n);
                                     },
                                   ),
                                 ),
@@ -1190,22 +1208,23 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                                   iconSize: 22,
                                   icon: const Icon(Icons.add_circle_outline),
                                   color: AppColors.primaryLight,
-                                  onPressed: p.cantidadFinal < p.cantidadMaxima
-                                      ? () => _setCantidadFinal(
-                                            p,
-                                            p.cantidadFinal + 1,
-                                          )
-                                      : null,
+                                  onPressed: () => _setCantidadFinal(
+                                    p,
+                                    p.cantidadFinal + 1,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                           const SizedBox(width: 6),
-                          if (p.tieneDiscrepancia)
-                            Icon(
-                              Icons.warning_amber,
-                              color: Colors.orange[700],
-                              size: 20,
+                          if (p.tieneSobrante)
+                            Text(
+                              'Sobrante: +${p.sobrante}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.orange[800],
+                              ),
                             )
                           else
                             Text(
@@ -1226,7 +1245,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: conMargenInferior(context, const EdgeInsets.all(16)),
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -1250,9 +1269,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
   }
 
   Widget _buildResumenView() {
-    final hayDiscrepancias = _productos.any((p) => p.tieneDiscrepancia);
+    final hayDiscrepancias = _productos.any((p) => p.tieneSobrante);
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: conMargenInferior(context, const EdgeInsets.all(16)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1279,8 +1298,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Hay productos con inventario final mayor al disponible. '
-                      'Revise los conteos antes de confirmar.',
+                      'Hay productos con sobrante (se contó más que el stock del '
+                      'sistema). Sus ventas quedan en 0 y el sobrante se registrará '
+                      'para que el administrador lo revise.',
                       style: GoogleFonts.poppins(fontSize: 13, color: Colors.orange[900]),
                     ),
                   ),
@@ -1562,7 +1582,8 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                             ),
                           ),
                           Text(
-                            'Inicial: ${p.cantidadInicial} → Final: ${p.cantidadFinal}',
+                            'Inicial: ${p.cantidadInicial} → Final: ${p.cantidadFinal}'
+                            '${p.tieneSobrante ? ' (sobrante +${p.sobrante})' : ''}',
                             style: GoogleFonts.poppins(
                               fontSize: 12,
                               color: AppColors.secondary,
@@ -1579,7 +1600,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                           style: GoogleFonts.poppins(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: p.tieneDiscrepancia ? Colors.orange[800] : AppColors.success,
+                            color: p.tieneSobrante ? Colors.orange[800] : AppColors.success,
                           ),
                         ),
                         Text(

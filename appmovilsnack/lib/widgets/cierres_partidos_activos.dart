@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/app_theme.dart';
 import '../services/firestore_helpers.dart';
 import 'resumen_cierre_turno.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 class CierresPartidosActivos extends StatefulWidget {
   const CierresPartidosActivos({super.key});
@@ -164,7 +165,7 @@ class _CierresPartidosActivosState extends State<CierresPartidosActivos> {
                       onRefresh: _cargar,
                       color: AppColors.accent,
                       child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
+                        padding: conMargenInferior(context, const EdgeInsets.all(16)),
                         itemCount: _eventosConCierres.length,
                         itemBuilder: (context, index) {
                           final evento = _eventosConCierres[index];

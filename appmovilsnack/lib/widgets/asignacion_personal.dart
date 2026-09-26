@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 import 'package:front_appsnack/widgets/share_csv_file_io.dart'
     if (dart.library.html) 'package:front_appsnack/widgets/share_csv_file.dart'
     as share_csv;
@@ -422,7 +423,7 @@ class _EmpleadosTab extends StatelessWidget {
               );
             }
             return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              padding: conMargenInferior(context, const EdgeInsets.fromLTRB(16, 16, 16, 100)),
               itemCount: docs.length,
               itemBuilder: (context, index) {
                 final doc = docs[index];
@@ -485,7 +486,7 @@ class _EmpleadosTab extends StatelessWidget {
         ),
         Positioned(
           right: 16,
-          bottom: 24,
+          bottom: 24 + margenSistemaInferior(context),
           child: FloatingActionButton(
             onPressed: () => _agregarOEditar(context),
             backgroundColor: accentColor,
@@ -653,7 +654,7 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
               }
 
               return ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                padding: conMargenInferior(context, const EdgeInsets.fromLTRB(16, 0, 16, 100)),
                 itemCount: empleadosFiltrados.length,
                 itemBuilder: (context, index) {
                   final doc = empleadosFiltrados[index];

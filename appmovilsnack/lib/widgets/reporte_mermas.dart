@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 class ReporteMermas extends StatefulWidget {
   const ReporteMermas({super.key});
@@ -277,7 +278,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
               onRefresh: _cargar,
               color: AppColors.accent,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: conMargenInferior(context, const EdgeInsets.all(16)),
                 children: [
                   _buildFiltros(),
                   const SizedBox(height: 16),

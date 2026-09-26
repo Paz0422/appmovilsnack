@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 int _intDesdeFirestore(dynamic value, [int fallback = 0]) {
   if (value is int) return value;
@@ -316,7 +317,7 @@ class _ReporteDiferenciasTraspasoState
       onRefresh: _cargar,
       color: AppColors.accent,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: conMargenInferior(context, const EdgeInsets.all(16)),
         children: [
           _buildFiltros(),
           const SizedBox(height: 16),

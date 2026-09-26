@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
 import 'package:front_appsnack/widgets/gestion_categorias.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 class InventoryManagement extends StatefulWidget {
   const InventoryManagement({super.key});
@@ -527,7 +528,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
                           ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: conMargenInferior(context, const EdgeInsets.symmetric(horizontal: 16), extra: espacioBotonFlotante),
                           itemCount: _productosFiltrados.length,
                           itemBuilder: (context, index) {
                             final producto = _productosFiltrados[index];

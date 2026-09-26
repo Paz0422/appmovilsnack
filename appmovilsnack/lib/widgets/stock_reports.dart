@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 class StockReports extends StatefulWidget {
   const StockReports({super.key});
@@ -570,7 +571,7 @@ class _StockReportsState extends State<StockReports> {
                           ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.all(16),
+                          padding: conMargenInferior(context, const EdgeInsets.all(16)),
                           itemCount: _stockDataFiltrados.length,
                           itemBuilder: (context, index) {
                             final item = _stockDataFiltrados[index];

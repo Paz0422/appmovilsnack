@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/traspaso_service.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 /// Resumen de pedidos/traspasos pendientes de confirmar en un sector.
 class ResumenPedidosPendientes {
@@ -611,7 +612,7 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
                 final grupos = _agruparPedidos(docs);
 
                 return ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: conMargenInferior(context, const EdgeInsets.all(16)),
                   itemCount: grupos.length,
                   itemBuilder: (context, index) {
                     final grupo = grupos[index];

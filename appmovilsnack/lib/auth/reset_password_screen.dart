@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/firebase_auth_messages.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 // Paleta de cores baseada no logo "Fusión"
 const Color primaryColor = Color(0xFF2B2B2B); // Preto/marrón oscuro
@@ -104,7 +105,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         ),
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
+            padding: conMargenInferior(context, const EdgeInsets.all(24.0)),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

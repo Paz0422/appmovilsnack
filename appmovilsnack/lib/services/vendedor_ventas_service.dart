@@ -1,11 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 
 /// Acumula ventas por usuario (cierres de turno del punto) para ranking anual.
 class VendedorVentasService {
   VendedorVentasService._();
 
-  static final _db = FirebaseFirestore.instance;
+  static FirebaseFirestore? _dbPrueba;
+  static FirebaseFirestore get _db => _dbPrueba ?? FirebaseFirestore.instance;
+
+  /// Sustituye Firestore en tests; `null` vuelve al real.
+  @visibleForTesting
+  static void usarFirestoreDePrueba(FirebaseFirestore? db) => _dbPrueba = db;
 
   /// Firestore devuelve `Map<dynamic, dynamic>`, no `Map<String, dynamic>`.
   static Map<String, dynamic>? _mapFirestore(dynamic raw) {

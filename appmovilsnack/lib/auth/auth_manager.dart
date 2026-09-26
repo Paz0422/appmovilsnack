@@ -66,6 +66,10 @@ class AuthManager {
     return _perfilCache ?? loggedInVendor;
   }
 
+  /// Si la sesión actual es de un admin, también cuando usa el panel de vendedor.
+  bool get sesionEsAdmin =>
+      esAdmin(normalizarRol(perfilEnCache()?.data()?['rol']?.toString()));
+
   Widget pantallaDesdeDocumento(DocumentSnapshot<Map<String, dynamic>> doc) {
     final rol = normalizarRol(doc.data()?['rol']?.toString());
     if (esAdmin(rol)) return const HomeAdmin();

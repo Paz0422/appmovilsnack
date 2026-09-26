@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 class GestionCategorias extends StatefulWidget {
   const GestionCategorias({super.key});
@@ -292,7 +293,7 @@ class _GestionCategoriasState extends State<GestionCategorias> {
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: conMargenInferior(context, const EdgeInsets.all(16), extra: espacioBotonFlotante),
               itemCount: _docs.length,
               itemBuilder: (context, index) {
                 final doc = _docs[index];

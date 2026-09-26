@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/vendedor_ventas_service.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 /// Primer año con uso real de la app en ranking (no mostrar años anteriores).
 const int _anioInicioRanking = 2026;
@@ -108,7 +109,7 @@ class _RankingVendedoresState extends State<RankingVendedores> {
               : RefreshIndicator(
                   onRefresh: _cargar,
                   child: ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: conMargenInferior(context, const EdgeInsets.all(16)),
                     children: [
                       Row(
                         children: [

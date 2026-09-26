@@ -4,6 +4,7 @@ import 'package:front_appsnack/screens/vendedores/home_vendedor.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 // Compatibilidad con referencias existentes
 const Color primaryColor = AppColors.primaryLight;
@@ -141,7 +142,7 @@ class _EstadioSelectionState extends State<EstadioSelection> {
               }
 
               return ListView.builder(
-                padding: const EdgeInsets.only(bottom: 160, top: 16),
+                padding: conMargenInferior(context, const EdgeInsets.only(bottom: 160, top: 16)),
                 itemCount: eventos.length,
                 itemBuilder: (context, index) {
                   final eventoDoc = eventos[index];
@@ -224,7 +225,7 @@ class _EstadioSelectionState extends State<EstadioSelection> {
     return Align(
       alignment: Alignment.bottomCenter,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+        padding: conMargenInferior(context, const EdgeInsets.fromLTRB(20, 20, 20, 40)),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),

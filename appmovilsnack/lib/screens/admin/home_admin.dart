@@ -10,7 +10,8 @@ import 'package:front_appsnack/widgets/stock_reports.dart';
 import 'package:front_appsnack/widgets/ventas_por_categoria.dart';
 import 'package:front_appsnack/widgets/reporte_mermas.dart';
 import 'package:front_appsnack/widgets/reporte_diferencias_traspaso.dart';
-import 'package:front_appsnack/widgets/discrepancias_pendientes.dart';
+import 'package:front_appsnack/widgets/incidencias_pendientes.dart';
+import 'package:front_appsnack/widgets/agregar_stock.dart';
 import 'package:front_appsnack/widgets/gestion_roles_usuarios.dart';
 import 'package:front_appsnack/widgets/ranking_vendedores.dart';
 import 'package:front_appsnack/widgets/estadio_selection.dart';
@@ -19,6 +20,7 @@ import 'package:front_appsnack/widgets/reporte_bandejeo_admin.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/admin_estadisticas_service.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 class HomeAdmin extends StatefulWidget {
   const HomeAdmin({super.key});
@@ -80,7 +82,7 @@ class _HomeAdminState extends State<HomeAdmin> {
         onRefresh: _cargarEstadisticas,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          padding: conMargenInferior(context, const EdgeInsets.fromLTRB(16, 12, 16, 24)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -307,7 +309,7 @@ class _HomeAdminState extends State<HomeAdmin> {
       child: Container(
         color: primaryColor,
         child: ListView(
-          padding: EdgeInsets.zero,
+          padding: EdgeInsets.only(bottom: margenSistemaInferior(context)),
           children: [
             DrawerHeader(
               decoration: const BoxDecoration(color: Colors.transparent),
@@ -401,13 +403,13 @@ class _HomeAdminState extends State<HomeAdmin> {
             ),
             _buildDrawerItem(
               icon: Icons.report_problem_outlined,
-              title: 'Faltantes por resolver',
+              title: 'Incidencias por resolver',
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const DiscrepanciasPendientes(),
+                    builder: (context) => const IncidenciasPendientes(),
                   ),
                 );
               },
@@ -531,6 +533,12 @@ class _HomeAdminState extends State<HomeAdmin> {
             title: Text('Eventos', style: subItemStyle),
             dense: true,
             onTap: () => irA(const EventosManagement()),
+          ),
+          ListTile(
+            leading: Icon(Icons.add_box_outlined, color: accentColor, size: 22),
+            title: Text('Agregar stock', style: subItemStyle),
+            dense: true,
+            onTap: () => irA(const AgregarStock()),
           ),
         ],
       ),

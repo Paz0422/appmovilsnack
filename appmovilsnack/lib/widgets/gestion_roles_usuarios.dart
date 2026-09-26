@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 class GestionRolesUsuarios extends StatefulWidget {
   const GestionRolesUsuarios({super.key});
@@ -108,7 +109,7 @@ class _GestionRolesUsuariosState extends State<GestionRolesUsuarios> {
               : RefreshIndicator(
                   onRefresh: _cargar,
                   child: ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: conMargenInferior(context, const EdgeInsets.all(16)),
                     children: [
                       Text(
                         'Listado de usuarios con rol admin o vendedor.',

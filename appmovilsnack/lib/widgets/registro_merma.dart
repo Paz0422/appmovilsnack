@@ -2,6 +2,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/auth/auth_manager.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 // Paleta de colores basada en el logo "Fusión"
 const Color _primaryColor = Color(0xFF2B2B2B);
@@ -77,8 +79,9 @@ class RegistroMerma extends StatelessWidget {
         ),
         body: Column(
           children: [
-            // Encabezado con pérdida total acumulada
-            _PerdidaTotalAcumulada(eventoId: eventoId, sectorId: sectorId),
+            // Pérdida total acumulada: solo para el admin.
+            if (AuthManager().sesionEsAdmin)
+              _PerdidaTotalAcumulada(eventoId: eventoId, sectorId: sectorId),
             // Tabs content
             Expanded(
               child: TabBarView(
@@ -369,6 +372,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
       ..sort((a, b) => a.nombre.compareTo(b.nombre));
 
     await showModalBottomSheet<void>(
+      useSafeArea: true,
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -682,7 +686,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                   16,
                   8,
                   16,
-                  tieneCarrito ? 88 : 16,
+                  tieneCarrito ? 88 : 16 + margenSistemaInferior(context),
                 ),
                 itemCount: productos.length,
                 itemBuilder: (context, index) {
@@ -1170,7 +1174,7 @@ class _TabHistorial extends StatelessWidget {
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
+          padding: conMargenInferior(context, const EdgeInsets.all(16)),
           itemCount: mermas.length,
           itemBuilder: (context, index) {
             final mermaDoc = mermas[index];

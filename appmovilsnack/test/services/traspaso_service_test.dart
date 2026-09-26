@@ -1,5 +1,6 @@
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:front_appsnack/services/incidencias_service.dart';
 import 'package:front_appsnack/services/traspaso_service.dart';
 
 const evento = 'eventos/ev1';
@@ -170,6 +171,7 @@ void main() {
 
       final discrepancia =
           (await db.doc('$evento/discrepancias/${ids.single}').get()).data()!;
+      expect(discrepancia, containsPair('tipo', TipoIncidencia.faltanteTraspaso));
       expect(discrepancia, containsPair('estado', 'pendiente'));
       expect(discrepancia, containsPair('sectorOrigenNombre', 'Sur'));
       expect(discrepancia, containsPair('sectorDestinoNombre', 'Norte'));
@@ -188,17 +190,38 @@ void main() {
       await cerrarTurno('sur');
       await confirmar(ids, 3);
 
-      final pendientes = await service.discrepanciasPendientes();
-      expect(pendientes.map((d) => d.id), [ids.single]);
+      // Un sobrante de conteo en el mismo evento, para probar el filtro.
+      await db.doc('$evento/discrepancias/c1_p1').set({
+        'tipo': TipoIncidencia.sobranteConteo,
+        'estado': 'pendiente',
+        'eventoId': 'ev1',
+      });
+      final incidencias = IncidenciasService(db);
 
-      await service.resolverDiscrepancia(
+      expect((await incidencias.pendientes()).map((d) => d.id).toSet(),
+          {ids.single, 'c1_p1'});
+      expect(
+        (await incidencias.pendientes(tipo: TipoIncidencia.faltanteTraspaso))
+            .map((d) => d.id),
+        [ids.single],
+      );
+      expect(
+        (await incidencias.pendientes(tipo: TipoIncidencia.sobranteConteo))
+            .map((d) => d.id),
+        ['c1_p1'],
+      );
+
+      await incidencias.resolver(
         eventoId: 'ev1',
-        discrepanciaId: ids.single,
+        incidenciaId: ids.single,
         adminUid: 'admin1',
         nota: 'Se descontó',
       );
 
-      expect(await service.discrepanciasPendientes(), isEmpty);
+      expect(
+        (await incidencias.pendientes()).map((d) => d.id),
+        ['c1_p1'],
+      );
       final resuelta = (await db.doc('$evento/discrepancias/${ids.single}').get())
           .data()!;
       expect(resuelta, containsPair('estado', 'resuelta'));

@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 const _sectoresEventoDefault = [
   'Galeria Sur',
@@ -950,7 +951,7 @@ class _EventosManagementState extends State<EventosManagement> {
                           ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: conMargenInferior(context, const EdgeInsets.symmetric(horizontal: 16), extra: espacioBotonFlotante),
                           itemCount: _eventosFiltrados.length,
                           itemBuilder: (context, index) {
                             final evento = _eventosFiltrados[index];
@@ -1267,7 +1268,9 @@ class _GestionSectoresState extends State<_GestionSectores> {
       await sector.reference.update({
         'turnoCerrado': false,
         'turnoCerradoAt': FieldValue.delete(),
-        'stockInicialIngresado': false,
+        // El stock del sector queda con el conteo del cierre: el vendedor sigue
+        // operando con él. Unidades nuevas se suman con "Agregar stock"; la
+        // carga inicial ya no se permite (StockService.bloqueosStockInicial).
       });
       if (mounted) {
         messenger.showSnackBar(
@@ -1509,7 +1512,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
               ),
               Expanded(
                 child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: conMargenInferior(context, const EdgeInsets.symmetric(horizontal: 16), extra: espacioBotonFlotante),
                   itemCount: sectores.length,
                   itemBuilder: (context, index) {
                     final sector = sectores[index];

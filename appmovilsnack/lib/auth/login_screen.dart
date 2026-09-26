@@ -8,6 +8,7 @@ import 'package:wave/wave.dart';
 import 'package:wave/config.dart';
 import 'package:front_appsnack/auth/register_screen.dart';
 import 'package:front_appsnack/auth/reset_password_screen.dart';
+import 'package:front_appsnack/core/margen_inferior.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? mensajeInicial;
@@ -170,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
           // Formulario: card con glass y bordes redondeados
           Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: conMargenInferior(context, const EdgeInsets.symmetric(horizontal: 24)),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(AppRadius.xl),
                 child: BackdropFilter(
