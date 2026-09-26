@@ -1155,7 +1155,7 @@ class _ProductoStockCard extends StatelessWidget {
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
         content: Text(
-          '¿Estás seguro de que quieres eliminar "$nombre" del stock?',
+          '¿Está seguro de que desea eliminar "$nombre" del stock?',
           style: GoogleFonts.poppins(),
         ),
         actions: [

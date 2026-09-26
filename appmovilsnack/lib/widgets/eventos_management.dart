@@ -93,11 +93,11 @@ Future<bool> _existeOtroEventoActivoConNombre(
   return false;
 }
 
-const _msgEventoSinNombre = 'Por favor, ingresa un nombre para el evento.';
-const _msgEventoSinSectores = 'Por favor, agrega al menos un sector.';
+const _msgEventoSinNombre = 'Por favor, ingrese un nombre para el evento.';
+const _msgEventoSinSectores = 'Por favor, agregue al menos un sector.';
 const _msgSectorDuplicado = 'Ya existe un sector con ese nombre.';
 const _msgEventoActivoDuplicado =
-    'Ya hay un evento activo con ese nombre. Desactivá el otro o usá otro nombre.';
+    'Ya hay un evento activo con ese nombre. Desactive el otro o use otro nombre.';
 
 Widget _bannerDialogo({
   required String mensaje,
@@ -260,7 +260,7 @@ class _EventosManagementState extends State<EventosManagement> {
       if (mounted) {
         setState(() {
           _errorMessage =
-              'Error al cargar eventos. Revisa tu conexión y permisos.';
+              'Error al cargar eventos. Revise su conexión y permisos.';
           _isLoading = false;
         });
       }
@@ -477,7 +477,7 @@ class _EventosManagementState extends State<EventosManagement> {
                             ? Padding(
                                 padding: const EdgeInsets.all(16),
                                 child: Text(
-                                  'Agregá al menos un sector',
+                                  'Agregue al menos un sector',
                                   style: GoogleFonts.poppins(
                                     fontSize: 13,
                                     color: secondaryColor.withValues(
@@ -728,7 +728,7 @@ class _EventosManagementState extends State<EventosManagement> {
             ),
           ),
           content: Text(
-            '¿Estás seguro de que deseas eliminar "$nombre"? Esta acción eliminará todos los sectores y datos asociados. Esta acción no se puede deshacer.',
+            '¿Está seguro de que desea eliminar "$nombre"? Esta acción eliminará todos los sectores y datos asociados. Esta acción no se puede deshacer.',
             style: GoogleFonts.poppins(),
           ),
           actions: [
@@ -1173,7 +1173,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Por favor, ingresa un nombre para el sector.',
+                        'Por favor, ingrese un nombre para el sector.',
                         style: GoogleFonts.poppins(),
                       ),
                       backgroundColor: Colors.red,
@@ -1312,7 +1312,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
             ),
           ),
           content: Text(
-            '¿Estás seguro de que deseas eliminar "$nombre"? Esta acción eliminará todos los datos asociados (stock, personal asignado, etc.). Esta acción no se puede deshacer.',
+            '¿Está seguro de que desea eliminar "$nombre"? Esta acción eliminará todos los datos asociados (stock, personal asignado, etc.). Esta acción no se puede deshacer.',
             style: GoogleFonts.poppins(),
           ),
           actions: [

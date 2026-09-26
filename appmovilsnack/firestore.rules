@@ -1,41 +1,285 @@
 rules_version = '2';
+
+// Permisos por rol. El análisis de qué escribe cada rol está en
+// firestore-rules-analisis.md; si cambia una escritura en lib/, actualizar ambos.
+// Tests: cd firestore-tests && npm test
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Usuarios: solo el propio usuario o admin
-    match /usuarios/{userId} {
-      allow read, write: if request.auth != null;
+
+    // ---------- Helpers ----------
+
+    function autenticado() {
+      return request.auth != null;
     }
-    // Empleados (base de personal): usuarios autenticados (gestión desde admin)
+
+    function perfilPropio() {
+      return /databases/$(database)/documents/usuarios/$(request.auth.uid);
+    }
+
+    // Mismo criterio que AuthManager.normalizarRol: 'admin' o 'administrador',
+    // sin distinguir mayúsculas ni espacios.
+    function esAdmin() {
+      return autenticado()
+        && exists(perfilPropio())
+        && get(perfilPropio()).data.get('rol', '').trim().lower()
+             in ['admin', 'administrador'];
+    }
+
+    // La app a veces identifica al vendedor por el id del documento de perfil
+    // (loggedInVendor.id), que en perfiles antiguos puede no ser el uid de Auth
+    // y se enlaza con el campo auth_uid.
+    function esDuenoPerfil(uid) {
+      return autenticado()
+        && (request.auth.uid == uid
+            || get(/databases/$(database)/documents/usuarios/$(uid))
+                 .data.get('auth_uid', '') == request.auth.uid);
+    }
+
+    function camposCambiados() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function soloCambia(campos) {
+      return camposCambiados().hasOnly(campos);
+    }
+
+    // Si el campo se modifica, su nuevo valor debe ser `valor`.
+    function siCambiaEs(campo, valor) {
+      return !(campo in camposCambiados())
+        || request.resource.data[campo] == valor;
+    }
+
+    // Confirmación de un traspaso pendiente por el sector de destino.
+    function confirmaTraspasoPendiente() {
+      return resource.data.estado == 'pendiente'
+        && request.resource.data.estado == 'confirmado'
+        && soloCambia([
+          'estado',
+          'cantidadRecibida',
+          'cantidadDiferencia',
+          'confirmadoAt',
+          'comentarioDiferencia',
+          'discrepanciaId'
+        ]);
+    }
+
+    // Igual que AuthManager.normalizarUsername: minúsculas y sin espacios.
+    function normalizarUsername(username) {
+      return username.lower().replace('\\s', '');
+    }
+
+    // ---------- Usernames (login por nombre de usuario) ----------
+
+    // usernames/{username} = { email }. El login lo lee sin sesión, así que se
+    // puede leer un documento conocido pero nunca listar la colección.
+    match /usernames/{username} {
+      allow get: if true;
+      allow list: if false;
+
+      // Registro (register_screen.dart): el usuario reserva el username de su
+      // propio perfil usuarios/{uid}, con su propio correo de Auth. Como solo
+      // hay `create`, no puede sobrescribir un username existente.
+      // El id siempre va normalizado ("Paz" -> "paz"), incluso si lo crea el admin:
+      // el login solo busca el id normalizado.
+      allow create: if username == normalizarUsername(username)
+        && ((autenticado()
+            && request.resource.data.keys().hasOnly(['email'])
+            && request.resource.data.email is string
+            && request.resource.data.email == request.auth.token.email
+            && normalizarUsername(
+                 getAfter(perfilPropio()).data.get('username', '')) == username)
+          || esAdmin());
+
+      allow update, delete: if esAdmin();
+    }
+
+    // ---------- Usuarios ----------
+
+    match /usuarios/{uid} {
+      // Lectura abierta a autenticados: el ranking y "Roles de usuarios" listan
+      // todos los perfiles. El login sin sesión usa usernames/, no esta colección.
+      allow read: if autenticado();
+
+      // Registro (register_screen.dart): el propio usuario, siempre como vendedor.
+      allow create: if autenticado()
+        && request.auth.uid == uid
+        && request.resource.data.get('rol', '') == 'vendedor'
+        && request.resource.data.get('auth_uid', uid) == uid;
+
+      // El vendedor solo actualiza sus acumulados de ventas al cerrar turno
+      // (VendedorVentasService.registrarCierreTurno). No puede tocar rol,
+      // auth_uid, email ni username. El admin puede todo.
+      allow update: if esAdmin()
+        || (esDuenoPerfil(uid)
+            && soloCambia(['ventasAcumuladas', 'totalvendido', 'itemsvendidos']));
+
+      allow delete: if esAdmin();
+
+      // Registro idempotente de cierres ya sumados al ranking.
+      match /cierres_contabilizados/{cierreId} {
+        allow read: if esAdmin() || esDuenoPerfil(uid);
+        allow create: if esAdmin()
+          || (esDuenoPerfil(uid)
+              && request.resource.data.cierreId == cierreId
+              && request.resource.data.tipo == 'cierre_turno');
+        allow update, delete: if esAdmin();
+      }
+    }
+
+    // ---------- Configuración: lectura autenticados, escritura solo admin ----------
+
     match /empleados/{empleadoId} {
-      allow read, write: if request.auth != null;
+      allow read: if autenticado();
+      allow write: if esAdmin();
     }
-    // Productos
+
     match /productos/{productoId} {
-      allow read, write: if request.auth != null;
+      allow read: if autenticado();
+      allow write: if esAdmin();
     }
-    // Categorías de productos (admin puede agregar; todos leen)
+
     match /categorias/{categoriaId} {
-      allow read, write: if request.auth != null;
+      allow read: if autenticado();
+      allow write: if esAdmin();
     }
-    // Eventos (incluye trabajadoresAsignados)
+
+    // ---------- Eventos y operación ----------
+
     match /eventos/{eventoId} {
-      allow read, write: if request.auth != null;
+      allow read: if autenticado();
+      // Crear, editar, activar/desactivar y borrar eventos: solo admin
+      // (eventos_management.dart).
+      allow write: if esAdmin();
+
+      // Faltantes de traspasos que no pudieron volver al origen porque ya había
+      // cerrado su turno (TraspasoService.confirmarRecepcion). El vendedor que
+      // confirma solo los registra; el admin los revisa y marca resueltos.
+      match /discrepancias/{discrepanciaId} {
+        allow read, update: if esAdmin();
+        allow create: if autenticado()
+          && request.resource.data.keys().hasOnly([
+               'eventoId', 'traspasoId', 'pedidoId',
+               'sectorOrigenId', 'sectorOrigenNombre',
+               'sectorDestinoId', 'sectorDestinoNombre',
+               'productoId', 'nombreProducto',
+               'cantidadEnviada', 'cantidadRecibida', 'diferencia',
+               'comentario', 'vendedorUid', 'vendedorNombre', 'fecha', 'estado'])
+          && request.resource.data.estado == 'pendiente'
+          && request.resource.data.eventoId == eventoId
+          && request.resource.data.traspasoId == discrepanciaId
+          && request.resource.data.vendedorUid == request.auth.uid
+          && request.resource.data.diferencia is int
+          && request.resource.data.diferencia > 0
+          && request.resource.data.diferencia
+               == request.resource.data.cantidadEnviada - request.resource.data.cantidadRecibida
+          // Solo cuando el origen de verdad está cerrado; si no, la diferencia
+          // vuelve a su stock.
+          && get(/databases/$(database)/documents/eventos/$(eventoId)/sectores/$(request.resource.data.sectorOrigenId))
+               .data.get('turnoCerrado', false) == true;
+        allow delete: if false;
+      }
+
       match /sectores/{sectorId} {
-        allow read, write: if request.auth != null;
-        match /bandejeros/{bandejeroId} {
-          allow read, write: if request.auth != null;
-          match /rondas/{rondaId} {
-            allow read, write: if request.auth != null;
-          }
+        // Estado del sector antes de esta escritura. La transacción de cierre
+        // escribe el stock y marca turnoCerrado a la vez, y aquí aún lo ve abierto.
+        function sectorAbierto() {
+          return get(/databases/$(database)/documents/eventos/$(eventoId)/sectores/$(sectorId))
+            .data.get('turnoCerrado', false) != true;
         }
-        match /stock/{stockId} {
-          allow read, write: if request.auth != null;
+
+        allow read: if autenticado();
+        // Crear, renombrar y borrar sectores: solo admin.
+        allow create, delete: if esAdmin();
+        // El vendedor actualiza el sector existente con borradores, stock
+        // inicial y cierre de turno (gestion_stock.dart, resumen_cierre_turno.dart).
+        // No puede reabrir un turno ni desmarcar el stock inicial: eso lo hace el
+        // admin (_reabrirSector).
+        allow update: if (autenticado()
+            && soloCambia([
+              'borradorStockInicial',
+              'stockInicialIngresado',
+              'borradorCierreTurno',
+              'ultimoCierre',
+              'turnoCerrado',
+              'turnoCerradoAt',
+              'totalVendido',
+              'vendedoresasignados'
+            ])
+            && siCambiaEs('turnoCerrado', true)
+            && siCambiaEs('stockInicialIngresado', true))
+          || esAdmin();
+
+        // Stock: ingreso inicial (incluye borrar productos quitados), bandejeo,
+        // mermas, traspasos y cierre de turno. Los traspasos escriben el stock
+        // del sector de origen y de destino, así que no se limita por sector.
+        // Con el turno cerrado el vendedor ya no toca el stock: bloquea enviar
+        // desde el sector y devolverle diferencias de un traspaso (traspaso_service.dart).
+        match /stock/{productoId} {
+          allow read: if autenticado();
+          allow create, update, delete: if (autenticado() && sectorAbierto())
+            || esAdmin();
+        }
+
+        // Mermas: el vendedor solo registra; el historial no se edita.
+        match /mermas/{mermaId} {
+          allow read: if autenticado();
+          allow create: if autenticado()
+            && request.resource.data.eventoId == eventoId
+            && request.resource.data.sectorId == sectorId;
+          allow update, delete: if esAdmin();
+        }
+
+        // Traspasos: el sector de origen crea la línea en ambos lados como
+        // 'pendiente' y el destino la confirma (confirmacion_traspasos.dart).
+        // Si falta la copia saliente, el destino la crea ya confirmada.
+        // {sectorId} es el destino: no recibe ni confirma con el turno cerrado.
+        match /traspasos_entrantes/{traspasoId} {
+          allow read: if autenticado();
+          allow create: if (autenticado()
+              && request.resource.data.estado == 'pendiente'
+              && sectorAbierto())
+            || esAdmin();
+          allow update: if (autenticado()
+              && confirmaTraspasoPendiente()
+              && sectorAbierto())
+            || esAdmin();
+          allow delete: if esAdmin();
+        }
+
+        // {sectorId} es el origen: no envía con el turno cerrado. Confirmar sin
+        // diferencia sí actualiza (o crea ya confirmada) su copia.
+        match /traspasos_salientes/{traspasoId} {
+          allow read: if autenticado();
+          allow create: if (autenticado()
+              && (request.resource.data.estado == 'confirmado'
+                  || (request.resource.data.estado == 'pendiente' && sectorAbierto())))
+            || esAdmin();
+          allow update: if (autenticado() && confirmaTraspasoPendiente())
+            || esAdmin();
+          allow delete: if esAdmin();
+        }
+
+        // Bandejeo (bandejeo_flow.dart): el vendedor crea bandejeros, guarda
+        // rondas, las rinde y cierra el bandejeo. Borrar es solo admin.
+        match /bandejeros/{bandejeroId} {
+          allow read: if autenticado();
+          allow create, update: if autenticado();
+          allow delete: if esAdmin();
+
+          match /rondas/{rondaId} {
+            allow read: if autenticado();
+            allow create, update: if autenticado();
+            allow delete: if esAdmin();
+          }
         }
       }
     }
-    // Transacciones
+
+    // Ventas del bandejeo: el vendedor las registra; no se editan después.
     match /transacciones/{transaccionId} {
-      allow read, write: if request.auth != null;
+      allow read: if autenticado();
+      allow create: if autenticado();
+      allow update, delete: if esAdmin();
     }
   }
 }

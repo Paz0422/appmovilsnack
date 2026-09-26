@@ -2178,7 +2178,7 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Selecciona un bandejero',
+                'Seleccione un bandejero',
                 style: GoogleFonts.poppins(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -2254,7 +2254,7 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Agrega el primero para comenzar.',
+                          'Agregue el primero para comenzar.',
                           style: GoogleFonts.poppins(color: _secondaryColor),
                           textAlign: TextAlign.center,
                         ),

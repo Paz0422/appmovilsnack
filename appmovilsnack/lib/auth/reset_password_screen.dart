@@ -43,7 +43,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     final email = _emailController.text.trim();
 
     if (email.isEmpty) {
-      _showSnackBar('Por favor, ingresa tu correo electrónico.', isError: true);
+      _showSnackBar('Por favor, ingrese su correo electrónico.', isError: true);
       return;
     }
 
@@ -109,7 +109,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'Ingresa tu correo electrónico para restablecer tu contraseña.',
+                  'Ingrese su correo electrónico para restablecer su contraseña.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.lato(
                     fontSize: 18,

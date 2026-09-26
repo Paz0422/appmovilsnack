@@ -1,0 +1,13 @@
+{
+  "name": "firestore-rules-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "firebase emulators:exec --config ../firebase.json --project demo-snack-estadio --only firestore \"node --test --test-concurrency=1\"",
+    "test:solo": "node --test --test-concurrency=1"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.0.0"
+  }
+}

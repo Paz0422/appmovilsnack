@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/core/app_theme.dart';
-import 'package:front_appsnack/utils/categorias_producto.dart';
+import 'package:front_appsnack/services/traspaso_service.dart';
 
 /// Resumen de pedidos/traspasos pendientes de confirmar en un sector.
 class ResumenPedidosPendientes {
@@ -104,127 +106,6 @@ int _intDesdeFirestore(dynamic value, [int fallback = 0]) {
   if (value is num) return value.toInt();
   if (value is String) return int.tryParse(value.trim()) ?? fallback;
   return fallback;
-}
-
-class _LineaConfirmacionPendiente {
-  final DocumentSnapshot<Map<String, dynamic>> doc;
-  final Map<String, dynamic> tData;
-  final int cantidadEnviada;
-  final int cantidadRecibida;
-  final String? comentarioDiferencia;
-  final String productoId;
-  final String origenId;
-  final DocumentReference<Map<String, dynamic>> destinoRef;
-  final DocumentSnapshot<Map<String, dynamic>> destinoSnap;
-  final DocumentSnapshot<Map<String, dynamic>>? origenSnap;
-  final DocumentSnapshot<Map<String, dynamic>>? salienteSnap;
-
-  const _LineaConfirmacionPendiente({
-    required this.doc,
-    required this.tData,
-    required this.cantidadEnviada,
-    required this.cantidadRecibida,
-    this.comentarioDiferencia,
-    required this.productoId,
-    required this.origenId,
-    required this.destinoRef,
-    required this.destinoSnap,
-    required this.origenSnap,
-    required this.salienteSnap,
-  });
-}
-
-void _aplicarConfirmacionLineaEnTx(
-  Transaction tx, {
-  required String eventoId,
-  required _LineaConfirmacionPendiente linea,
-}) {
-  final tData = linea.tData;
-  final cantidadRecibida = linea.cantidadRecibida;
-  final cantidadEnviada = linea.cantidadEnviada;
-  final productoId = linea.productoId;
-  final traspasoRef = linea.doc.reference;
-
-  if (cantidadRecibida > 0) {
-    if (linea.destinoSnap.exists) {
-      final destData = linea.destinoSnap.data()!;
-      final actual = _intDesdeFirestore(destData['cantidad']);
-      final traspasoActual =
-          _intDesdeFirestore(destData['cantidadPorTraspaso']);
-      tx.update(linea.destinoRef, {
-        'cantidad': actual + cantidadRecibida,
-        'cantidadPorTraspaso': traspasoActual + cantidadRecibida,
-      });
-    } else {
-      tx.set(linea.destinoRef, {
-        'productoId': productoId,
-        'nombre': tData['nombre'],
-        'precio': tData['precio'],
-        'cantidad': cantidadRecibida,
-        'cantidadPorTraspaso': cantidadRecibida,
-        'cantidadPropio': 0,
-        'categoria': tData['categoria'] ?? categoriaDefault,
-      });
-    }
-  }
-
-  final diferencia = cantidadEnviada - cantidadRecibida;
-  if (diferencia > 0 && linea.origenId.isNotEmpty) {
-    final origenRef = FirebaseFirestore.instance
-        .collection('eventos')
-        .doc(eventoId)
-        .collection('sectores')
-        .doc(linea.origenId)
-        .collection('stock')
-        .doc(productoId);
-
-    if (linea.origenSnap != null && linea.origenSnap!.exists) {
-      final origenData = linea.origenSnap!.data()!;
-      final actualOrigen = _intDesdeFirestore(origenData['cantidad']);
-      tx.update(origenRef, {'cantidad': actualOrigen + diferencia});
-    } else {
-      tx.set(origenRef, {
-        'productoId': productoId,
-        'nombre': tData['nombre'],
-        'precio': tData['precio'],
-        'cantidad': diferencia,
-        'categoria': tData['categoria'] ?? categoriaDefault,
-      });
-    }
-  }
-
-  final confirmacion = <String, dynamic>{
-    'estado': 'confirmado',
-    'cantidadRecibida': cantidadRecibida,
-    'cantidadDiferencia': diferencia,
-    'confirmadoAt': FieldValue.serverTimestamp(),
-  };
-
-  final comentario = linea.comentarioDiferencia?.trim();
-  if (diferencia > 0 && comentario != null && comentario.isNotEmpty) {
-    confirmacion['comentarioDiferencia'] = comentario;
-  }
-
-  tx.update(traspasoRef, confirmacion);
-
-  if (linea.origenId.isNotEmpty) {
-    final salienteRef = FirebaseFirestore.instance
-        .collection('eventos')
-        .doc(eventoId)
-        .collection('sectores')
-        .doc(linea.origenId)
-        .collection('traspasos_salientes')
-        .doc(linea.doc.id);
-
-    if (linea.salienteSnap != null && linea.salienteSnap!.exists) {
-      tx.update(salienteRef, confirmacion);
-    } else {
-      tx.set(
-        salienteRef,
-        Map<String, dynamic>.from(tData)..addAll(confirmacion),
-      );
-    }
-  }
 }
 
 class _ResultadoConfirmacionRecepcion {
@@ -381,7 +262,7 @@ class _DialogConfirmarRecepcionState extends State<_DialogConfirmarRecepcion> {
                     ),
                   ),
                   child: Text(
-                    'Si recibiste menos de lo enviado, debés indicar el motivo.',
+                    'Si recibió menos de lo enviado, debe indicar el motivo.',
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       color: widget.secondaryColor,
@@ -436,7 +317,7 @@ class _DialogConfirmarRecepcionState extends State<_DialogConfirmarRecepcion> {
                           maxLines: 2,
                           textCapitalization: TextCapitalization.sentences,
                           decoration: InputDecoration(
-                            labelText: '¿Por qué recibiste menos?',
+                            labelText: '¿Por qué recibió menos?',
                             hintText: 'Ej: faltaron unidades en la caja',
                             isDense: true,
                             border: OutlineInputBorder(
@@ -567,114 +448,55 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
     final comentarios = resultado.comentariosDiferencia;
 
     try {
-      await FirebaseFirestore.instance.runTransaction((tx) async {
-        final pendientes = <_LineaConfirmacionPendiente>[];
-
-        for (final doc in grupo.lineas) {
-          final cantidadRecibida = recibidas[doc.id]!;
-          final traspasoRef = doc.reference;
-          final traspasoSnap = await tx.get(traspasoRef);
-
-          if (!traspasoSnap.exists) {
-            throw Exception('Un ítem del pedido ya no está disponible.');
-          }
-
-          final tData = traspasoSnap.data()!;
-          if (tData['estado']?.toString() != 'pendiente') {
-            throw Exception('Este pedido ya fue procesado.');
-          }
-
-          final productoId = tData['productoId']?.toString() ?? '';
-          if (productoId.isEmpty) {
-            throw Exception('Producto inválido en el pedido.');
-          }
-
-          final cantidadEnviada = _intDesdeFirestore(tData['cantidadEnviada']);
-          final origenId = tData['sectorOrigenId']?.toString() ?? '';
-
-          final destinoRef = FirebaseFirestore.instance
-              .collection('eventos')
-              .doc(widget.eventoId)
-              .collection('sectores')
-              .doc(widget.sectorId)
-              .collection('stock')
-              .doc(productoId);
-
-          final destinoSnap = await tx.get(destinoRef);
-
-          DocumentSnapshot<Map<String, dynamic>>? origenSnap;
-          if (cantidadEnviada - cantidadRecibida > 0 && origenId.isNotEmpty) {
-            final origenRef = FirebaseFirestore.instance
-                .collection('eventos')
-                .doc(widget.eventoId)
-                .collection('sectores')
-                .doc(origenId)
-                .collection('stock')
-                .doc(productoId);
-            origenSnap = await tx.get(origenRef);
-          }
-
-          DocumentSnapshot<Map<String, dynamic>>? salienteSnap;
-          if (origenId.isNotEmpty) {
-            final salienteRef = FirebaseFirestore.instance
-                .collection('eventos')
-                .doc(widget.eventoId)
-                .collection('sectores')
-                .doc(origenId)
-                .collection('traspasos_salientes')
-                .doc(doc.id);
-            salienteSnap = await tx.get(salienteRef);
-          }
-
-          pendientes.add(
-            _LineaConfirmacionPendiente(
-              doc: doc,
-              tData: tData,
-              cantidadEnviada: cantidadEnviada,
-              cantidadRecibida: cantidadRecibida,
-              comentarioDiferencia: comentarios[doc.id],
-              productoId: productoId,
-              origenId: origenId,
-              destinoRef: destinoRef,
-              destinoSnap: destinoSnap,
-              origenSnap: origenSnap,
-              salienteSnap: salienteSnap,
-            ),
-          );
-        }
-
-        for (final linea in pendientes) {
-          _aplicarConfirmacionLineaEnTx(
-            tx,
-            eventoId: widget.eventoId,
-            linea: linea,
-          );
-        }
-      });
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        _mostrarError('Su sesión expiró. Inicie sesión de nuevo.');
+        return;
+      }
+      final resultado = await TraspasoService().confirmarRecepcion(
+        eventoId: widget.eventoId,
+        sectorId: widget.sectorId,
+        traspasoIds: grupo.lineas.map((d) => d.id).toList(),
+        recibidas: recibidas,
+        comentarios: comentarios,
+        vendedorUid: user.uid,
+        vendedorNombre:
+            AuthManager().loggedInVendor?.data()?['username']?.toString() ??
+                user.email,
+      );
 
       if (!mounted) return;
-      final huboDiferencia = grupo.lineas.any((doc) {
-        final enviada = _intDesdeFirestore(doc.data()?['cantidadEnviada']);
-        return recibidas[doc.id] != enviada;
-      });
+      final String mensaje;
+      if (resultado.faltanteRegistrado > 0) {
+        // El origen ya cerró su turno: el faltante no volvió a su stock.
+        mensaje = TraspasoService.mensajeFaltanteRegistrado(
+          resultado.faltanteRegistrado,
+        );
+      } else if (resultado.unidadesDevueltas > 0) {
+        mensaje = grupo.lineas.length == 1
+            ? 'Recepción confirmada con diferencia. '
+                'Lo no recibido volvió al sector origen.'
+            : 'Pedido confirmado con diferencias. '
+                'Lo no recibido volvió al sector origen.';
+      } else {
+        mensaje = grupo.lineas.length == 1
+            ? 'Recepción confirmada.'
+            : 'Pedido confirmado (${grupo.lineas.length} productos).';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            huboDiferencia
-                ? (grupo.lineas.length == 1
-                    ? 'Recepción confirmada con diferencia. '
-                        'Lo no recibido volvió al sector origen.'
-                    : 'Pedido confirmado con diferencias. '
-                        'Lo no recibido volvió al sector origen.')
-                : (grupo.lineas.length == 1
-                    ? 'Recepción confirmada.'
-                    : 'Pedido confirmado (${grupo.lineas.length} productos).'),
-            style: GoogleFonts.poppins(),
-          ),
-          backgroundColor: AppColors.success,
+          content: Text(mensaje, style: GoogleFonts.poppins()),
+          backgroundColor: resultado.faltanteRegistrado > 0
+              ? Colors.orange[800]
+              : AppColors.success,
           behavior: SnackBarBehavior.floating,
+          duration: Duration(
+            seconds: resultado.faltanteRegistrado > 0 ? 6 : 4,
+          ),
         ),
       );
+    } on TraspasoException catch (e) {
+      _mostrarError(e.mensaje);
     } on FirebaseException catch (e) {
       _mostrarError(
         'No se pudo confirmar (${e.code}): ${e.message ?? e.toString()}',
@@ -721,7 +543,7 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
             child: Text(
               'Sector: ${widget.nombreSector}\n'
               'Recibiste pedidos de otros sectores. '
-              'Confirmá cuánto llegó. Si recibiste menos, indicá el motivo.',
+              'Confirme cuánto llegó. Si recibió menos, indique el motivo.',
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 color: secondaryColor,
@@ -1060,7 +882,7 @@ class _BannerTraspasosPendientesState extends State<BannerTraspasosPendientes> {
                                 const SizedBox(height: 2),
                                 Text(
                                   n == 1
-                                      ? 'Confirmá la recepción'
+                                      ? 'Confirme la recepción'
                                       : '$n pedidos por confirmar'
                                       '${unidades > 0 ? ' · $unidades u.' : ''}',
                                   style: GoogleFonts.poppins(

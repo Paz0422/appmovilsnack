@@ -231,7 +231,7 @@ class _EmpleadosTab extends StatelessWidget {
                   ScaffoldMessenger.of(ctx).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Ingresa el nombre',
+                        'Ingrese el nombre',
                         style: GoogleFonts.poppins(),
                       ),
                       backgroundColor: Colors.red,
@@ -409,7 +409,7 @@ class _EmpleadosTab extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'No hay empleados.\nAgrega nombre y RUT.',
+                        'No hay empleados.\nAgregue nombre y RUT.',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.poppins(
                           color: secondaryColor,
@@ -626,7 +626,7 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
               if (empleados.isEmpty) {
                 return Center(
                   child: Text(
-                    'Agrega empleados en la pestaña "Empleados".',
+                    'Agregue empleados en la pestaña "Empleados".',
                     style: GoogleFonts.poppins(color: widget.secondaryColor),
                   ),
                 );

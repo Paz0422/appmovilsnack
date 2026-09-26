@@ -1,0 +1,11 @@
+{
+  "name": "snack-scripts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "migrar-usernames": "node migrar_usernames.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

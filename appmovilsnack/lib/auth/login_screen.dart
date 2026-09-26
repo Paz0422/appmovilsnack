@@ -280,7 +280,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextButton(
                           onPressed: _navigateToResetPassword,
                           child: Text(
-                            '¿Olvidaste tu contraseña?',
+                            '¿Olvidó su contraseña?',
                             style: GoogleFonts.plusJakartaSans(
                               color: AppColors.primaryLight,
                               fontWeight: FontWeight.w600,

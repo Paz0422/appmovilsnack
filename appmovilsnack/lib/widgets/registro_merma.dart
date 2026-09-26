@@ -651,7 +651,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                   ),
                   Expanded(
                     child: Text(
-                      'Elegí los productos a registrar',
+                      'Seleccione los productos a registrar',
                       style: GoogleFonts.poppins(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -667,7 +667,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Tocá cada producto para agregarlo al carrito. Podés registrar uno o varios juntos.',
+                  'Toque cada producto para agregarlo al carrito. Puede registrar uno o varios juntos.',
                   style: GoogleFonts.poppins(
                     fontSize: 12,
                     color: _secondaryColor.withValues(alpha: 0.9),
@@ -766,8 +766,8 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
             const SizedBox(height: 10),
             Text(
               tieneCarrito
-                  ? 'Tenés ${_carrito.length} producto(s) pendientes en el carrito.'
-                  : 'Podés cargar una o varias pérdidas en un solo registro.',
+                  ? 'Tiene ${_carrito.length} producto(s) pendientes en el carrito.'
+                  : 'Puede cargar una o varias pérdidas en un solo registro.',
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 color: _secondaryColor.withValues(alpha: 0.85),
@@ -830,7 +830,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                           ),
                         ),
                         Text(
-                          '$_totalUnidades u. · Tocá para ver',
+                          '$_totalUnidades u. · Toque para ver',
                           style: GoogleFonts.poppins(
                             fontSize: 11,
                             color: _secondaryColor,

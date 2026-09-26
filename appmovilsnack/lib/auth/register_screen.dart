@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/auth/firebase_auth_messages.dart';
 import 'package:google_fonts/google_fonts.dart';
 // Necessário para ImageFilter.blur
@@ -59,14 +60,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email.isEmpty ||
         password.isEmpty ||
         confirmPassword.isEmpty) {
-      _showSnackBar('Por favor, completa todos los campos.', isError: true);
+      _showSnackBar('Por favor, complete todos los campos.', isError: true);
       return;
     }
 
     // --- VALIDAÇÕES DE NOME DE USUÁRIO ---
-    if (username.length < 3) {
+    final usernameId = AuthManager.normalizarUsername(username);
+    if (usernameId.length < 3) {
       _showSnackBar(
         'El nombre de usuario debe tener al menos 3 caracteres.',
+        isError: true,
+      );
+      return;
+    }
+    if (!AuthManager.esIdUsernameValido(usernameId)) {
+      _showSnackBar(
+        'El nombre de usuario no puede contener "/".',
         isError: true,
       );
       return;
@@ -118,26 +127,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
     );
 
+    final usernameRef = _firestore.collection('usernames').doc(usernameId);
+
     try {
-      // 1. Criar usuário no Firebase Authentication com e-mail e senha
+      // 1. Verificar que el nombre de usuario esté libre antes de crear la cuenta.
+      final usernameSnap = await usernameRef.get();
+      if (usernameSnap.exists) {
+        if (mounted) Navigator.of(context).pop();
+        _showSnackBar(
+          'Ese nombre de usuario ya está en uso. Elija otro.',
+          isError: true,
+        );
+        return;
+      }
+
+      // 2. Criar usuário no Firebase Authentication com e-mail e senha
       final UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(email: email, password: password);
+      final nuevoUsuario = userCredential.user!;
 
-      // 2. Salvar dados adicionais no Firestore
-      await _firestore.collection('usuarios').doc(userCredential.user!.uid).set(
-        {
-          'auth_uid': userCredential.user!.uid,
-          'email': email,
-          'username': username,
-          'rol': 'vendedor', // Função padrão para novos registros
-          'fechaRegistro': FieldValue.serverTimestamp(),
-          'itemsvendidos': 0,
-          'totalvendido': 0,
-        },
-      );
+      // 3. Perfil + reserva del username en un solo batch. Las reglas rechazan
+      // el batch si otro usuario tomó el username entre el paso 1 y este.
+      final batch = _firestore.batch();
+      batch.set(_firestore.collection('usuarios').doc(nuevoUsuario.uid), {
+        'auth_uid': nuevoUsuario.uid,
+        'email': email,
+        'username': username,
+        'rol': 'vendedor', // Função padrão para novos registros
+        'fechaRegistro': FieldValue.serverTimestamp(),
+        'itemsvendidos': 0,
+        'totalvendido': 0,
+      });
+      // Las reglas exigen el correo tal como lo guarda Firebase Auth.
+      batch.set(usernameRef, {'email': nuevoUsuario.email ?? email});
+      try {
+        await batch.commit();
+      } on FirebaseException catch (e) {
+        // Sin perfil la cuenta queda inservible: se borra para liberar el correo.
+        try {
+          await nuevoUsuario.delete();
+        } catch (_) {}
+        if (e.code == 'permission-denied') {
+          if (mounted) Navigator.of(context).pop();
+          _showSnackBar(
+            'Ese nombre de usuario ya está en uso. Elija otro.',
+            isError: true,
+          );
+          return;
+        }
+        rethrow;
+      }
 
       if (mounted) Navigator.of(context).pop();
-      _showSnackBar('¡Registro exitoso! Ya puedes iniciar sesión.');
+      _showSnackBar('¡Registro exitoso! Ya puede iniciar sesión.');
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) Navigator.of(context).pop();
       });

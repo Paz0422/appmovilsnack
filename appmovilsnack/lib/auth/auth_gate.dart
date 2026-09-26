@@ -76,7 +76,7 @@ class _AuthGateState extends State<AuthGate> {
           _pantalla = null;
           _resolviendo = false;
           _errorPerfil =
-              'No encontramos tu perfil. Pide al administrador que verifique tu cuenta.';
+              'No encontramos su perfil. Pida al administrador que verifique su cuenta.';
         });
         return;
       }
@@ -94,7 +94,7 @@ class _AuthGateState extends State<AuthGate> {
         _pantalla = null;
         _resolviendo = false;
         _errorPerfil =
-            'No pudimos cargar tu perfil. Revisa tu conexión e intenta de nuevo.';
+            'No pudimos cargar su perfil. Revise su conexión e intente de nuevo.';
       });
     }
   }

@@ -87,3 +87,11 @@ serviceAccount*.json
 /analysis_options.yaml
 /assets/
 /firebase.json
+
+# Tests de reglas de Firestore
+/firestore-tests/node_modules/
+/scripts/node_modules/
+/scripts/*.json
+!/scripts/package.json
+!/scripts/package-lock.json
+*-debug.log

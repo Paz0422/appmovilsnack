@@ -10,6 +10,7 @@ import 'package:front_appsnack/widgets/stock_reports.dart';
 import 'package:front_appsnack/widgets/ventas_por_categoria.dart';
 import 'package:front_appsnack/widgets/reporte_mermas.dart';
 import 'package:front_appsnack/widgets/reporte_diferencias_traspaso.dart';
+import 'package:front_appsnack/widgets/discrepancias_pendientes.dart';
 import 'package:front_appsnack/widgets/gestion_roles_usuarios.dart';
 import 'package:front_appsnack/widgets/ranking_vendedores.dart';
 import 'package:front_appsnack/widgets/estadio_selection.dart';
@@ -114,7 +115,7 @@ class _HomeAdminState extends State<HomeAdmin> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Deslizá hacia abajo para actualizar',
+                'Deslice hacia abajo para actualizar',
                 style: TextStyle(color: Colors.grey[500], fontSize: 11),
               ),
               const SizedBox(height: 16),
@@ -394,6 +395,19 @@ class _HomeAdminState extends State<HomeAdmin> {
                   MaterialPageRoute(
                     builder: (context) =>
                         const ReporteDiferenciasTraspaso(),
+                  ),
+                );
+              },
+            ),
+            _buildDrawerItem(
+              icon: Icons.report_problem_outlined,
+              title: 'Faltantes por resolver',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const DiscrepanciasPendientes(),
                   ),
                 );
               },

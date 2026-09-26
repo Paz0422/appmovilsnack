@@ -38,6 +38,15 @@ class _EstadioSelectionState extends State<EstadioSelection> {
         backgroundColor: primaryColor,
         elevation: 0,
         centerTitle: true,
+        leading: widget.fromAdmin
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Volver al panel de administración',
+                onPressed: () =>
+                    Navigator.of(context).popUntil((route) => route.isFirst),
+              )
+            : null,
+        automaticallyImplyLeading: false,
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -95,7 +104,7 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Revisa conexión o inténtalo de nuevo.',
+                          'Revise la conexión o inténtelo de nuevo.',
                           style: GoogleFonts.lato(
                             fontSize: 13,
                             color: secondaryColor,

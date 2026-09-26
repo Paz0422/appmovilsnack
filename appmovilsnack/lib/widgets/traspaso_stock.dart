@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:front_appsnack/core/app_theme.dart';
-import 'package:front_appsnack/utils/categorias_producto.dart';
+import 'package:front_appsnack/services/traspaso_service.dart';
 
 class _LineaPedido {
   final String productoId;
@@ -20,31 +20,6 @@ class _LineaPedido {
     required this.cantidad,
     this.categoria,
   });
-}
-
-class _LineaEnvioTraspaso {
-  final _LineaPedido linea;
-  final DocumentReference<Map<String, dynamic>> origenRef;
-  final Map<String, dynamic> origenData;
-  final int stockActual;
-  final String traspasoId;
-  final String categoria;
-
-  const _LineaEnvioTraspaso({
-    required this.linea,
-    required this.origenRef,
-    required this.origenData,
-    required this.stockActual,
-    required this.traspasoId,
-    required this.categoria,
-  });
-}
-
-int _intDesdeFirestore(dynamic value, [int fallback = 0]) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  if (value is String) return int.tryParse(value.trim()) ?? fallback;
-  return fallback;
 }
 
 class TraspasoStock extends StatefulWidget {
@@ -135,7 +110,8 @@ class _TraspasoStockState extends State<TraspasoStock> {
         setState(() {
           _sectores = sectores;
           _sectorOrigenId = widget.sectorIdOrigenInicial ??
-              sectores.firstOrNull?['id'] as String?;
+              (sectores.where((s) => s['turnoCerrado'] != true).firstOrNull ??
+                  sectores.firstOrNull)?['id'] as String?;
           _syncSectorDestino();
           _isLoading = false;
           _error = null;
@@ -312,7 +288,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Tu pedido',
+                'Su pedido',
                 style: GoogleFonts.poppins(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
@@ -390,9 +366,18 @@ class _TraspasoStockState extends State<TraspasoStock> {
       return;
     }
 
+    if (_sectorEstaCerrado(origenId)) {
+      _mostrarMensaje(
+        '${TraspasoService.mensajeOrigenCerradoEnvio(_nombreSector(origenId))} '
+        'Un administrador debe reabrirlo desde Gestión de eventos.',
+        esError: true,
+      );
+      return;
+    }
+
     if (_sectorEstaCerrado(destinoId)) {
       _mostrarMensaje(
-        'No podés enviar productos a un sector con turno cerrado. '
+        'No puede enviar productos a un sector con turno cerrado. '
         'Un administrador debe reabrirlo desde Gestión de eventos.',
         esError: true,
       );
@@ -463,109 +448,24 @@ class _TraspasoStockState extends State<TraspasoStock> {
     setState(() => _enviando = true);
 
     try {
-      final pedidoId = FirebaseFirestore.instance.collection('_').doc().id;
-
-      await FirebaseFirestore.instance.runTransaction((tx) async {
-        final origenNombreTx = origenNombre;
-        final destinoNombreTx = destinoNombre;
-        final pendientes = <_LineaEnvioTraspaso>[];
-
-        final destinoSectorRef = FirebaseFirestore.instance
-            .collection('eventos')
-            .doc(widget.eventoId)
-            .collection('sectores')
-            .doc(destinoId);
-        final destinoSectorSnap = await tx.get(destinoSectorRef);
-        if (!destinoSectorSnap.exists) {
-          throw Exception('El sector destino ya no existe.');
-        }
-        if (destinoSectorSnap.data()?['turnoCerrado'] == true) {
-          throw Exception(
-            'No se puede enviar a "$destinoNombreTx": el turno está cerrado.',
-          );
-        }
-
-        for (final linea in lineas) {
-          final origenRef = FirebaseFirestore.instance
-              .collection('eventos')
-              .doc(widget.eventoId)
-              .collection('sectores')
-              .doc(origenId)
-              .collection('stock')
-              .doc(linea.productoId);
-
-          final origenSnap = await tx.get(origenRef);
-          if (!origenSnap.exists) {
-            throw Exception('"${linea.nombre}" ya no está en tu sector.');
-          }
-
-          final origenData = origenSnap.data()!;
-          final stockActual = _intDesdeFirestore(origenData['cantidad']);
-          if (stockActual < linea.cantidad) {
-            throw Exception(
-              'Stock insuficiente de "${linea.nombre}" (hay $stockActual u.).',
-            );
-          }
-
-          pendientes.add(
-            _LineaEnvioTraspaso(
-              linea: linea,
-              origenRef: origenRef,
-              origenData: origenData,
-              stockActual: stockActual,
-              traspasoId: FirebaseFirestore.instance.collection('_').doc().id,
-              categoria:
-                  linea.categoria ??
-                  origenData['categoria']?.toString() ??
-                  categoriaDefault,
+      // Relee en una transacción que ambos sectores sigan abiertos.
+      await TraspasoService().enviar(
+        eventoId: widget.eventoId,
+        origenId: origenId,
+        origenNombre: origenNombre,
+        destinoId: destinoId,
+        destinoNombre: destinoNombre,
+        lineas: [
+          for (final l in lineas)
+            LineaEnvio(
+              productoId: l.productoId,
+              nombre: l.nombre,
+              precio: l.precio,
+              cantidad: l.cantidad,
+              categoria: l.categoria,
             ),
-          );
-        }
-
-        for (final item in pendientes) {
-          final linea = item.linea;
-          tx.update(item.origenRef, {
-            'cantidad': item.stockActual - linea.cantidad,
-          });
-
-          final traspasoData = {
-            'fecha': FieldValue.serverTimestamp(),
-            'registradoAt': FieldValue.serverTimestamp(),
-            'pedidoId': pedidoId,
-            'totalProductosPedido': lineas.length,
-            'totalUnidadesPedido': _totalUnidadesPedido,
-            'sectorOrigenId': origenId,
-            'sectorOrigenNombre': origenNombreTx,
-            'sectorDestinoId': destinoId,
-            'sectorDestinoNombre': destinoNombreTx,
-            'productoId': linea.productoId,
-            'nombre': linea.nombre,
-            'precio': linea.precio,
-            'categoria': item.categoria,
-            'cantidadEnviada': linea.cantidad,
-            'estado': 'pendiente',
-          };
-
-          final entranteRef = FirebaseFirestore.instance
-              .collection('eventos')
-              .doc(widget.eventoId)
-              .collection('sectores')
-              .doc(destinoId)
-              .collection('traspasos_entrantes')
-              .doc(item.traspasoId);
-
-          final salienteRef = FirebaseFirestore.instance
-              .collection('eventos')
-              .doc(widget.eventoId)
-              .collection('sectores')
-              .doc(origenId)
-              .collection('traspasos_salientes')
-              .doc(item.traspasoId);
-
-          tx.set(entranteRef, traspasoData);
-          tx.set(salienteRef, traspasoData);
-        }
-      });
+        ],
+      );
 
       if (!mounted) return;
       setState(() {
@@ -574,8 +474,15 @@ class _TraspasoStockState extends State<TraspasoStock> {
       });
       _mostrarMensaje(
         'Pedido enviado a $destinoNombre (${lineas.length} productos). '
-        'Esperá su confirmación.',
+        'Espere su confirmación.',
       );
+    } on TraspasoException catch (e) {
+      if (mounted) {
+        setState(() => _enviando = false);
+        _mostrarMensaje(e.mensaje, esError: true);
+        // Otro dispositivo pudo cerrar un turno: refrescar el estado de los sectores.
+        _cargarSectores();
+      }
     } on FirebaseException catch (e) {
       if (mounted) {
         setState(() => _enviando = false);
@@ -707,7 +614,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
                           ),
                         ),
                         Text(
-                          '$_totalUnidadesPedido u. · Tocá para ver',
+                          '$_totalUnidadesPedido u. · Toque para ver',
                           style: GoogleFonts.poppins(
                             fontSize: 11,
                             color: secondaryColor,
@@ -722,6 +629,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
               FilledButton.icon(
                 onPressed: (_enviando ||
                         _sectorDestinoId == null ||
+                        _sectorEstaCerrado(_sectorOrigenId) ||
                         _sectorEstaCerrado(_sectorDestinoId))
                     ? null
                     : _enviarPedido,
@@ -844,7 +752,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
   Widget _buildSelector() {
     final origenNombre = _nombreSector(_sectorOrigenId).isNotEmpty
         ? _nombreSector(_sectorOrigenId)
-        : (widget.nombreSectorOrigenInicial ?? 'Tu sector');
+        : (widget.nombreSectorOrigenInicial ?? 'Su sector');
 
     final origenOptions =
         _sectores.where((s) => s['id'] != _sectorDestinoId).toList();
@@ -919,6 +827,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
               label: 'Sector origen',
               value: _sectorOrigenId,
               options: origenOptions,
+              marcarCerrados: true,
               onChanged: (v) => setState(() {
                 _sectorOrigenId = v;
                 _pedido.clear();
@@ -955,7 +864,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
           ],
           const SizedBox(height: 10),
           Text(
-            'Tocá los productos para armar el pedido. '
+            'Toque los productos para armar el pedido. '
             'Cuando termines, envialo todo junto.',
             style: GoogleFonts.poppins(
               fontSize: 12,
@@ -1064,7 +973,7 @@ class _ListaStockTraspasoState extends State<_ListaStockTraspaso> {
         if (docs.isEmpty) {
           return Center(
             child: Text(
-              'No hay stock en tu sector para traspasar.',
+              'No hay stock en su sector para traspasar.',
               style: GoogleFonts.poppins(color: widget.secondaryColor),
             ),
           );
@@ -1180,7 +1089,7 @@ class _ListaStockTraspasoState extends State<_ListaStockTraspaso> {
                               ] else if (habilitado && destino.isNotEmpty) ...[
                                 const SizedBox(height: 2),
                                 Text(
-                                  'Tocá para agregar al pedido',
+                                  'Toque para agregar al pedido',
                                   style: GoogleFonts.poppins(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,

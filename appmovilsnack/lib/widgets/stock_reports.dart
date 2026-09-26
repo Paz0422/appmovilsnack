@@ -239,7 +239,7 @@ class _StockReportsState extends State<StockReports> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Primero selecciona un evento',
+            'Primero seleccione un evento',
             style: GoogleFonts.poppins(),
           ),
           backgroundColor: Colors.orange,

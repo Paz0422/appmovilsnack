@@ -17,6 +17,25 @@ class AuthManager {
 
   Widget? _pantallaRaiz;
 
+  FirebaseFirestore? _firestorePrueba;
+  FirebaseAuth? _authPrueba;
+
+  FirebaseFirestore get _firestore =>
+      _firestorePrueba ?? FirebaseFirestore.instance;
+  FirebaseAuth get _firebaseAuth => _authPrueba ?? FirebaseAuth.instance;
+
+  /// Sustituye Firestore y Auth en [iniciarSesion]; `null` vuelve a los reales.
+  @visibleForTesting
+  void usarInstanciasDePrueba({FirebaseFirestore? firestore, FirebaseAuth? auth}) {
+    _firestorePrueba = firestore;
+    _authPrueba = auth;
+  }
+
+  /// Mismo texto si el usuario no existe o la contraseña es incorrecta, para no
+  /// revelar qué nombres de usuario existen.
+  static const mensajeCredencialesIncorrectas =
+      'Usuario o contraseña incorrectos';
+
   static String normalizarRol(String? rol) {
     final r = rol?.trim().toLowerCase() ?? '';
     if (r == 'admin' || r == 'administrador') return 'admin';
@@ -24,6 +43,20 @@ class AuthManager {
   }
 
   static bool esAdmin(String rol) => rol == 'admin';
+
+  /// Id del documento en `usernames/`: minúsculas y sin espacios.
+  /// Debe coincidir con `normalizarUsername` en firestore.rules y con
+  /// scripts/migrar_usernames.mjs.
+  static String normalizarUsername(String username) =>
+      username.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+
+  /// Firestore no acepta como id de documento '/', '.', '..' ni '__x__'.
+  static bool esIdUsernameValido(String id) =>
+      id.isNotEmpty &&
+      !id.contains('/') &&
+      id != '.' &&
+      id != '..' &&
+      !(id.startsWith('__') && id.endsWith('__'));
 
   void configurarPantallaRaiz(Widget pantalla) {
     _pantallaRaiz = pantalla;
@@ -107,34 +140,31 @@ class AuthManager {
     final nombre = username.trim();
     final clave = password.trim();
     if (nombre.isEmpty || clave.isEmpty) {
-      return 'Por favor, completa todos los campos.';
+      return 'Por favor, complete todos los campos.';
     }
 
+    // "Paz", "paz" y " PAZ " apuntan al mismo documento.
+    final usernameId = normalizarUsername(nombre);
+    if (!esIdUsernameValido(usernameId)) return mensajeCredencialesIncorrectas;
+
     try {
-      final query = await FirebaseFirestore.instance
-          .collection('usuarios')
-          .where('username', isEqualTo: nombre)
-          .limit(1)
+      // Sin sesión todavía: las reglas solo permiten `get` en usernames/,
+      // nunca consultar usuarios/.
+      final usernameDoc = await _firestore
+          .collection('usernames')
+          .doc(usernameId)
           .get()
           .timeout(const Duration(seconds: 15));
 
-      if (query.docs.isEmpty) {
-        return 'Usuario no encontrado. Revisa el nombre o pide que te den de alta.';
-      }
+      if (!usernameDoc.exists) return mensajeCredencialesIncorrectas;
 
-      final userDoc = query.docs.first;
-      final userData = userDoc.data();
-      final emailRaw = userData['email'];
-      final email = emailRaw is String
-          ? emailRaw.trim()
-          : emailRaw?.toString().trim();
+      final email = usernameDoc.data()?['email']?.toString().trim();
       if (email == null || email.isEmpty) {
-        return 'Falta el correo en tu perfil. Pide al administrador que lo agregue.';
+        return 'Falta el correo en su perfil. Pida al administrador que lo agregue.';
       }
 
-      _guardarPerfil(userDoc);
-
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      // El perfil lo resuelve AuthGate con resolverPerfil al cambiar la sesión.
+      await _firebaseAuth.signInWithEmailAndPassword(
         email: email,
         password: clave,
       );

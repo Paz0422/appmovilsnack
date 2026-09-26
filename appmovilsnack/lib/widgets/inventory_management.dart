@@ -66,7 +66,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
       if (mounted) {
         setState(() {
           _errorMessage =
-              'Error al cargar productos. Revisa tu conexión y permisos.';
+              'Error al cargar productos. Revise su conexión y permisos.';
           _isLoading = false;
         });
       }
@@ -215,7 +215,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Por favor, ingresa un nombre para el producto.',
+                        'Por favor, ingrese un nombre para el producto.',
                         style: GoogleFonts.poppins(),
                       ),
                       backgroundColor: Colors.red,
@@ -229,7 +229,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Por favor, ingresa un precio válido mayor a 0.',
+                        'Por favor, ingrese un precio válido mayor a 0.',
                         style: GoogleFonts.poppins(),
                       ),
                       backgroundColor: Colors.red,
@@ -322,7 +322,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
             ),
           ),
           content: Text(
-            '¿Estás seguro de que deseas eliminar "$nombre"? Esta acción no se puede deshacer.',
+            '¿Está seguro de que desea eliminar "$nombre"? Esta acción no se puede deshacer.',
             style: GoogleFonts.poppins(),
           ),
           actions: [

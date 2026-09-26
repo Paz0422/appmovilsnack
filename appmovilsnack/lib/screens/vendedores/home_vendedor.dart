@@ -299,7 +299,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                     ? _buildBotonBarraInferior(
                         icon: Icons.admin_panel_settings_outlined,
                         label: 'Panel admin',
-                        onTap: () => Navigator.of(context).pop(),
+                        onTap: _volverAlPanelAdmin,
                         color: primaryColor,
                         borde: primaryColor.withValues(alpha: 0.25),
                         fondo: primaryColor.withValues(alpha: 0.06),

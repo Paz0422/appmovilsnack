@@ -7,6 +7,7 @@ import 'package:front_appsnack/core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
+import 'package:front_appsnack/services/cierre_turno_service.dart';
 import 'package:front_appsnack/services/vendedor_ventas_service.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 
@@ -135,6 +136,15 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
   Timer? _debounceBorrador;
   bool _mostroAvisoBorrador = false;
 
+  final _cierreService = CierreTurnoService();
+  /// Stock de cada producto al abrir el conteo. El cierre solo se escribe si
+  /// sigue igual; se guarda en el borrador para detectar cambios al volver.
+  Map<String, int> _stockAlIniciar = {};
+  /// Productos cuyo stock cambió durante el conteo: hay que volver a contarlos.
+  Set<String> _productosCambiados = {};
+  /// Traspasos entrantes sin confirmar y rondas abiertas: bloquean el conteo.
+  List<String> _movimientosPendientes = [];
+
   DocumentReference<Map<String, dynamic>> get _sectorRef =>
       FirebaseFirestore.instance
           .collection('eventos')
@@ -200,7 +210,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
   }
 
   Future<void> _retrocederConBorrador() async {
-    if (widget.soloVerReporte) {
+    if (widget.soloVerReporte || _productos.isEmpty) {
       if (mounted) Navigator.of(context).pop();
       return;
     }
@@ -209,7 +219,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Borrador guardado. Podés continuar el conteo cuando vuelvas a cerrar turno.',
+          'Borrador guardado. Puede continuar el conteo cuando vuelva a cerrar turno.',
           style: GoogleFonts.poppins(),
         ),
         backgroundColor: Colors.green,
@@ -229,6 +239,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           'borradorCierreTurno': {
             'actualizadoEn': FieldValue.serverTimestamp(),
             'enResumen': enResumen,
+            'stockAlIniciar': _stockAlIniciar,
             'productos': _productos
                 .map(
                   (p) => {
@@ -259,6 +270,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
   void _setCantidadFinal(_ProductoConciliacion p, int value) {
     final clamped = value.clamp(0, p.cantidadMaxima);
     p.cantidadFinal = clamped;
+    _productosCambiados.remove(p.productoId);
     final ctrl = _cantidadControllers[p.productoId];
     if (ctrl != null && ctrl.text != '$clamped') {
       ctrl.text = '$clamped';
@@ -268,10 +280,12 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
     _programarGuardadoBorrador(enResumen: _mostrarResumen);
   }
 
-  Future<void> _cargarDatos() async {
+  /// [cambiadosAlCerrar]: productos que el cierre detectó modificados.
+  Future<void> _cargarDatos({Set<String> cambiadosAlCerrar = const {}}) async {
     setState(() {
       _isLoading = true;
       _error = null;
+      _movimientosPendientes = [];
     });
     try {
       final sectorSnap = await FirebaseFirestore.instance
@@ -285,6 +299,23 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       if (widget.soloVerReporte && sectorData?['ultimoCierre'] != null) {
         _cargarDesdeCierreGuardado(sectorData!['ultimoCierre'] as Map<String, dynamic>);
         return;
+      }
+
+      if (!widget.soloVerReporte) {
+        final pendientes = await _cierreService.movimientosPendientes(
+          widget.eventoId,
+          widget.sectorId,
+        );
+        if (!mounted) return;
+        if (pendientes.isNotEmpty) {
+          setState(() {
+            _movimientosPendientes = pendientes;
+            _productos = [];
+            _mostrarResumen = false;
+            _isLoading = false;
+          });
+          return;
+        }
       }
 
       final stockSnapshot = await FirebaseFirestore.instance
@@ -322,6 +353,12 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       }).toList()
         ..sort((a, b) => a.nombre.compareTo(b.nombre));
 
+      final stockActual = {
+        for (final doc in stockSnapshot.docs)
+          doc.id: CierreTurnoService.cantidadDe(doc.data()),
+      };
+      final cambiados = {...cambiadosAlCerrar};
+
       var mostrarResumen = widget.soloVerReporte;
       var bandejeros = <_ResumenBandejeroEnCierre>[];
       var total = 0.0;
@@ -334,7 +371,18 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           borrador is Map<String, dynamic>) {
         _aplicarBorradorInventario(borrador, productos);
         restauroBorrador = true;
-        if (borrador['enResumen'] == true) {
+        // Stock movido desde que se empezó este conteo (p. ej. salió y volvió).
+        final previo = borrador['stockAlIniciar'];
+        if (previo is Map) {
+          cambiados.addAll(CierreTurnoService.productosCambiados(
+            {
+              for (final e in previo.entries)
+                if (e.value is num) e.key.toString(): (e.value as num).toInt(),
+            },
+            stockActual,
+          ));
+        }
+        if (borrador['enResumen'] == true && cambiados.isEmpty) {
           for (final p in productos) {
             if (p.cantidadVendida > 0) {
               total += p.subtotal;
@@ -353,16 +401,31 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         _totalEstimado = total;
         _totalUnidadesVendidas = unidades;
         _mostrarResumen = mostrarResumen;
+        _stockAlIniciar = stockActual;
+        _productosCambiados = cambiados.intersection(stockActual.keys.toSet());
         _isLoading = false;
       });
       _vincularControllers();
 
-      if (restauroBorrador && mounted && !_mostroAvisoBorrador) {
+      if (cambiados.isNotEmpty && mounted) {
         _mostroAvisoBorrador = true;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Se restauró el conteo que habías guardado.',
+              CierreTurnoService.mensajeStockCambio,
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.orange[800],
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 8),
+          ),
+        );
+      } else if (restauroBorrador && mounted && !_mostroAvisoBorrador) {
+        _mostroAvisoBorrador = true;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Se restauró el conteo guardado anteriormente.',
               style: GoogleFonts.poppins(),
             ),
             backgroundColor: AppColors.accent,
@@ -462,8 +525,56 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
     }
 
     if (pendientes.isEmpty) return null;
-    return 'Antes de cerrar el turno del sector, completá el cierre de bandejeo:\n'
+    return 'Antes de cerrar el turno del sector, complete el cierre de bandejeo:\n'
         '• ${pendientes.join('\n• ')}';
+  }
+
+  /// Revisa de nuevo antes de pasar al resumen y antes de cerrar: pudo llegar
+  /// un traspaso o abrirse una ronda después de empezar el conteo.
+  Future<bool> _verificarSinPendientes() async {
+    final movimientos = await _cierreService.movimientosPendientes(
+      widget.eventoId,
+      widget.sectorId,
+    );
+    if (!mounted) return false;
+    if (movimientos.isNotEmpty) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(
+            'No se puede cerrar todavía',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+          ),
+          content: Text(
+            'Hay movimientos pendientes que cambian el stock del sector:\n'
+            '• ${movimientos.join('\n• ')}\n\n'
+            'Resuélvalos y vuelva a revisar el conteo.',
+            style: GoogleFonts.poppins(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+      return false;
+    }
+
+    final msgBandejeros = await _mensajeBandejerosPendientes();
+    if (!mounted) return false;
+    if (msgBandejeros != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msgBandejeros, style: GoogleFonts.poppins()),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 6),
+        ),
+      );
+      return false;
+    }
+    return true;
   }
 
   Future<List<_ResumenBandejeroEnCierre>> _cargarBandejerosCerrados() async {
@@ -564,18 +675,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       }
     }
 
-    final msgBandejeros = await _mensajeBandejerosPendientes();
-    if (!mounted) return;
-    if (msgBandejeros != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msgBandejeros, style: GoogleFonts.poppins()),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 6),
-        ),
-      );
-      return;
-    }
+    if (!await _verificarSinPendientes()) return;
 
     final bandejeros = await _cargarBandejerosCerrados();
     if (!mounted) return;
@@ -662,18 +762,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
   }
 
   Future<void> _confirmarCierre() async {
-    final msgBandejeros = await _mensajeBandejerosPendientes();
-    if (!mounted) return;
-    if (msgBandejeros != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msgBandejeros, style: GoogleFonts.poppins()),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 6),
-        ),
-      );
-      return;
-    }
+    if (!await _verificarSinPendientes()) return;
 
     setState(() => _isLoading = true);
     try {
@@ -724,47 +813,25 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         'bandejeros': _bandejerosCierre.map((b) => b.toFirestore()).toList(),
       };
 
-      final sectorRef = FirebaseFirestore.instance
-          .collection('eventos')
-          .doc(widget.eventoId)
-          .collection('sectores')
-          .doc(widget.sectorId);
-
-      final sectorSnap = await sectorRef.get();
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Actualizar cantidad final en stock
-      final stockCol = sectorRef.collection('stock');
-      for (final p in _productos) {
-        batch.set(
-          stockCol.doc(p.productoId),
-          {'cantidad': p.cantidadFinal, 'cantidadFinal': p.cantidadFinal},
-          SetOptions(merge: true),
-        );
+      // El conteo físico reemplaza el stock solo si nadie lo movió mientras
+      // se contaba; si cambió, no se escribe nada y se vuelve a contar.
+      final cambiados = await _cierreService.cerrarTurno(
+        eventoId: widget.eventoId,
+        sectorId: widget.sectorId,
+        stockAlIniciar: _stockAlIniciar,
+        conteoFinal: {for (final p in _productos) p.productoId: p.cantidadFinal},
+        cierreData: cierreData,
+        totalEstimado: _totalEstimado,
+        vendedorNombre: vendedorNombre,
+      );
+      if (cambiados.isNotEmpty) {
+        if (!mounted) return;
+        _mostrarResumen = false;
+        await _guardarBorradorCierre();
+        if (!mounted) return;
+        await _cargarDatos(cambiadosAlCerrar: cambiados);
+        return;
       }
-
-      Map<String, dynamic> sectorUpdate = {
-        'ultimoCierre': cierreData,
-        'turnoCerrado': true,
-        'turnoCerradoAt': FieldValue.serverTimestamp(),
-        'totalVendido': FieldValue.increment(_totalEstimado),
-        'borradorCierreTurno': FieldValue.delete(),
-      };
-
-      if (sectorSnap.exists && sectorSnap.data() != null) {
-        final data = sectorSnap.data()!;
-        List<dynamic> vendedores = List.from(data['vendedoresasignados'] ?? []);
-        if (vendedorNombre != null && vendedorNombre.isNotEmpty) {
-          vendedores.removeWhere((v) {
-            final n = v is Map ? v['nombre']?.toString() : null;
-            return n == vendedorNombre;
-          });
-        }
-        sectorUpdate['vendedoresasignados'] = vendedores;
-      }
-
-      batch.set(sectorRef, sectorUpdate, SetOptions(merge: true));
-      await batch.commit();
 
       if (vendedorUid != null && vendedorUid.isNotEmpty) {
         try {
@@ -783,6 +850,16 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       }
 
       await AuthManager().cerrarSesion();
+    } on TurnoYaCerradoException catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$e', style: GoogleFonts.poppins()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -854,7 +931,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           ? Center(child: CircularProgressIndicator(color: AppColors.accent))
           : _error != null
               ? _buildError()
-              : _mostrarResumen
+              : _movimientosPendientes.isNotEmpty
+                  ? _buildMovimientosPendientes()
+                  : _mostrarResumen
                   ? _buildResumenView()
                   : _buildInventarioFinalView(),
     ),
@@ -879,6 +958,57 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
             FilledButton(onPressed: _cargarDatos, child: const Text('Reintentar')),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMovimientosPendientes() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(Icons.pending_actions, size: 48, color: Colors.orange[800]),
+          const SizedBox(height: 12),
+          Text(
+            'Antes de contar, resuelva estos movimientos',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primaryLight,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Cambian el stock del sector, así que el conteo quedaría '
+            'desactualizado. Confirme los traspasos desde el aviso de pedidos '
+            'pendientes en el inicio y rinda las rondas en Bandejeo.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(fontSize: 13, color: AppColors.secondary),
+          ),
+          const SizedBox(height: 16),
+          ..._movimientosPendientes.map(
+            (m) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: Icon(Icons.warning_amber, color: Colors.orange[800]),
+                title: Text(m, style: GoogleFonts.poppins(fontSize: 14)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: _cargarDatos,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Revisar de nuevo'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Volver'),
+          ),
+        ],
       ),
     );
   }
@@ -918,9 +1048,15 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
             itemCount: _productos.length,
             itemBuilder: (context, index) {
               final p = _productos[index];
+              final cambio = _productosCambiados.contains(p.productoId);
               return Card(
                 margin: const EdgeInsets.only(bottom: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: cambio
+                      ? BorderSide(color: Colors.orange[800]!, width: 2)
+                      : BorderSide.none,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: Column(
@@ -934,6 +1070,29 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                           color: AppColors.primaryLight,
                         ),
                       ),
+                      if (cambio) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.sync_problem,
+                              size: 16,
+                              color: Colors.orange[800],
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'El stock cambió: vuelva a contar',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.orange[800],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 4),
                       Text(
                         'Inicial: ${p.cantidadInicial} · Máximo: ${p.cantidadMaxima}'
