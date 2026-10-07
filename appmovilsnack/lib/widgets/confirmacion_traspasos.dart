@@ -2,13 +2,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/services/traspaso_service.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 
 /// Resumen de pedidos/traspasos pendientes de confirmar en un sector.
 class ResumenPedidosPendientes {
@@ -552,7 +553,7 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
-                  return Center(child: CircularProgressIndicator());
+                  return const Center(child: CargandoPuntos());
                 }
                 if (snapshot.hasError) {
                   return ErrorAmable(
@@ -576,7 +577,7 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
                 return ListView.builder(
                   padding: conMargenInferior(context, const EdgeInsets.all(16)),
                   itemCount: grupos.length,
-                  itemBuilder: (context, index) {
+                  itemBuilder: (context, index) => Builder(builder: (context) {
                     final grupo = grupos[index];
                     final esPedidoMulti = grupo.lineas.length > 1;
 
@@ -677,7 +678,7 @@ class _ConfirmacionTraspasosState extends State<ConfirmacionTraspasos> {
                         ),
                       ),
                     );
-                  },
+                  }).entradaEnLista(index),
                 );
               },
             ),
@@ -811,15 +812,7 @@ class _BannerTraspasosPendientesState extends State<BannerTraspasosPendientes> {
                                         size: 24,
                                       ),
                                     )
-                                    .animate(
-                                      onPlay: (c) => c.repeat(reverse: true),
-                                    )
-                                    .scale(
-                                      begin: const Offset(1, 1),
-                                      end: const Offset(1.06, 1.06),
-                                      duration: 900.ms,
-                                      curve: Curves.easeInOut,
-                                    ),
+                                    .latido(),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
@@ -885,9 +878,7 @@ class _BannerTraspasosPendientesState extends State<BannerTraspasosPendientes> {
             ),
           ),
         )
-        .animate()
-        .fadeIn(duration: 300.ms, curve: Curves.easeOut)
-        .slideY(begin: -0.05, end: 0, duration: 350.ms, curve: Curves.easeOut);
+        .entrada(desde: -0.05);
   }
 }
 

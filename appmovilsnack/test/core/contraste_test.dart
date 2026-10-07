@@ -41,6 +41,17 @@ void main() {
     'cian sobre tarjeta (gráficos)': (AppColors.cian, AppColors.tarjeta, 4.5),
     'coral sobre tarjeta (gráficos)': (AppColors.coral, AppColors.tarjeta, 4.5),
     'violeta sobre tarjeta (gráficos)': (AppColors.violeta, AppColors.tarjeta, 4.5),
+    'café sobre tarjeta (detalles, podio)': (AppColors.cafe, AppColors.tarjeta, 4.5),
+    'café sobre fondo': (AppColors.cafe, AppColors.fondo, 4.5),
+    'café claro sobre etiqueta café': (AppColors.cafeClaro, AppColors.cafeSuave, 4.5),
+    'plata sobre tarjeta (podio)': (AppColors.plata, AppColors.tarjeta, 4.5),
+    'texto secundario en el paso "Ahora"': (AppColors.tintaSecundaria, AppColors.doradoSuave, 4.5),
+    'dorado en el paso "Ahora"': (AppColors.dorado, AppColors.doradoSuave, 4.5),
+    'violeta sobre fondo (mosaicos)': (AppColors.violeta, AppColors.fondo, 4.5),
+    'cian sobre fondo (mosaicos)': (AppColors.cian, AppColors.fondo, 4.5),
+    'ícono azul noche sobre cian (botón del panel)': (AppColors.negro, AppColors.cian, 4.5),
+    'ícono azul noche sobre coral (botón del panel)': (AppColors.negro, AppColors.coral, 4.5),
+    'ícono azul noche sobre violeta (botón del panel)': (AppColors.negro, AppColors.violeta, 4.5),
   };
 
   for (final caso in casos.entries) {

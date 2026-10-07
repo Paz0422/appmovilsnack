@@ -7,6 +7,8 @@ import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
 import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 import 'package:front_appsnack/widgets/share_csv_file_io.dart'
     if (dart.library.html) 'package:front_appsnack/widgets/share_csv_file.dart'
     as share_csv;
@@ -84,7 +86,7 @@ class _AsignacionPersonalState extends State<AsignacionPersonal>
         bottom: TabBar(
           controller: _tabController,
           labelColor: accentColor,
-          unselectedLabelColor: Colors.white70,
+          unselectedLabelColor: AppColors.tintaSecundaria,
           indicatorColor: accentColor,
           tabs: [
             Tab(
@@ -381,7 +383,7 @@ class _EmpleadosTab extends StatelessWidget {
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: CargandoPuntos());
             }
             if (snapshot.hasError) {
               return ErrorAmable(
@@ -401,7 +403,7 @@ class _EmpleadosTab extends StatelessWidget {
                 const EdgeInsets.fromLTRB(16, 16, 16, 100),
               ),
               itemCount: docs.length,
-              itemBuilder: (context, index) {
+              itemBuilder: (context, index) => Builder(builder: (context) {
                 final doc = docs[index];
                 final d = doc.data() as Map<String, dynamic>;
                 final nombre = d['nombre']?.toString() ?? '';
@@ -456,7 +458,7 @@ class _EmpleadosTab extends StatelessWidget {
                     ),
                   ),
                 );
-              },
+              }).entradaEnLista(index),
             );
           },
         ),
@@ -586,7 +588,7 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
             future: _empleadosFuture,
             builder: (context, empSnap) {
               if (empSnap.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: CargandoPuntos());
               }
               if (empSnap.hasError) {
                 return ErrorAmable(
@@ -628,7 +630,7 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
                   const EdgeInsets.fromLTRB(16, 0, 16, 100),
                 ),
                 itemCount: empleadosFiltrados.length,
-                itemBuilder: (context, index) {
+                itemBuilder: (context, index) => Builder(builder: (context) {
                   final doc = empleadosFiltrados[index];
                   final d = doc.data() as Map<String, dynamic>;
                   final id = doc.id;
@@ -648,7 +650,7 @@ class _AsignarYExportarTabState extends State<_AsignarYExportarTab> {
                       setState(() => _seleccionados[id] = v ?? false);
                     },
                   );
-                },
+                }).entradaEnLista(index),
               );
             },
           ),

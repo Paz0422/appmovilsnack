@@ -6,6 +6,8 @@ import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
 import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 
 class GestionCategorias extends StatefulWidget {
   const GestionCategorias({super.key});
@@ -283,7 +285,7 @@ class _GestionCategoriasState extends State<GestionCategorias> {
         ],
       ),
       body: _loading
-          ? Center(child: CircularProgressIndicator())
+          ? const CargandoTarjetas()
           : _error != null
           ? ErrorAmable(
               titulo: 'No pudimos cargar las categorías',
@@ -297,7 +299,7 @@ class _GestionCategoriasState extends State<GestionCategorias> {
                 extra: espacioBotonFlotante,
               ),
               itemCount: _docs.length,
-              itemBuilder: (context, index) {
+              itemBuilder: (context, index) => Builder(builder: (context) {
                 final doc = _docs[index];
                 final data = doc.data();
                 final nombre = data['nombre']?.toString() ?? 'Sin nombre';
@@ -325,7 +327,7 @@ class _GestionCategoriasState extends State<GestionCategorias> {
                     ),
                   ),
                 );
-              },
+              }).entradaEnLista(index),
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _agregarCategoria,

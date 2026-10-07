@@ -13,7 +13,7 @@ Pantallas de vendedor: `estadio_selection` → `home_vendedor` → `gestion_stoc
 | `usuarios/{uid}` + `usernames/{username}` | create en un batch (`usernames` solo con `{ email }`, id = username en minúsculas y sin espacios) | propio usuario al registrarse | `register_screen.dart` `_registerUser` |
 | `usuarios/{uid}` | set merge `ventasAcumuladas`, `totalvendido`, `itemsvendidos` | vendedor, sobre su propio perfil | `vendedor_ventas_service.dart:103` |
 | `usuarios/{uid}/cierres_contabilizados/{cierreId}` | read + create (en transacción) | vendedor, sobre su propio perfil | `vendedor_ventas_service.dart:66,91` |
-| `usuarios/{uid}` | `rol` | nadie desde la app (`gestion_roles_usuarios` solo lista); se cambia desde la consola | — |
+| `usuarios/{uid}` | update solo `rol` (`admin` / `vendedor`), nunca el propio perfil | admin | `roles_service.dart` `cambiarRol` (desde `gestion_roles_usuarios.dart`) |
 | `productos/{id}` | add / update / delete | admin | `inventory_management.dart:251,253,354` |
 | `categorias/{id}` | add / delete | admin | `gestion_categorias.dart:172,238` |
 | `categorias/{id}` | add de las categorías por defecto si la colección está vacía | **cualquiera** que llame a `cargarCategoriasFirestore()` (también vendedores) | `categorias_producto.dart:80` |

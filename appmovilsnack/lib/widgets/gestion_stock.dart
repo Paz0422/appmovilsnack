@@ -10,6 +10,8 @@ import 'package:front_appsnack/core/margen_inferior.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/core/precio.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 
 // Paleta de colores basada en el logo "Fusión"
 const Color _primaryColor = AppColors.primaryLight;
@@ -1029,7 +1031,7 @@ class _GestionStockState extends State<GestionStock> {
                 ),
               ),
         body: _loading
-            ? Center(child: CircularProgressIndicator())
+            ? const CargandoTarjetas()
             : _errorCarga != null
             ? ErrorAmable(
                 titulo: 'No pudimos cargar los productos',
@@ -1537,7 +1539,7 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
 
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
-                  return Center(child: CircularProgressIndicator());
+                  return const Center(child: CargandoPuntos());
                 }
 
                 final docs = snapshot.data?.docs ?? [];
@@ -1553,7 +1555,7 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
 
                 return ListView.builder(
                   itemCount: filtrados.length,
-                  itemBuilder: (context, index) {
+                  itemBuilder: (context, index) => Builder(builder: (context) {
                     final producto = filtrados[index];
                     final data = producto.data();
                     final nombre = data['nombre'] as String? ?? 'Sin nombre';
@@ -1574,7 +1576,7 @@ class _ModalBuscarProductoState extends State<_ModalBuscarProducto> {
                         onPressed: () => _agregarProductoAlStock(producto),
                       ),
                     );
-                  },
+                  }).entradaEnLista(index),
                 );
               },
             ),

@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart'
 import 'firebase_options.dart';
 import 'auth/auth_gate.dart';
 import 'auth/auth_manager.dart';
+import 'core/animaciones.dart';
 import 'core/app_navigator.dart';
 import 'core/app_theme.dart';
 
@@ -69,6 +70,11 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: appNavigatorKey,
       theme: AppTheme.tema,
+      // Respeta "Quitar animaciones" del sistema en toda la app.
+      builder: (context, child) {
+        Movimiento.reducido = MediaQuery.disableAnimationsOf(context);
+        return child!;
+      },
       home: const AuthGate(),
     );
   }

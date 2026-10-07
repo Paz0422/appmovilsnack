@@ -7,6 +7,8 @@ import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
 import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 
 const _sectoresEventoDefault = [
   'Galeria Sur',
@@ -106,8 +108,8 @@ Widget _bannerDialogo({required String mensaje, required bool esError}) {
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     decoration: BoxDecoration(
-      color: esError ? const Color(0xFFFFEBEE) : const Color(0xFFE8F5E9),
-      borderRadius: BorderRadius.circular(8),
+      color: esError ? AppColors.errorSuave : AppColors.exitoSuave,
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       border: Border.all(
         color: esError ? AppColors.error : AppColors.exito,
       ),
@@ -838,7 +840,7 @@ class _EventosManagementState extends State<EventosManagement> {
         ),
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const CargandoTarjetas()
           : _errorMessage != null
           ? Center(
               child: Padding(
@@ -938,7 +940,7 @@ class _EventosManagementState extends State<EventosManagement> {
                             extra: espacioBotonFlotante,
                           ),
                           itemCount: _eventosFiltrados.length,
-                          itemBuilder: (context, index) {
+                          itemBuilder: (context, index) => Builder(builder: (context) {
                             final evento = _eventosFiltrados[index];
                             final data = evento.data() as Map<String, dynamic>?;
 
@@ -1065,7 +1067,7 @@ class _EventosManagementState extends State<EventosManagement> {
                                 ),
                               ),
                             );
-                          },
+                          }).entradaEnLista(index),
                         ),
                 ),
               ],
@@ -1402,7 +1404,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CargandoPuntos());
           }
 
           if (snapshot.hasError) {
@@ -1479,7 +1481,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                     extra: espacioBotonFlotante,
                   ),
                   itemCount: sectores.length,
-                  itemBuilder: (context, index) {
+                  itemBuilder: (context, index) => Builder(builder: (context) {
                     final sector = sectores[index];
                     final data = sector.data() as Map<String, dynamic>?;
 
@@ -1615,7 +1617,7 @@ class _GestionSectoresState extends State<_GestionSectores> {
                         ),
                       ),
                     );
-                  },
+                  }).entradaEnLista(index),
                 ),
               ),
             ],

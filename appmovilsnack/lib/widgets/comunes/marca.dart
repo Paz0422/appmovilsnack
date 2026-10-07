@@ -4,6 +4,7 @@
 // vacías y errores de carga a pantalla completa. Nunca encima de datos o
 // botones, y nunca demora una acción (sin animaciones que bloqueen).
 import 'package:flutter/material.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 
@@ -86,7 +87,8 @@ class EstadoVacio extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Mascota(alto: 120),
+          // La mascota aparece con un rebote y saluda; el texto la sigue.
+          const Mascota(alto: 120).aparicionRebote().saludo(),
           const SizedBox(height: 16),
           Text(
             titulo,
@@ -96,7 +98,7 @@ class EstadoVacio extends StatelessWidget {
               fontWeight: FontWeight.w800,
               color: AppColors.tinta,
             ),
-          ),
+          ).entrada(orden: 3),
           if (mensaje != null) ...[
             const SizedBox(height: 8),
             Text(
@@ -107,11 +109,11 @@ class EstadoVacio extends StatelessWidget {
                 color: AppColors.tintaSecundaria,
                 height: 1.4,
               ),
-            ),
+            ).entrada(orden: 4),
           ],
           if (accion != null) ...[
             const SizedBox(height: 20),
-            SizedBox(width: double.infinity, child: accion),
+            SizedBox(width: double.infinity, child: accion).entrada(orden: 5),
           ],
         ],
       ),
@@ -179,7 +181,7 @@ class AvisoMascota extends StatelessWidget {
   Widget build(BuildContext context) {
     final exito = tipo == TipoAviso.exito;
     final color = exito ? AppColors.exito : AppColors.error;
-    return Semantics(
+    final aviso = Semantics(
       liveRegion: true,
       container: true,
       child: Container(
@@ -191,7 +193,9 @@ class AvisoMascota extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Mascota(alto: 52),
+            const Mascota(alto: 52).saludo(
+              demora: const Duration(milliseconds: 600),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -232,5 +236,6 @@ class AvisoMascota extends StatelessWidget {
         ),
       ),
     );
+    return exito ? aviso.aparicionRebote() : aviso.temblor();
   }
 }

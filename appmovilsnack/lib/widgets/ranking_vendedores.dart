@@ -5,6 +5,10 @@ import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/vendedor_ventas_service.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
+import 'package:front_appsnack/widgets/graficos_admin.dart';
+import 'package:front_appsnack/core/precio.dart';
 
 /// Primer año con uso real de la app en ranking (no mostrar años anteriores).
 const int _anioInicioRanking = 2026;
@@ -58,17 +62,6 @@ class _RankingVendedoresState extends State<RankingVendedores> {
     }
   }
 
-  String _fmtMonto(num v) {
-    final s = v.round().abs().toString();
-    final buf = StringBuffer(v < 0 ? '-' : '');
-    for (int i = 0; i < s.length; i++) {
-      buf.write(s[i]);
-      final resto = s.length - i - 1;
-      if (resto > 0 && resto % 3 == 0) buf.write('.');
-    }
-    return buf.toString();
-  }
-
   @override
   Widget build(BuildContext context) {
     final conVentas = _ranking
@@ -90,7 +83,7 @@ class _RankingVendedoresState extends State<RankingVendedores> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const CargandoTarjetas()
           : _error != null
           ? ErrorAmable(
               titulo: 'No pudimos cargar el ranking',
@@ -150,6 +143,25 @@ class _RankingVendedoresState extends State<RankingVendedores> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  if (conVentas.isNotEmpty) ...[
+                    TarjetaGrafico(
+                      titulo: 'Podio $_anioSeleccionado',
+                      subtitulo: 'Monto vendido en cierres de turno',
+                      child: RankingBarras(
+                        formatear: formatearPesos,
+                        items: [
+                          for (final v in conVentas.take(5))
+                            (
+                              nombre: v.nombre,
+                              detalle:
+                                  '${v.cierresAnio} cierre${v.cierresAnio == 1 ? '' : 's'}',
+                              monto: v.montoAnio,
+                            ),
+                        ],
+                      ),
+                    ).entrada(),
+                    const SizedBox(height: 20),
+                  ],
                   if (conVentas.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 32),
@@ -161,35 +173,37 @@ class _RankingVendedoresState extends State<RankingVendedores> {
                     ...conVentas.asMap().entries.map((e) {
                       final pos = e.key + 1;
                       final v = e.value;
-                      final esTop = pos == 1;
+                      // Oro, plata y bronce (café) para los tres primeros.
+                      final podio = pos <= 3;
+                      final color = podio
+                          ? AppColors.podio[pos - 1]
+                          : AppColors.tintaSecundaria;
                       return Card(
                         margin: const EdgeInsets.only(bottom: 10),
-                        elevation: esTop ? 3 : 1,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: esTop
-                              ? BorderSide(
-                                  color: AppColors.accent.withValues(
-                                    alpha: 0.6,
-                                  ),
-                                  width: 2,
-                                )
-                              : BorderSide.none,
+                          borderRadius: BorderRadius.circular(AppRadius.lg),
+                          side: BorderSide(
+                            color: podio
+                                ? color.withValues(alpha: 0.7)
+                                : AppColors.separador,
+                            width: podio ? 2 : 1,
+                          ),
                         ),
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: esTop
-                                ? AppColors.accent
-                                : AppColors.accent.withValues(alpha: 0.25),
-                            child: Text(
-                              '$pos',
-                              style: AppFonts.inter(
-                                fontWeight: FontWeight.bold,
-                                color: esTop
-                                    ? AppColors.primaryLight
-                                    : AppColors.secondary,
-                              ),
-                            ),
+                            backgroundColor: color.withValues(alpha: 0.18),
+                            child: pos == 1
+                                ? Icon(
+                                    Icons.emoji_events_rounded,
+                                    color: color,
+                                  )
+                                : Text(
+                                    '$pos',
+                                    style: AppFonts.inter(
+                                      fontWeight: FontWeight.w800,
+                                      color: color,
+                                    ),
+                                  ),
                           ),
                           title: Text(
                             v.nombre,
@@ -205,7 +219,7 @@ class _RankingVendedoresState extends State<RankingVendedores> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                '\$${_fmtMonto(v.montoAnio)}',
+                                formatearPesos(v.montoAnio),
                                 style: AppFonts.inter(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -214,7 +228,7 @@ class _RankingVendedoresState extends State<RankingVendedores> {
                               ),
                               if (v.totalHistorico > v.montoAnio)
                                 Text(
-                                  'Hist. \$${_fmtMonto(v.totalHistorico)}',
+                                  'Hist. ${formatearPesos(v.totalHistorico)}',
                                   style: AppFonts.inter(
                                     fontSize: 14,
                                     color: AppColors.onSurfaceVariant,
@@ -223,7 +237,7 @@ class _RankingVendedoresState extends State<RankingVendedores> {
                             ],
                           ),
                         ),
-                      );
+                      ).entradaEnLista(e.key + 1);
                     }),
                 ],
               ),

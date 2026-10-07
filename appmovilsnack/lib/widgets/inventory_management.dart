@@ -10,6 +10,8 @@ import 'package:front_appsnack/widgets/gestion_categorias.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/core/precio.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 
 class InventoryManagement extends StatefulWidget {
   const InventoryManagement({super.key});
@@ -463,7 +465,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const CargandoTarjetas()
           : _errorMessage != null
           ? Center(
               child: Padding(
@@ -563,7 +565,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
                             extra: espacioBotonFlotante,
                           ),
                           itemCount: _productosFiltrados.length,
-                          itemBuilder: (context, index) {
+                          itemBuilder: (context, index) => Builder(builder: (context) {
                             final producto = _productosFiltrados[index];
                             final data =
                                 producto.data() as Map<String, dynamic>?;
@@ -652,7 +654,7 @@ class _InventoryManagementState extends State<InventoryManagement> {
                                 ),
                               ),
                             );
-                          },
+                          }).entradaEnLista(index),
                         ),
                 ),
               ],

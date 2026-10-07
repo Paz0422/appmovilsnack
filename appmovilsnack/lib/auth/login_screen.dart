@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/auth/register_screen.dart';
 import 'package:front_appsnack/auth/reset_password_screen.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/core/avisos_sesion.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
 import 'package:front_appsnack/core/tipografia.dart';
+import 'package:front_appsnack/widgets/comunes/animados.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
 import 'package:front_appsnack/widgets/comunes/marca.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -92,7 +95,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   Expanded(child: Center(child: _buildMarca(ancho: true))),
                   SizedBox(
                     width: 480,
-                    child: _buildHojaFormulario(redondearArriba: false),
+                    child: _buildHojaFormulario(
+                      redondearArriba: false,
+                    ).entradaLateral(),
                   ),
                 ],
               );
@@ -105,7 +110,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       _buildMarca(ancho: false),
                       Expanded(
-                        child: _buildHojaFormulario(redondearArriba: true),
+                        child: _buildHojaFormulario(
+                          redondearArriba: true,
+                        ).entradaDesdeAbajo(
+                          demora: const Duration(milliseconds: 150),
+                        ),
                       ),
                     ],
                   ),
@@ -138,10 +147,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   'assets/imagenes/logo.png',
                   width: tamanoLogo,
                   excludeFromSemantics: true,
-                ),
+                ).aparicionRebote(),
               ),
               const SizedBox(width: 4),
-              Mascota(alto: tamanoMascota),
+              Mascota(alto: tamanoMascota)
+                  .aparicionRebote(demora: const Duration(milliseconds: 250))
+                  .saludo(demora: const Duration(milliseconds: 1200)),
             ],
           ),
           const SizedBox(height: 10),
@@ -152,7 +163,9 @@ class _LoginScreenState extends State<LoginScreen> {
               fontSize: ancho ? 40 : 32,
               color: AppColors.dorado,
             ),
-          ),
+          ).entrada(orden: 4).destello(
+                demora: const Duration(milliseconds: 1000),
+              ),
         ],
       ),
     );
@@ -180,6 +193,10 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (redondearArriba) ...[
+                    const Center(child: FiletMarca(ancho: 56)),
+                    const SizedBox(height: 16),
+                  ],
                   Text(
                     'Ingrese a su punto de venta',
                     style: AppFonts.inter(
@@ -187,19 +204,24 @@ class _LoginScreenState extends State<LoginScreen> {
                       fontWeight: FontWeight.w800,
                       color: AppColors.tinta,
                     ),
-                  ),
+                  ).entrada(orden: 3),
                   const SizedBox(height: 16),
-                  if (_turnoCerradoEn != null) ...[
-                    AvisoMascota(
-                      tipo: TipoAviso.exito,
-                      titulo: '¡Turno cerrado!',
-                      mensaje: _turnoCerradoEn!.isEmpty
-                          ? 'Buen trabajo. Ya puede cerrar la app o ingresar de nuevo.'
-                          : 'Buen trabajo en ${_turnoCerradoEn!}. Ya puede cerrar la app o ingresar de nuevo.',
-                      onCerrar: () => setState(() => _turnoCerradoEn = null),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
+                  Aparece(
+                    child: _turnoCerradoEn == null
+                        ? null
+                        : Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: AvisoMascota(
+                              tipo: TipoAviso.exito,
+                              titulo: '¡Turno cerrado!',
+                              mensaje: _turnoCerradoEn!.isEmpty
+                                  ? 'Buen trabajo. Ya puede cerrar la app o ingresar de nuevo.'
+                                  : 'Buen trabajo en ${_turnoCerradoEn!}. Ya puede cerrar la app o ingresar de nuevo.',
+                              onCerrar: () =>
+                                  setState(() => _turnoCerradoEn = null),
+                            ),
+                          ),
+                  ),
                   TextField(
                     controller: _usernameController,
                     autofocus: _turnoCerradoEn == null,
@@ -210,7 +232,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       labelText: 'Usuario',
                       prefixIcon: Icon(Icons.person_outline_rounded),
                     ),
-                  ),
+                  ).entrada(orden: 4),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _passwordController,
@@ -236,30 +258,30 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    AvisoMascota(
-                      tipo: TipoAviso.error,
-                      titulo: _error!,
-                      mensaje:
-                          'Revise sus datos e intente otra vez. ¡Le pasa a cualquiera!',
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _cargando ? null : signIn,
-                    child: _cargando
-                        ? const SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 3,
-                              color: AppColors.dorado,
+                  ).entrada(orden: 5),
+                  // Se vuelve a crear en cada intento fallido: sacude cada vez.
+                  Aparece(
+                    child: _error == null
+                        ? null
+                        : Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: AvisoMascota(
+                              tipo: TipoAviso.error,
+                              titulo: _error!,
+                              mensaje:
+                                  'Revise sus datos e intente otra vez. ¡Le pasa a cualquiera!',
                             ),
-                          )
-                        : const Text('Ingresar'),
+                          ),
                   ),
+                  const SizedBox(height: 20),
+                  Presionable(
+                    child: ElevatedButton(
+                      onPressed: _cargando ? null : signIn,
+                      child: _cargando
+                          ? const SizedBox(height: 24, child: CargandoPuntos())
+                          : const Text('Ingresar'),
+                    ),
+                  ).entrada(orden: 6),
                   const SizedBox(height: 12),
                   Wrap(
                     alignment: WrapAlignment.center,
@@ -274,7 +296,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: const Text('Crear cuenta'),
                       ),
                     ],
-                  ),
+                  ).entrada(orden: 7),
                 ],
               ),
             ),

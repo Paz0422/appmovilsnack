@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:front_appsnack/core/animaciones.dart';
+import 'package:front_appsnack/widgets/comunes/animados.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
 import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
@@ -491,8 +494,8 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
   void _siguientePaso() {
     if (_currentPage < 3) {
       _pageController.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
+        duration: _duracionPagina,
+        curve: Curves.easeOutCubic,
       );
     }
   }
@@ -507,8 +510,8 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
         setState(() => _actualizandoBandeja = false);
       }
       _pageController.previousPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
+        duration: _duracionPagina,
+        curve: Curves.easeOutCubic,
       );
     }
   }
@@ -622,6 +625,10 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
                   onPressed: _anteriorPaso,
                 )
               : null,
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(10),
+            child: _IndicadorPasos(paso: _currentPage, total: 4),
+          ),
         ),
         body: PageView(
           controller: _pageController,
@@ -1112,21 +1119,21 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
       case _AccionRonda.ver:
         await _pageController.animateToPage(
           2,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeInOut,
+          duration: _duracionPagina,
+          curve: Curves.easeOutCubic,
         );
       case _AccionRonda.agregar:
         setState(() => _actualizandoBandeja = true);
         await _pageController.animateToPage(
           1,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeInOut,
+          duration: _duracionPagina,
+          curve: Curves.easeOutCubic,
         );
       case _AccionRonda.rendir:
         await _pageController.animateToPage(
           3,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeInOut,
+          duration: _duracionPagina,
+          curve: Curves.easeOutCubic,
         );
     }
   }
@@ -1420,8 +1427,8 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
     });
     await _pageController.animateToPage(
       0,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeInOut,
+      duration: _duracionPagina,
+      curve: Curves.easeOutCubic,
     );
 
     if (!mounted) return;
@@ -1429,7 +1436,7 @@ class _BandejeoFlowState extends State<BandejeoFlow> {
       SnackBar(
         content: Text(
           'Bandejeo de $nombre cerrado. Total a recibir: '
-          '\$${(cierre['totalARecibir'] as num).toStringAsFixed(0)}',
+          '${formatearPesos((cierre['totalARecibir'] as num))}',
           style: AppFonts.inter(),
         ),
         backgroundColor: AppColors.exitoFuerte,
@@ -1854,7 +1861,7 @@ class _DialogoResumenCierreBandejeoState
                       ),
                     ),
                     Text(
-                      '\$${resumen.totalVendido.toStringAsFixed(0)}',
+                      formatearPesos(resumen.totalVendido),
                       style: AppFonts.inter(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -1893,7 +1900,7 @@ class _DialogoResumenCierreBandejeoState
                           ),
                         ),
                         Text(
-                          '\$${p.subtotal.toStringAsFixed(0)}',
+                          formatearPesos(p.subtotal),
                           style: AppFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -1946,7 +1953,7 @@ class _DialogoResumenCierreBandejeoState
                       children: [
                         Text('Total vendido', style: AppFonts.inter()),
                         Text(
-                          '\$${resumen.totalVendido.toStringAsFixed(0)}',
+                          formatearPesos(resumen.totalVendido),
                           style: AppFonts.inter(fontWeight: FontWeight.w600),
                         ),
                       ],
@@ -1957,7 +1964,7 @@ class _DialogoResumenCierreBandejeoState
                       children: [
                         Text('Caja para vuelto', style: AppFonts.inter()),
                         Text(
-                          '\$${widget.cajaVuelto.toStringAsFixed(0)}',
+                          formatearPesos(widget.cajaVuelto),
                           style: AppFonts.inter(fontWeight: FontWeight.w600),
                         ),
                       ],
@@ -1971,7 +1978,7 @@ class _DialogoResumenCierreBandejeoState
                           style: AppFonts.inter(fontWeight: FontWeight.bold),
                         ),
                         Text(
-                          '\$${_totalARecibir.toStringAsFixed(0)}',
+                          formatearPesos(_totalARecibir),
                           style: AppFonts.inter(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
@@ -2018,7 +2025,7 @@ class _DialogoResumenCierreBandejeoState
                           style: AppFonts.inter(),
                         ),
                         Text(
-                          '\$${_comision.toStringAsFixed(0)}',
+                          formatearPesos(_comision),
                           style: AppFonts.inter(
                             fontWeight: FontWeight.w600,
                             color: AppColors.primaryLight,
@@ -2184,7 +2191,7 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData) {
-                return Center(child: CircularProgressIndicator());
+                return const CargandoTarjetas(alto: 84);
               }
               if (snapshot.hasError) {
                 return ErrorAmable(
@@ -2263,7 +2270,7 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
                     subtitle: cerrado
                         ? Text(
                             totalCierre != null
-                                ? 'Cerrado · vendió \$${totalCierre.toStringAsFixed(0)} · ver comisión'
+                                ? 'Cerrado · vendió ${formatearPesos(totalCierre)} · ver comisión'
                                 : 'Cerrado · ver resumen y comisión',
                             style: AppFonts.inter(
                               fontSize: 14,
@@ -2320,12 +2327,17 @@ class _PasoSeleccionBandejeroState extends State<_PasoSeleccionBandejero>
                 children: [
                   if (activos.isNotEmpty) ...[
                     encabezadoSeccion('En turno'),
-                    ...activos.map((d) => tileBandejero(d, cerrado: false)),
+                    for (final (i, d) in activos.indexed)
+                      tileBandejero(d, cerrado: false).entradaEnLista(i),
                   ],
                   if (cerrados.isNotEmpty) ...[
                     if (activos.isNotEmpty) const SizedBox(height: 8),
                     encabezadoSeccion('Cerrados (solo consulta)'),
-                    ...cerrados.map((d) => tileBandejero(d, cerrado: true)),
+                    for (final (i, d) in cerrados.indexed)
+                      tileBandejero(
+                        d,
+                        cerrado: true,
+                      ).entradaEnLista(activos.length + i),
                   ],
                 ],
               );
@@ -2536,8 +2548,8 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  'Total: \$${productosBandeja.fold(0.0, (total, p) => total + (p.cantidadInicial * p.precio)).toStringAsFixed(0)}',
+                TextoCambiante(
+                  'Total: ${formatearPesos(productosBandeja.fold(0.0, (total, p) => total + (p.cantidadInicial * p.precio)))}',
                   style: AppFonts.inter(
                     fontWeight: FontWeight.bold,
                     fontSize: 17,
@@ -2554,7 +2566,7 @@ class _PasoCargaBandejaState extends State<_PasoCargaBandeja> {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData) {
-                return Center(child: CircularProgressIndicator());
+                return const CargandoTarjetas(alto: 96);
               }
 
               if (snapshot.hasError) {
@@ -2894,7 +2906,11 @@ class _PasoResumenRonda extends StatelessWidget {
           ),
           child: Column(
             children: [
-              Icon(Icons.shopping_basket, size: 64, color: AppColors.negro),
+              Icon(
+                Icons.shopping_basket,
+                size: 64,
+                color: AppColors.negro,
+              ).aparicionRebote(),
               const SizedBox(height: 16),
               Text(
                 'Ronda en Curso',
@@ -2910,8 +2926,9 @@ class _PasoResumenRonda extends StatelessWidget {
                 style: AppFonts.inter(fontSize: 14, color: AppColors.negro),
               ),
               const SizedBox(height: 8),
-              Text(
-                '\$${valorTotal.toStringAsFixed(0)}',
+              CifraAnimada(
+                valor: valorTotal,
+                formatear: formatearPesos,
                 style: AppFonts.inter(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
@@ -2961,7 +2978,7 @@ class _PasoResumenRonda extends StatelessWidget {
                     style: AppFonts.inter(fontSize: 14, color: _secondaryColor),
                   ),
                   trailing: Text(
-                    '\$${(producto.cantidadInicial * producto.precio).toStringAsFixed(0)}',
+                    formatearPesos((producto.cantidadInicial * producto.precio)),
                     style: AppFonts.inter(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
@@ -3056,8 +3073,10 @@ class _PasoRendicion extends StatelessWidget {
                 style: AppFonts.inter(fontSize: 16, color: _secondaryColor),
               ),
               const SizedBox(height: 8),
-              Text(
-                '\$${totalVendido.toStringAsFixed(0)}',
+              CifraAnimada(
+                valor: totalVendido,
+                formatear: formatearPesos,
+                duracion: const Duration(milliseconds: 700),
                 style: AppFonts.inter(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
@@ -3130,7 +3149,7 @@ class _PasoRendicion extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Total vendido: \$${producto.totalVendido.toStringAsFixed(0)}',
+                        'Total vendido: ${formatearPesos(producto.totalVendido)}',
                         style: AppFonts.inter(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -3229,13 +3248,9 @@ class _PasoRendicion extends StatelessWidget {
               disabledBackgroundColor: AppColors.tintaSecundaria,
             ),
             child: isGuardando
-                ? SizedBox(
-                    width: 20,
+                ? const SizedBox(
                     height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: _primaryColor,
-                    ),
+                    child: CargandoPuntos(color: AppColors.negro),
                   )
                 : Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -3254,6 +3269,52 @@ class _PasoRendicion extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Progreso del flujo de bandejeo: un tramo por paso; los completados y el
+/// actual se pintan de dorado → café y el actual es más alto.
+/// Cambio de paso del PageView. PageController no acepta Duration.zero.
+Duration get _duracionPagina => Movimiento.reducido
+    ? const Duration(milliseconds: 1)
+    : Movimiento.normal;
+
+class _IndicadorPasos extends StatelessWidget {
+  const _IndicadorPasos({required this.paso, required this.total});
+
+  final int paso;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Paso ${paso + 1} de $total',
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            for (var i = 0; i < total; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              Expanded(
+                child: AnimatedContainer(
+                  duration: Movimiento.reducido
+                      ? Duration.zero
+                      : Movimiento.normal,
+                  curve: Movimiento.resorte,
+                  height: i == paso ? 5 : 3,
+                  decoration: BoxDecoration(
+                    gradient: i <= paso ? AppGradientes.marca : null,
+                    color: i <= paso ? null : AppColors.separador,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

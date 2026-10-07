@@ -5,6 +5,9 @@ import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/services/traspaso_service.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
+import 'package:front_appsnack/core/precio.dart';
 
 class _LineaPedido {
   final String productoId;
@@ -308,7 +311,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
                   shrinkWrap: true,
                   itemCount: lineas.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
+                  itemBuilder: (_, i) => Builder(builder: (_) {
                     final l = lineas[i];
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
@@ -337,7 +340,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
                         },
                       ),
                     );
-                  },
+                  }).entradaEnLista(i),
                 ),
               ),
               const SizedBox(height: 8),
@@ -546,7 +549,7 @@ class _TraspasoStockState extends State<TraspasoStock> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const CargandoTarjetas()
           : _error != null
           ? ErrorAmable(
               titulo: 'No pudimos cargar los sectores',
@@ -960,7 +963,7 @@ class _ListaStockTraspasoState extends State<_ListaStockTraspaso> {
             snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData;
         if (cargando) {
-          return Center(child: CircularProgressIndicator());
+          return const Center(child: CargandoPuntos());
         }
         if (snapshot.hasError) {
           return ErrorAmable(
@@ -990,7 +993,7 @@ class _ListaStockTraspasoState extends State<_ListaStockTraspaso> {
         return ListView.builder(
           padding: EdgeInsets.fromLTRB(16, 16, 16, widget.bottomPadding),
           itemCount: docs.length,
-          itemBuilder: (context, index) {
+          itemBuilder: (context, index) => Builder(builder: (context) {
             final doc = docs[index];
             final data = doc.data() ?? {};
             final nombre = data['nombre'] as String? ?? 'Sin nombre';
@@ -1078,7 +1081,7 @@ class _ListaStockTraspasoState extends State<_ListaStockTraspaso> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Stock: $cantidad  ·  \$${precio.toStringAsFixed(0)}',
+                                'Stock: $cantidad  ·  ${formatearPesos(precio)}',
                                 style: AppFonts.inter(
                                   fontSize: 14,
                                   color: widget.secondaryColor,
@@ -1128,7 +1131,7 @@ class _ListaStockTraspasoState extends State<_ListaStockTraspaso> {
                 ),
               ),
             );
-          },
+          }).entradaEnLista(index),
         );
       },
     );

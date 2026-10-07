@@ -7,6 +7,8 @@ import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/precio.dart';
 
 int _intDesdeFirestore(dynamic value, [int fallback = 0]) {
   if (value is int) return value;
@@ -238,7 +240,7 @@ class _ReporteDiferenciasTraspasoState
               children: [
                 Text(
                   'Solo activos',
-                  style: AppFonts.inter(fontSize: 14, color: Colors.white70),
+                  style: AppFonts.inter(fontSize: 14, color: AppColors.tintaSecundaria),
                 ),
                 const SizedBox(width: 6),
                 Switch(
@@ -260,7 +262,7 @@ class _ReporteDiferenciasTraspasoState
 
   Widget _buildBody() {
     if (_isLoading) {
-      return Center(child: CircularProgressIndicator());
+      return const Center(child: CargandoPuntos());
     }
     if (_errorMessage != null) {
       return ErrorAmable(
@@ -437,13 +439,13 @@ class _ReporteDiferenciasTraspasoState
         children: [
           Row(
             children: [
-              const Icon(Icons.sync_problem_rounded, color: Colors.white70),
+              const Icon(Icons.sync_problem_rounded, color: AppColors.tintaSecundaria),
               const SizedBox(width: 8),
               Text(
                 'Unidades no recibidas',
                 style: AppFonts.inter(
                   fontSize: 14,
-                  color: Colors.white70,
+                  color: AppColors.tintaSecundaria,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -456,7 +458,7 @@ class _ReporteDiferenciasTraspasoState
             style: AppFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: AppColors.tinta,
             ),
           ),
           if (pedidos.isNotEmpty) ...[
@@ -464,13 +466,13 @@ class _ReporteDiferenciasTraspasoState
             Text(
               '${pedidos.length} pedido${pedidos.length == 1 ? '' : 's'} afectado'
               '${pedidos.length == 1 ? '' : 's'}',
-              style: AppFonts.inter(fontSize: 14, color: Colors.white70),
+              style: AppFonts.inter(fontSize: 14, color: AppColors.tintaSecundaria),
             ),
           ],
           if (totalValor > 0) ...[
             const SizedBox(height: 4),
             Text(
-              '\$${totalValor.toStringAsFixed(0)} estimado',
+              '${formatearPesos(totalValor)} estimado',
               style: AppFonts.inter(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,

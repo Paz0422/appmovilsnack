@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
 import 'package:front_appsnack/core/tipografia.dart';
+import 'package:front_appsnack/widgets/comunes/animados.dart';
 
 /// Plantilla de las pantallas de acceso secundarias (registro, recuperar
 /// contraseña): cabecera negra con el logo y formulario sobre fondo claro.
@@ -29,10 +31,16 @@ class PantallaAcceso extends StatelessWidget {
               width: double.infinity,
               color: AppColors.negro,
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-              child: Image.asset(
-                'assets/imagenes/logo.png',
-                height: 84,
-                excludeFromSemantics: true,
+              child: Column(
+                children: [
+                  Image.asset(
+                    'assets/imagenes/logo.png',
+                    height: 84,
+                    excludeFromSemantics: true,
+                  ).aparicionRebote(),
+                  const SizedBox(height: 14),
+                  const FiletMarca(ancho: 56),
+                ],
               ),
             ),
             Padding(
@@ -51,9 +59,11 @@ class PantallaAcceso extends StatelessWidget {
                           color: AppColors.tinta,
                           height: 1.35,
                         ),
-                      ),
+                      ).entrada(),
                       const SizedBox(height: 24),
-                      ...children,
+                      // Campos y botones entran uno tras otro.
+                      for (final (i, hijo) in children.indexed)
+                        hijo is SizedBox ? hijo : hijo.entrada(orden: i + 1),
                     ],
                   ),
                 ),

@@ -7,6 +7,10 @@ import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
 import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/services/reportes_service.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
+import 'package:front_appsnack/core/precio.dart';
 
 class StockReports extends StatefulWidget {
   const StockReports({super.key});
@@ -29,7 +33,7 @@ class _StockReportsState extends State<StockReports> {
   String? _errorMessage;
 
   // Umbral de stock bajo (se puede hacer configurable)
-  final int _stockBajoUmbral = 10;
+  final int _stockBajoUmbral = ReportesService.umbralStockBajo;
 
   final Color primaryColor = AppColors.primaryLight;
   final Color accentColor = AppColors.accent;
@@ -187,7 +191,7 @@ class _StockReportsState extends State<StockReports> {
           child: ListView.builder(
             shrinkWrap: true,
             itemCount: eventosSnapshot.docs.length + 1,
-            itemBuilder: (context, index) {
+            itemBuilder: (context, index) => Builder(builder: (context) {
               if (index == 0) {
                 return ListTile(
                   title: Text(
@@ -214,7 +218,7 @@ class _StockReportsState extends State<StockReports> {
                   });
                 },
               );
-            },
+            }).entradaEnLista(index),
           ),
         ),
       ),
@@ -282,7 +286,7 @@ class _StockReportsState extends State<StockReports> {
           child: ListView.builder(
             shrinkWrap: true,
             itemCount: sectoresSnapshot.docs.length + 1,
-            itemBuilder: (context, index) {
+            itemBuilder: (context, index) => Builder(builder: (context) {
               if (index == 0) {
                 return ListTile(
                   title: Text(
@@ -309,7 +313,7 @@ class _StockReportsState extends State<StockReports> {
                   });
                 },
               );
-            },
+            }).entradaEnLista(index),
           ),
         ),
       ),
@@ -381,7 +385,7 @@ class _StockReportsState extends State<StockReports> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const CargandoTarjetas()
           : _errorMessage != null
           ? Center(
               child: Padding(
@@ -548,7 +552,7 @@ class _StockReportsState extends State<StockReports> {
                             const EdgeInsets.all(16),
                           ),
                           itemCount: _stockDataFiltrados.length,
-                          itemBuilder: (context, index) {
+                          itemBuilder: (context, index) => Builder(builder: (context) {
                             final item = _stockDataFiltrados[index];
                             final stock = item['stock'] as int? ?? 0;
                             final productoNombre =
@@ -626,7 +630,7 @@ class _StockReportsState extends State<StockReports> {
                                     if (precio > 0) ...[
                                       const SizedBox(height: 2),
                                       Text(
-                                        'Precio: \$${precio.toStringAsFixed(0)}',
+                                        'Precio: ${formatearPesos(precio)}',
                                         style: AppFonts.inter(
                                           fontSize: 14,
                                           color: secondaryColor,
@@ -662,7 +666,7 @@ class _StockReportsState extends State<StockReports> {
                                 ),
                               ),
                             );
-                          },
+                          }).entradaEnLista(index),
                         ),
                 ),
               ],

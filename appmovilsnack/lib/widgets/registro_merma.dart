@@ -7,6 +7,8 @@ import 'package:front_appsnack/core/margen_inferior.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/core/precio.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 
 // Paleta de colores basada en el logo "Fusión"
 const Color _primaryColor = AppColors.primaryLight;
@@ -51,13 +53,13 @@ class RegistroMerma extends StatelessWidget {
                 ),
                 Text(
                   nombreSector,
-                  style: AppFonts.inter(fontSize: 14, color: Colors.white70),
+                  style: AppFonts.inter(fontSize: 14, color: AppColors.tintaSecundaria),
                 ),
               ],
             ),
             bottom: TabBar(
               labelColor: _accentColor,
-              unselectedLabelColor: Colors.white70,
+              unselectedLabelColor: AppColors.tintaSecundaria,
               indicatorColor: _accentColor,
               tabs: [
                 Tab(
@@ -166,7 +168,7 @@ class _PerdidaTotalAcumulada extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                '\$${perdidaTotal.toStringAsFixed(0)}',
+                formatearPesos(perdidaTotal),
                 style: AppFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -410,7 +412,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                   shrinkWrap: true,
                   itemCount: lineas.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
+                  itemBuilder: (_, i) => Builder(builder: (_) {
                     final l = lineas[i];
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
@@ -440,7 +442,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                         },
                       ),
                     );
-                  },
+                  }).entradaEnLista(i),
                 ),
               ),
               const SizedBox(height: 8),
@@ -603,7 +605,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
       ).orderBy('nombre').snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
+          return const Center(child: CargandoPuntos());
         }
 
         if (snapshot.hasError) {
@@ -676,7 +678,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                   tieneCarrito ? 88 : 16 + margenSistemaInferior(context),
                 ),
                 itemCount: productos.length,
-                itemBuilder: (context, index) {
+                itemBuilder: (context, index) => Builder(builder: (context) {
                   final producto = productos[index];
                   final enCarrito = _carrito[producto.id];
                   return _ProductoMermaCard(
@@ -684,7 +686,7 @@ class _TabNuevaMermaState extends State<_TabNuevaMerma> {
                     cantidadEnCarrito: enCarrito?.cantidad,
                     onTap: () => _agregarAlCarrito(producto),
                   );
-                },
+                }).entradaEnLista(index),
               ),
             ),
             if (tieneCarrito) _buildBarraCarrito(),
@@ -1060,7 +1062,7 @@ class _TabHistorial extends StatelessWidget {
       ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
+          return const Center(child: CargandoPuntos());
         }
 
         if (snapshot.hasError) {
@@ -1071,7 +1073,7 @@ class _TabHistorial extends StatelessWidget {
         }
 
         if (!snapshot.hasData) {
-          return Center(child: CircularProgressIndicator());
+          return const Center(child: CargandoPuntos());
         }
 
         final mermas = snapshot.data!.docs.where((doc) {
@@ -1101,7 +1103,7 @@ class _TabHistorial extends StatelessWidget {
         return ListView.builder(
           padding: conMargenInferior(context, const EdgeInsets.all(16)),
           itemCount: mermas.length,
-          itemBuilder: (context, index) {
+          itemBuilder: (context, index) => Builder(builder: (context) {
             final mermaDoc = mermas[index];
             final data = mermaDoc.data();
             final nombreProducto =
@@ -1215,7 +1217,7 @@ class _TabHistorial extends StatelessWidget {
                 ),
               ),
             );
-          },
+          }).entradaEnLista(index),
         );
       },
     );

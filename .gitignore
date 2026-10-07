@@ -69,3 +69,6 @@ Thumbs.db
 /analysis_options.yaml
 /assets/
 /firebase.json
+
+# Instrucciones locales para Claude Code
+/CLAUDE.md

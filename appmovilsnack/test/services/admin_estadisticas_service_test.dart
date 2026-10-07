@@ -130,6 +130,55 @@ void main() {
     );
   });
 
+  test('ventas en el tiempo: mismas ventas que el total, por hora', () async {
+    final r = await AdminEstadisticasService.cargarResumenActivos();
+    final serie = r.ventasEnElTiempo;
+
+    expect(serie.porHora, isTrue);
+    // Cierres c0 (5 h), Oeste (9 h), c1 (10 h) y bandejeo del turno
+    // abierto (7 h); las horas sin venta quedan en 0.
+    expect(
+      serie.tramos.map((t) => (t.fecha.hour, t.monto)).toList(),
+      [(5, 300.0), (6, 0.0), (7, 250.0), (8, 0.0), (9, 500.0), (10, 1000.0)],
+    );
+    expect(
+      serie.tramos.fold<double>(0, (t, v) => t + v.monto),
+      r.totalVendido,
+    );
+  });
+
+  test('ventas en el tiempo de varios días: un tramo por día con ventas', () {
+    final serie = AdminEstadisticasService.agruparVentasEnElTiempo([
+      (fecha: DateTime(2026, 9, 7, 21), monto: 200),
+      (fecha: DateTime(2026, 9, 1, 18), monto: 100),
+      (fecha: DateTime(2026, 9, 1, 20), monto: 50),
+    ]);
+
+    expect(serie.porHora, isFalse);
+    expect(
+      serie.tramos.map((t) => (t.fecha, t.monto)).toList(),
+      [(DateTime(2026, 9, 1), 150.0), (DateTime(2026, 9, 7), 200.0)],
+    );
+  });
+
+  test('partido que cierra pasada la medianoche sigue por hora', () {
+    final serie = AdminEstadisticasService.agruparVentasEnElTiempo([
+      (fecha: DateTime(2026, 9, 6, 22, 15), monto: 100),
+      (fecha: DateTime(2026, 9, 7, 0, 40), monto: 300),
+    ]);
+
+    expect(serie.porHora, isTrue);
+    expect(
+      serie.tramos.map((t) => (t.fecha.hour, t.monto)).toList(),
+      [(22, 100.0), (23, 0.0), (0, 300.0)],
+    );
+  });
+
+  test('ventas en el tiempo sin ventas', () {
+    final serie = AdminEstadisticasService.agruparVentasEnElTiempo([]);
+    expect(serie.tramos, isEmpty);
+  });
+
   test('resumen solo de eventos activos', () async {
     final r = await AdminEstadisticasService.cargarResumenActivos(
       soloEventosActivos: true,

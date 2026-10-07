@@ -1,14 +1,27 @@
-// Admin: consultar roles de usuarios (admin / vendedor)
+// Admin: ver los usuarios y cambiar su rol (vendedor ↔ administrador).
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:front_appsnack/auth/auth_manager.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
 import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/services/roles_service.dart';
+import 'package:front_appsnack/widgets/comunes/animados.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/widgets/comunes/marca.dart';
 
 class GestionRolesUsuarios extends StatefulWidget {
-  const GestionRolesUsuarios({super.key});
+  const GestionRolesUsuarios({super.key, this.firestore, this.miUid});
+
+  /// Solo para tests: otra base (p. ej. FakeFirebaseFirestore).
+  @visibleForTesting
+  final FirebaseFirestore? firestore;
+
+  /// Solo para tests: uid de la sesión.
+  @visibleForTesting
+  final String? miUid;
 
   @override
   State<GestionRolesUsuarios> createState() => _GestionRolesUsuariosState();
@@ -18,8 +31,14 @@ class _GestionRolesUsuariosState extends State<GestionRolesUsuarios> {
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _docs = [];
   bool _loading = true;
   String? _error;
-  final Color primaryColor = AppColors.primaryLight;
-  final Color accentColor = AppColors.accent;
+
+  /// Perfil cuyo rol se está guardando (deshabilita su botón).
+  String? _guardando;
+
+  FirebaseFirestore get _db => widget.firestore ?? FirebaseFirestore.instance;
+  String? get _miUid =>
+      widget.miUid ??
+      (widget.firestore == null ? FirebaseAuth.instance.currentUser?.uid : null);
 
   @override
   void initState() {
@@ -33,43 +52,100 @@ class _GestionRolesUsuariosState extends State<GestionRolesUsuarios> {
       _error = null;
     });
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('usuarios')
-          .get();
-      if (mounted) {
-        final list = snap.docs;
-        list.sort((a, b) {
-          final na = (a.data()['username'] ?? a.data()['email'] ?? '')
-              .toString()
-              .toLowerCase();
-          final nb = (b.data()['username'] ?? b.data()['email'] ?? '')
-              .toString()
-              .toLowerCase();
-          return na.compareTo(nb);
-        });
-        setState(() {
-          _docs = list;
-          _loading = false;
-        });
-      }
+      final snap = await _db.collection('usuarios').get();
+      if (!mounted) return;
+      final list = snap.docs;
+      // Administradores primero; dentro, por nombre.
+      list.sort((a, b) {
+        final adminA = _esAdmin(a.data()) ? 0 : 1;
+        final adminB = _esAdmin(b.data()) ? 0 : 1;
+        if (adminA != adminB) return adminA - adminB;
+        return _nombre(a).toLowerCase().compareTo(_nombre(b).toLowerCase());
+      });
+      setState(() {
+        _docs = list;
+        _loading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
     }
   }
 
-  String _etiquetaRol(String rol) {
-    return AuthManager.esAdmin(rol) ? 'Admin' : 'Vendedor';
+  static bool _esAdmin(Map<String, dynamic> data) =>
+      AuthManager.esAdmin(AuthManager.normalizarRol(data['rol']?.toString()));
+
+  static String _nombre(QueryDocumentSnapshot<Map<String, dynamic>> doc) =>
+      (doc.data()['username'] ?? doc.data()['email'] ?? doc.id).toString();
+
+  Future<void> _cambiarRol(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
+    final aAdmin = !_esAdmin(doc.data());
+    final nombre = _nombre(doc);
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(aAdmin ? '¿Hacer administrador?' : '¿Pasar a vendedor?'),
+        content: Text(
+          aAdmin
+              ? '$nombre podrá modificar todo: productos, stock, eventos y '
+                    'usuarios. Entregue este rol solo a quien lo necesite.'
+              : '$nombre dejará de ver el panel de administración. La próxima '
+                    'vez que ingrese entrará como vendedor.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(aAdmin ? 'Hacer administrador' : 'Pasar a vendedor'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !mounted) return;
+
+    setState(() => _guardando = doc.id);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await RolesService(_db).cambiarRol(
+        perfilId: doc.id,
+        aAdmin: aAdmin,
+        miUid: _miUid,
+      );
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            aAdmin
+                ? '$nombre ahora es administrador.'
+                : '$nombre ahora es vendedor.',
+          ),
+          backgroundColor: AppColors.exitoFuerte,
+        ),
+      );
+      await _cargar();
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e is RolException ? e.mensaje : 'No se pudo cambiar el rol: $e',
+          ),
+          backgroundColor: AppColors.errorFuerte,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _guardando = null);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Usuarios y roles'),
@@ -82,27 +158,12 @@ class _GestionRolesUsuariosState extends State<GestionRolesUsuarios> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const CargandoTarjetas()
           : _error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _error!,
-                      style: AppFonts.inter(color: AppColors.error),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: _cargar,
-                      child: const Text('Reintentar'),
-                    ),
-                  ],
-                ),
-              ),
+          ? ErrorAmable(
+              titulo: 'No pudimos cargar los usuarios',
+              detalle: _error,
+              onReintentar: _cargar,
             )
           : RefreshIndicator(
               onRefresh: _cargar,
@@ -110,102 +171,127 @@ class _GestionRolesUsuariosState extends State<GestionRolesUsuarios> {
                 padding: conMargenInferior(context, const EdgeInsets.all(16)),
                 children: [
                   Text(
-                    'Listado de usuarios con rol admin o vendedor.',
-                    style: AppFonts.inter(fontSize: 14, color: Colors.black54),
-                  ),
+                    'Toque el botón de cada persona para hacerla administradora '
+                    'o devolverla a vendedor. Su propio rol no se puede cambiar.',
+                    style: AppFonts.inter(
+                      fontSize: 14,
+                      color: AppColors.tintaSecundaria,
+                      height: 1.35,
+                    ),
+                  ).entrada(),
                   const SizedBox(height: 16),
-                  ..._docs.map((doc) {
-                    final data = doc.data();
-                    final uid = doc.id;
-                    final username = (data['username'] ?? data['email'] ?? uid)
-                        .toString();
-                    final email = (data['email'] ?? '').toString();
-                    final rolNormalizado = AuthManager.normalizarRol(
-                      data['rol']?.toString(),
-                    );
-                    final esAdmin = rolNormalizado == 'admin';
-                    final esYo = uid == currentUid;
-                    final etiqueta = esYo ? 'Tú' : _etiquetaRol(rolNormalizado);
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: esAdmin
-                                  ? accentColor
-                                  : primaryColor.withValues(alpha: 0.2),
-                              child: Icon(
-                                esAdmin
-                                    ? Icons.admin_panel_settings
-                                    : Icons.person,
-                                color: esAdmin ? primaryColor : primaryColor,
-                                size: 22,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    username,
-                                    style: AppFonts.inter(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 15,
-                                      color: primaryColor,
-                                    ),
-                                  ),
-                                  if (email.isNotEmpty)
-                                    Text(
-                                      email,
-                                      style: AppFonts.inter(
-                                        fontSize: 14,
-                                        color: Colors.black54,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color:
-                                    (esAdmin
-                                            ? accentColor
-                                            : AppColors.tintaSecundaria)
-                                        .withValues(alpha: 0.3),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                etiqueta,
-                                style: AppFonts.inter(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                  color: primaryColor,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
+                  for (final (i, doc) in _docs.indexed)
+                    _tarjeta(doc).entradaEnLista(i + 1),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _tarjeta(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
+    final esAdmin = _esAdmin(data);
+    final esYo = RolesService.esPropio(doc.id, data, _miUid);
+    final email = (data['email'] ?? '').toString();
+    final color = esAdmin ? AppColors.dorado : AppColors.cian;
+    final guardando = _guardando == doc.id;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        side: BorderSide(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: color.withValues(alpha: 0.18),
+                  child: Icon(
+                    esAdmin ? Icons.admin_panel_settings : Icons.person,
+                    color: color,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _nombre(doc),
+                        style: AppFonts.inter(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                          color: AppColors.tinta,
+                        ),
+                      ),
+                      if (email.isNotEmpty)
+                        Text(
+                          email,
+                          style: AppFonts.inter(
+                            fontSize: 14,
+                            color: AppColors.tintaSecundaria,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: color.withValues(alpha: 0.6)),
+                  ),
+                  child: Text(
+                    esAdmin ? 'Administrador' : 'Vendedor',
+                    style: AppFonts.inter(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (esYo)
+              Text(
+                'Esta es su cuenta: su rol no se puede cambiar desde aquí.',
+                style: AppFonts.inter(
+                  fontSize: 13,
+                  color: AppColors.tintaSecundaria,
+                ),
+              )
+            else
+              Align(
+                alignment: Alignment.centerRight,
+                child: Presionable(
+                  child: OutlinedButton.icon(
+                    onPressed: guardando ? null : () => _cambiarRol(doc),
+                    icon: guardando
+                        ? const SizedBox(height: 18, child: CargandoPuntos())
+                        : Icon(
+                            esAdmin
+                                ? Icons.person_outline_rounded
+                                : Icons.admin_panel_settings_outlined,
+                          ),
+                    label: Text(
+                      esAdmin ? 'Pasar a vendedor' : 'Hacer administrador',
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

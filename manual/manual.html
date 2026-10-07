@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Manual de uso · App Fusión Eventos</title>
+<style>
+  @font-face { font-family: Inter; src: url('../appmovilsnack/assets/fuentes/Inter-Regular.ttf'); font-weight: 400; }
+  @font-face { font-family: Inter; src: url('../appmovilsnack/assets/fuentes/Inter-Medium.ttf'); font-weight: 500; }
+  @font-face { font-family: Inter; src: url('../appmovilsnack/assets/fuentes/Inter-SemiBold.ttf'); font-weight: 600; }
+  @font-face { font-family: Inter; src: url('../appmovilsnack/assets/fuentes/Inter-Bold.ttf'); font-weight: 700; }
+  @font-face { font-family: Inter; src: url('../appmovilsnack/assets/fuentes/Inter-ExtraBold.ttf'); font-weight: 800; }
+  @font-face { font-family: Lobster; src: url('../appmovilsnack/assets/fuentes/Lobster-Regular.ttf'); }
+
+  :root {
+    --noche: #0E1A2B;
+    --negro: #081221;
+    --tarjeta: #182840;
+    --dorado: #EDC661;
+    --dorado-osc: #B8892E;
+    --cafe: #8A6434;
+    --crema: #FAF5EA;
+    --crema-borde: #EADCC0;
+    --tinta: #1B2433;
+    --gris: #5B6575;
+    --naranja: #D9772B;
+    --naranja-fondo: #FDF1E6;
+    --verde: #1E7D4E;
+  }
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { font-family: Inter, sans-serif; color: var(--tinta); font-size: 10.4pt; line-height: 1.45;
+         -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .pagina { width: 210mm; height: 297mm; padding: 15mm 16mm 18mm; position: relative;
+            overflow: hidden; page-break-after: always; break-after: page; background: #fff; }
+  .pagina:last-child { page-break-after: auto; break-after: auto; }
+  .pie { position: absolute; left: 16mm; right: 16mm; bottom: 8mm; display: flex; justify-content: space-between;
+         font-size: 7.5pt; color: var(--cafe); border-top: 0.6pt solid var(--crema-borde); padding-top: 2mm; }
+
+  /* ---------- Portada ---------- */
+  .portada { background: radial-gradient(ellipse at 50% 38%, #1d2c45 0%, var(--noche) 45%, var(--negro) 100%);
+             color: #fff; display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 20mm; }
+  .portada .logo { width: 44mm; }
+  .portada .mascota { width: 92mm; margin-top: 8mm; filter: drop-shadow(0 0 14mm rgba(237,198,97,.28)); }
+  .portada h1 { font-family: Lobster; font-weight: 400; color: var(--dorado); font-size: 52pt; margin: 6mm 0 1mm; }
+  .portada .sub { font-size: 15pt; font-weight: 600; }
+  .portada .sub2 { color: #A9B8CE; margin-top: 2mm; font-size: 11pt; }
+  .portada .chips { margin-top: auto; margin-bottom: 6mm; display: flex; gap: 3mm; }
+  .portada .chips span { border: 0.8pt solid var(--dorado); color: var(--dorado); border-radius: 99px;
+                         padding: 1.6mm 5mm; font-weight: 800; font-size: 10pt; }
+  .portada .fecha { color: #8794A8; font-size: 9pt; margin-bottom: 4mm; }
+  .portada .novedad { margin-top: 7mm; background: rgba(237,198,97,.12); border: 0.6pt solid rgba(237,198,97,.5);
+                      border-radius: 4mm; padding: 3mm 6mm; font-size: 9.5pt; color: #F3E3B5; max-width: 140mm; }
+
+  /* ---------- Encabezado de sección ---------- */
+  .seccion { background: var(--negro); color: #fff; border-radius: 5mm; padding: 6mm 7mm; display: flex;
+             align-items: center; gap: 5mm; margin-bottom: 6mm; position: relative; overflow: hidden; }
+  .seccion::after { content: ''; position: absolute; right: -14mm; top: -14mm; width: 46mm; height: 46mm; border-radius: 50%;
+                    border: 3mm solid rgba(237,198,97,.10); }
+  .seccion .num { width: 13mm; height: 13mm; border-radius: 50%; background: var(--dorado); color: var(--negro);
+                  font-weight: 800; font-size: 18pt; display: flex; align-items: center; justify-content: center; flex: none; }
+  .seccion h2 { margin: 0; font-size: 21pt; font-weight: 800; letter-spacing: -0.3pt; line-height: 1.1; }
+  .seccion p { margin: 1mm 0 0; color: var(--dorado); font-size: 10pt; }
+
+  h3 { font-size: 13.5pt; font-weight: 800; margin: 5mm 0 3mm; padding-bottom: 1.5mm; border-bottom: 1.2pt solid var(--dorado); }
+  h4 { font-size: 11pt; font-weight: 800; color: var(--cafe); margin: 4mm 0 2mm; }
+  p { margin: 0 0 2.5mm; }
+  b { font-weight: 700; }
+
+  /* Pasos numerados */
+  ol.pasos { list-style: none; counter-reset: paso; padding: 0; margin: 2mm 0 3mm; }
+  ol.pasos li { counter-increment: paso; position: relative; padding-left: 10mm; margin-bottom: 2.4mm; min-height: 6.5mm; }
+  ol.pasos li::before { content: counter(paso); position: absolute; left: 0; top: -0.3mm; width: 6.5mm; height: 6.5mm;
+                        border-radius: 50%; background: var(--negro); color: var(--dorado); font-weight: 800;
+                        font-size: 9pt; display: flex; align-items: center; justify-content: center; }
+  ul.lista { margin: 1mm 0 3mm; padding-left: 5mm; }
+  ul.lista li { margin-bottom: 1.4mm; }
+
+  .b { display: inline-block; background: var(--dorado); color: var(--negro); border: 0.5pt solid var(--dorado-osc);
+       border-radius: 99px; padding: 0.2mm 2.6mm; font-weight: 800; font-size: 8.6pt; white-space: nowrap; }
+  .ruta { color: var(--cafe); font-weight: 700; font-size: 9.4pt; }
+
+  /* Recuadros */
+  .caja { border-radius: 3.5mm; padding: 3.2mm 4.5mm; margin: 3mm 0; break-inside: avoid; }
+  .caja .t { font-size: 8pt; font-weight: 800; letter-spacing: 0.8pt; text-transform: uppercase; margin-bottom: 1mm; }
+  .ejemplo { background: var(--crema); border-left: 1.4mm solid var(--cafe); }
+  .ejemplo .t { color: var(--cafe); }
+  .importante { background: var(--naranja-fondo); border-left: 1.4mm solid var(--naranja); }
+  .importante .t { color: var(--naranja); }
+  .consejo { background: var(--negro); color: #fff; display: flex; gap: 4mm; align-items: center; }
+  .consejo img { width: 15mm; flex: none; }
+  .consejo .t { color: var(--dorado); }
+  .formula { background: var(--negro); color: #fff; text-align: center; border-radius: 3mm; padding: 3mm;
+             font-weight: 800; font-size: 11pt; margin: 3mm 0; }
+  .formula em { color: var(--dorado); font-style: normal; }
+
+  /* Flujo de pasos */
+  .flujo { display: flex; align-items: stretch; gap: 2mm; margin: 3mm 0 4mm; }
+  .flujo .paso { flex: 1; background: var(--crema); border: 0.6pt solid var(--crema-borde); border-radius: 3.5mm;
+                 padding: 3mm 2mm; text-align: center; }
+  .flujo .paso .n { width: 8mm; height: 8mm; border-radius: 50%; background: var(--negro); color: var(--dorado);
+                    font-weight: 800; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5mm; }
+  .flujo .paso b { display: block; font-size: 10pt; }
+  .flujo .paso span { font-size: 8.4pt; color: var(--gris); line-height: 1.3; display: block; }
+  .flujo .flecha { align-self: center; color: var(--cafe); font-weight: 800; }
+
+  /* Texto + teléfono */
+  .dos { display: grid; grid-template-columns: 1fr 58mm; gap: 7mm; align-items: start; }
+  .dos.izq { grid-template-columns: 58mm 1fr; }
+  .telefono { position: relative; width: 58mm; background: #05080F; border-radius: 7mm; padding: 2mm;
+              box-shadow: 0 2mm 5mm rgba(8,18,33,.28); break-inside: avoid; }
+  .telefono img { display: block; width: 100%; border-radius: 5.2mm; }
+  .telefono.chico { width: 48mm; }
+  .pie-foto { font-size: 8pt; color: var(--gris); text-align: center; margin-top: 2mm; line-height: 1.3; }
+  .marca { position: absolute; left: -4mm; width: 7mm; height: 7mm; border-radius: 50%; background: var(--naranja);
+           color: #fff; font-weight: 800; font-size: 9pt; display: flex; align-items: center; justify-content: center;
+           border: 0.8pt solid #fff; box-shadow: 0 0.6mm 1.6mm rgba(0,0,0,.35); }
+  .leyenda { list-style: none; padding: 0; margin: 2mm 0; }
+  .leyenda li { position: relative; padding-left: 9mm; margin-bottom: 2.6mm; }
+  .leyenda li .marca { left: 0; top: -0.4mm; width: 6.2mm; height: 6.2mm; font-size: 8.4pt; }
+
+  .fila-fotos { display: flex; gap: 6mm; justify-content: center; margin: 3mm 0; }
+  .tablet { background: #05080F; border-radius: 5mm; padding: 2mm; box-shadow: 0 2mm 5mm rgba(8,18,33,.28); }
+  .tablet img { display: block; width: 100%; border-radius: 3.5mm; }
+
+  /* Tablas */
+  table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 2.5mm 0 3mm; font-size: 9.3pt;
+          border: 0.6pt solid var(--crema-borde); border-radius: 3mm; overflow: hidden; break-inside: avoid; }
+  th { background: var(--negro); color: var(--dorado); text-align: left; padding: 2.4mm 3mm; font-weight: 800; }
+  td { padding: 2.2mm 3mm; border-top: 0.6pt solid var(--crema-borde); vertical-align: top; }
+  tr:nth-child(even) td { background: #FCF9F2; }
+  td:first-child { font-weight: 700; }
+
+  /* Tarjetas de dos columnas */
+  .par { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; margin: 2mm 0 4mm; }
+  .tarj { border-radius: 4mm; padding: 4mm 5mm; }
+  .tarj.oscura { background: var(--negro); color: #fff; }
+  .tarj.oscura .t { color: var(--dorado); }
+  .tarj.clara { border: 0.8pt solid var(--crema-borde); background: #fff; }
+  .tarj.clara .t { color: var(--cafe); }
+  .tarj .t { font-weight: 800; font-size: 11pt; margin-bottom: 1.5mm; }
+
+  /* Contenido */
+  .indice { display: grid; grid-template-columns: 1fr 1fr; column-gap: 8mm; }
+  .indice div { border-bottom: 0.6pt dashed var(--crema-borde); padding: 2mm 0; display: flex; gap: 2mm; }
+  .indice div b { color: var(--cafe); width: 5mm; }
+  .indice div span:last-child { margin-left: auto; color: var(--gris); }
+
+  /* Glosario */
+  .glosario { display: grid; grid-template-columns: 1fr 1fr; gap: 3.2mm; margin-top: 2mm; }
+  .glosario .g { background: var(--crema); border: 0.6pt solid var(--crema-borde); border-radius: 3.5mm; padding: 3mm 4mm;
+                 display: flex; gap: 3mm; }
+  .glosario .ico { font-size: 15pt; line-height: 1; flex: none; width: 9mm; height: 9mm; border-radius: 2.5mm;
+                   background: var(--negro); display: flex; align-items: center; justify-content: center; }
+  .glosario .g > div > b { display: block; margin-bottom: 0.6mm; }
+  .glosario span { font-size: 9pt; color: #3D4656; line-height: 1.35; }
+
+  /* Botones del panel */
+  .cuatro { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; margin: 2mm 0; }
+  .cuatro .c { border-radius: 3.5mm; padding: 3mm 4mm; border: 0.8pt solid; }
+  .cuatro .c b { display: block; font-size: 10.4pt; margin-bottom: 0.8mm; }
+  .cuatro .c span { font-size: 8.8pt; color: #3D4656; line-height: 1.35; display: block; }
+  .c.coral { border-color: #F2A79F; background: #FFF4F2; } .c.coral b { color: #C2493C; }
+  .c.cian { border-color: #8FD9F2; background: #F0FAFE; } .c.cian b { color: #1F7FA3; }
+  .c.dorado { border-color: #EDC661; background: #FFF9E8; } .c.dorado b { color: #9A6E14; }
+  .c.violeta { border-color: #C3B8FF; background: #F6F3FF; } .c.violeta b { color: #5D4BC4; }
+
+  /* Checklist */
+  .check { display: grid; grid-template-columns: 1fr 1fr; gap: 0 9mm; }
+  .check h3 { font-size: 12pt; margin-top: 4mm; }
+  .check ul { list-style: none; padding: 0; margin: 0; }
+  .check li { position: relative; padding-left: 8mm; margin-bottom: 2.4mm; font-size: 9.6pt; line-height: 1.35; }
+  .check li::before { content: ''; position: absolute; left: 0; top: 0.2mm; width: 4.4mm; height: 4.4mm;
+                      border: 0.9pt solid var(--cafe); border-radius: 1.2mm; }
+  .chico { font-size: 9pt; color: var(--gris); }
+</style>
+</head>
+<body>
+
+<!-- ============ PORTADA ============ -->
+<section class="pagina portada">
+  <img class="logo" src="../appmovilsnack/assets/imagenes/logo.png" alt="">
+  <img class="mascota" src="../appmovilsnack/assets/imagenes/mascota.png" alt="">
+  <h1>Manual de uso</h1>
+  <div class="sub">App Fusión Eventos</div>
+  <div class="sub2">Guía paso a paso, con pantallas reales, para vendedores y administradores</div>
+  <div class="novedad"><b>Edición actualizada:</b> nuevo panel del administrador (Ventas + Panel), gráficos de
+    ventas, ingreso directo con la sesión guardada y nuevas pantallas de ayuda.</div>
+  <div class="chips"><span>Vendedor</span><span>Administrador</span></div>
+  <div class="fecha">Fusión · Healthy Snacks &amp; Coffee · Octubre 2026</div>
+</section>
+
+<!-- ============ 1 BIENVENIDA ============ -->
+<section class="pagina">
+  <div class="seccion"><div class="num">1</div><div><h2>Bienvenida</h2><p>Qué es la app y cómo usar esta guía</p></div></div>
+  <p>Fusión Eventos es la app que usamos en el estadio para saber <b>qué hay en cada puesto</b>, <b>cuánto se vende</b>
+    y <b>cuánto dinero se debe entregar</b> al final del turno. Esta guía le muestra cada pantalla tal como la verá en su
+    teléfono, y le explica qué tocar en cada momento.</p>
+
+  <div class="par">
+    <div class="tarj oscura"><div class="t">Si usted es vendedor</div>
+      Lea las secciones <b>2, 3 y 4</b>. Ahí aprenderá a ingresar, abrir su puesto, trabajar con bandejeros, traspasos
+      y mermas, y cerrar el turno.</div>
+    <div class="tarj clara"><div class="t">Si usted es administrador</div>
+      Lea toda la guía. Además de preparar el evento y revisar las ventas, usted también puede trabajar como vendedor
+      en cualquier puesto.</div>
+  </div>
+
+  <h3>Contenido</h3>
+  <div class="indice">
+    <div><b>1</b><span>Bienvenida, instalación y palabras clave</span></div>
+    <div><b>5</b><span>Administrador</span></div>
+    <div><b>2</b><span>Primeros pasos: cuenta y acceso</span></div>
+    <div><b>6</b><span>Problemas frecuentes</span></div>
+    <div><b>3</b><span>Vendedor: su turno paso a paso</span></div>
+    <div><b>7</b><span>Checklist del día del evento</span></div>
+    <div><b>4</b><span>Vendedor: cierre de turno</span></div>
+    <div></div>
+  </div>
+
+  <h3>Cómo instalar la app</h3>
+  <p>La app se instala desde Google Play, pero solo pueden verla las personas invitadas por el administrador.</p>
+  <ol class="pasos">
+    <li>Entregue al administrador el <b>correo de Google</b> que usa en su teléfono.</li>
+    <li>Abra el enlace de invitación que le envían <b>desde ese mismo teléfono</b> y acepte participar.</li>
+    <li>Busque <b>Fusión eventos</b> en Google Play e instálela como cualquier app.</li>
+  </ol>
+  <div class="caja consejo"><img src="../appmovilsnack/assets/imagenes/mascota.png" alt="">
+    <div><div class="t">Consejo</div>Antes de cada evento, abra Google Play y revise la página de la app. Si aparece el
+      botón <span class="b">Actualizar</span>, tóquelo: así siempre tendrá la última versión.</div></div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<!-- ============ PALABRAS CLAVE ============ -->
+<section class="pagina">
+  <h3 style="margin-top:0">Palabras que verá en la app</h3>
+  <p>Antes de empezar, conozca las palabras que usa la app. Cuando las vea en la guía, ya sabrá de qué se trata.</p>
+  <div class="glosario">
+    <div class="g"><div class="ico">🏟️</div><div><b>Evento</b><span>El partido del día. Solo aparecen los eventos que el administrador dejó <b>activos</b>.</span></div></div>
+    <div class="g"><div class="ico">🏪</div><div><b>Sector o puesto</b><span>El lugar donde usted vende, por ejemplo <i>Galería Norte</i> o <i>Pacífico</i>.</span></div></div>
+    <div class="g"><div class="ico">📦</div><div><b>Stock inicial</b><span>Lo que hay en su puesto al abrir. Se cuenta y se carga una sola vez por turno.</span></div></div>
+    <div class="g"><div class="ico">🔁</div><div><b>Traspaso</b><span>Enviar productos de su puesto a otro, por ejemplo cuando a otro sector se le acaban las bebidas.</span></div></div>
+    <div class="g"><div class="ico">🧺</div><div><b>Bandejero y ronda</b><span>El bandejero sale a vender con una bandeja por las galerías. Cada salida es una <b>ronda</b>.</span></div></div>
+    <div class="g"><div class="ico">💵</div><div><b>Caja para vuelto</b><span>El efectivo que se le entrega al bandejero para dar vuelto. Se suma a lo que debe devolver.</span></div></div>
+    <div class="g"><div class="ico">💥</div><div><b>Merma</b><span>Un producto que se perdió y no se puede vender: se cayó, venció o se dañó.</span></div></div>
+    <div class="g"><div class="ico">🔒</div><div><b>Cierre de turno</b><span>Contar lo que queda al final. Con eso, la app calcula lo vendido y el dinero a entregar.</span></div></div>
+    <div class="g"><div class="ico">⚠️</div><div><b>Incidencia</b><span>Algo que no calzó y el administrador debe revisar: un traspaso que llegó incompleto o un conteo con sobrante.</span></div></div>
+    <div class="g"><div class="ico">🔄</div><div><b>Reabrir</b><span>Cuando el administrador vuelve a habilitar un puesto que ya cerró su turno.</span></div></div>
+  </div>
+
+  <div class="caja ejemplo" style="margin-top:6mm"><div class="t">Cómo leer esta guía</div>
+    Los botones que debe tocar aparecen así: <span class="b">Ingresar</span>. Los números naranjos
+    <span class="marca" style="position:static;display:inline-flex;width:5.4mm;height:5.4mm;font-size:7.6pt;vertical-align:-1mm">1</span>
+    sobre las pantallas indican de qué parte se habla en el texto. Los recuadros <b>Ejemplo</b> muestran un caso
+    real; los recuadros <b>Importante</b> marcan lo que no debe olvidar.</div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<!-- ============ 2 PRIMEROS PASOS ============ -->
+<section class="pagina">
+  <div class="seccion"><div class="num">2</div><div><h2>Primeros pasos</h2><p>Crear su cuenta, ingresar y recuperar la contraseña</p></div></div>
+
+  <div class="dos">
+    <div>
+      <p>Todos ingresan con un <b>nombre de usuario</b> y una <b>contraseña</b>. En la pantalla de ingreso, el campo
+        de la contraseña se llama <b>PIN</b>.</p>
+      <h3>Ingresar a la app</h3>
+      <ol class="pasos">
+        <li>Escriba su <b>Usuario</b> <span class="chico">(1)</span>.</li>
+        <li>Escriba su contraseña en <b>PIN</b> <span class="chico">(2)</span>. Toque el ojo para ver lo que escribió.</li>
+        <li>Toque <span class="b">Ingresar</span> <span class="chico">(3)</span>.</li>
+      </ol>
+      <div class="caja ejemplo"><div class="t">Ejemplo</div>
+        Si su usuario es “Paz”, puede escribir “Paz”, “paz” o “PAZ”: la app lo reconoce igual, porque no le importan
+        las mayúsculas ni los espacios.</div>
+      <h3>La próxima vez entra directo</h3>
+      <p>Si ya ingresó antes en ese teléfono, al abrir la app verá el logo unos segundos y entrará directo a su
+        pantalla, <b>aunque no haya señal</b>. No necesita volver a escribir su contraseña.</p>
+      <div class="caja importante"><div class="t">Si escribe mal sus datos</div>
+        La app muestra <i>“Usuario o contraseña incorrectos”</i> en un aviso rojo, con la mascota. Revise lo que
+        escribió e intente otra vez.</div>
+    </div>
+    <div>
+      <div class="telefono">
+        <img src="img/login.jpg" alt="Pantalla de ingreso">
+        <div class="marca" style="top:36.5%">1</div>
+        <div class="marca" style="top:45%">2</div>
+        <div class="marca" style="top:54%">3</div>
+      </div>
+      <div class="pie-foto">Pantalla de ingreso</div>
+    </div>
+  </div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<section class="pagina">
+  <div class="dos izq">
+    <div>
+      <div class="telefono"><img src="img/registro.jpg" alt="Crear cuenta"></div>
+      <div class="pie-foto">Crear cuenta</div>
+    </div>
+    <div>
+      <h3 style="margin-top:0">Crear una cuenta</h3>
+      <ol class="pasos">
+        <li>En la pantalla de ingreso, toque <span class="b">Crear cuenta</span>.</li>
+        <li>Complete su <b>nombre de usuario</b>, su <b>correo electrónico</b> y su <b>contraseña</b> (dos veces).</li>
+        <li>Toque <span class="b">Registrarme</span>. Verá el mensaje <i>“¡Registro exitoso! Ya puede iniciar sesión.”</i></li>
+      </ol>
+      <div class="caja importante"><div class="t">Tenga en cuenta</div>
+        <ul class="lista" style="margin:0">
+          <li>El nombre de usuario debe tener <b>al menos 3 caracteres</b>, y nadie más puede estar usándolo.</li>
+          <li>La contraseña debe tener <b>letras y números</b>, y <b>al menos 6 caracteres</b>.</li>
+          <li>Use un <b>correo real</b>: lo necesitará si olvida su contraseña.</li>
+          <li>Las cuentas nuevas siempre se crean como <b>vendedor</b>.</li>
+        </ul></div>
+    </div>
+  </div>
+
+  <div class="dos" style="margin-top:6mm">
+    <div>
+      <h3 style="margin-top:0">¿Olvidó su contraseña?</h3>
+      <ol class="pasos">
+        <li>En la pantalla de ingreso, toque <span class="b">¿Olvidó su contraseña?</span></li>
+        <li>Escriba el correo con que se registró y toque <span class="b">Enviar Correo de Restablecimiento</span>.</li>
+        <li>Abra el correo que le llega y siga el enlace para crear una contraseña nueva.</li>
+      </ol>
+      <h3>Cerrar sesión</h3>
+      <p>En el panel de vendedor, toque <span class="b">Cerrar sesión</span> en la barra de abajo. En el panel de
+        administrador, está al final de la pestaña <b>Panel</b>.</p>
+      <p>Al confirmar el cierre de turno, la app también cierra la sesión sola.</p>
+    </div>
+    <div>
+      <div class="telefono"><img src="img/recuperar.jpg" alt="Recuperar contraseña"></div>
+      <div class="pie-foto">Recuperar la contraseña</div>
+    </div>
+  </div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<!-- ============ 3 VENDEDOR ============ -->
+<section class="pagina">
+  <div class="seccion"><div class="num">3</div><div><h2>Vendedor: su turno paso a paso</h2><p>Desde que llega al puesto hasta antes de cerrar</p></div></div>
+  <p>Todo turno sigue el mismo camino. Si recuerda este orden, nunca se perderá:</p>
+  <div class="flujo">
+    <div class="paso"><div class="n">1</div><b>Elegir puesto</b><span>Evento y sector donde trabajará</span></div><div class="flecha">›</div>
+    <div class="paso"><div class="n">2</div><b>Stock inicial</b><span>Contar con qué abre el puesto</span></div><div class="flecha">›</div>
+    <div class="paso"><div class="n">3</div><b>Trabajar</b><span>Bandejeo, traspasos y mermas</span></div><div class="flecha">›</div>
+    <div class="paso"><div class="n">4</div><b>Cerrar turno</b><span>Contar lo que queda y entregar</span></div>
+  </div>
+
+  <h3>Paso 1 · Elegir su puesto</h3>
+  <ol class="pasos">
+    <li>Después de ingresar, toque el <b>evento</b> del día para ver sus sectores.</li>
+    <li>Toque su <b>sector</b> (su puesto, por ejemplo Galería Norte): se marca en dorado con un ✓.</li>
+    <li>Revise el nombre que aparece abajo y toque <span class="b">CONTINUAR</span>.</li>
+  </ol>
+  <p>Si un sector aparece como <b>Turno cerrado</b> 🔒, no se puede elegir: pida al administrador que lo reabra.</p>
+
+  <h3>Su panel de vendedor</h3>
+  <div class="dos">
+    <div>
+      <ul class="leyenda">
+        <li><span class="marca">1</span><b>Su puesto y el estado del turno.</b> El punto naranjo dice <i>Falta stock
+          inicial</i>; cuando lo cargue, cambia a verde: <i>Turno en curso</i>. A la derecha, la hora.</li>
+        <li><span class="marca">2</span><b>Avisos.</b> Aquí aparece lo que falta hacer, y también los
+          <b>pedidos pendientes</b> cuando otro puesto le envía productos.</li>
+        <li><span class="marca">3</span><b>Botón principal.</b> Al empezar dice <span class="b">Ingresar stock inicial</span>;
+          después cambia a <span class="b">Ingresar stock final</span> para cerrar el turno.</li>
+        <li><span class="marca">4</span><b>Operaciones:</b> Traspaso, Mermas, Bandejeo y Ver stock. Se ven
+          apagadas hasta que cargue el stock inicial.</li>
+        <li><span class="marca">5</span><b>Barra de abajo:</b> <span class="b">Cambiar evento</span> y
+          <span class="b">Cerrar sesión</span>.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="telefono">
+        <img src="img/vendedor_panel.jpg" alt="Panel de vendedor">
+        <div class="marca" style="top:11%">1</div>
+        <div class="marca" style="top:23.5%">2</div>
+        <div class="marca" style="top:37.5%">3</div>
+        <div class="marca" style="top:63%">4</div>
+        <div class="marca" style="top:92.5%">5</div>
+      </div>
+      <div class="pie-foto">Panel de vendedor al abrir el turno</div>
+    </div>
+  </div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<section class="pagina">
+  <h3 style="margin-top:0">Paso 2 · Cargar el stock inicial</h3>
+  <p>El stock inicial es la cantidad de cada producto con la que abre su puesto. Mientras no lo cargue, la app no le
+    deja usar bandejeo, traspasos ni mermas.</p>
+  <ol class="pasos">
+    <li>En su panel, toque <span class="b">Ingresar stock inicial</span>.</li>
+    <li>Cuente cada producto, toque su recuadro de cantidad y escriba el número.</li>
+    <li>Si falta un producto en la lista, toque <span class="b">Agregar Producto</span>.</li>
+    <li>Cuando termine, toque <span class="b">Guardar y salir</span> y confirme.</li>
+  </ol>
+  <div class="caja ejemplo"><div class="t">Ejemplo</div>
+    Antes de abrir, otro puesto le envió 10 bebidas por traspaso, y usted tiene 20 propias. Escriba solo <b>20</b>:
+    la app suma sola las 10 del traspaso, y su stock inicial queda en <b>30</b>.</div>
+  <div class="caja importante"><div class="t">Importante</div>
+    Si sale antes de terminar, su avance queda guardado como borrador, pero el puesto <b>no se activa</b> hasta que
+    toque <span class="b">Guardar y salir</span>. El stock inicial se carga <b>una sola vez</b>: si después llega más
+    mercadería, el administrador la suma con “Agregar stock”.</div>
+
+  <h3>Ver stock</h3>
+  <p>Toque <span class="b">Ver stock</span> para saber cuántas unidades le quedan de cada producto. Se actualiza solo,
+    en tiempo real. Es una pantalla solo para mirar: desde aquí no se cambia nada.</p>
+
+  <h3>Paso 3 · Bandejeo</h3>
+  <p>Un <b>bandejero</b> es la persona que sale a vender con una bandeja por las galerías. Cada salida se llama
+    <b>ronda</b>. La app anota lo que lleva, lo que vende y el dinero que debe entregar. Arriba de la pantalla, una
+    barra dorada le muestra en qué paso va.</p>
+  <div class="flujo">
+    <div class="paso"><div class="n">A</div><b>Cargar bandeja</b><span>Productos y caja para vuelto</span></div><div class="flecha">›</div>
+    <div class="paso"><div class="n">B</div><b>Sale a vender</b><span>La ronda queda “en curso”</span></div><div class="flecha">›</div>
+    <div class="paso"><div class="n">C</div><b>Rendir ronda</b><span>Anotar lo que trae de vuelta</span></div><div class="flecha">›</div>
+    <div class="paso"><div class="n">D</div><b>¿Otra ronda?</b><span>Vuelve a A, o cierra su bandejeo</span></div>
+  </div>
+  <h4>Agregar un bandejero</h4>
+  <ol class="pasos">
+    <li>Toque <span class="b">Bandejeo</span> y luego <span class="b">Agregar bandejero</span>.</li>
+    <li>Escriba su nombre y toque <span class="b">Guardar</span>.</li>
+  </ol>
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<section class="pagina">
+  <h4 style="margin-top:0">A · Cargar la bandeja e iniciar la ronda</h4>
+  <ol class="pasos">
+    <li>Toque el nombre del bandejero en la lista.</li>
+    <li>Toque cada producto que lleva y escriba la cantidad. Arriba verá cuántos productos lleva y el total de la bandeja.</li>
+    <li>Toque <span class="b">Iniciar ronda</span> y escriba la <b>caja para vuelto</b> (puede ser 0).</li>
+  </ol>
+  <p>Mientras está afuera, puede usar <span class="b">Ver lo que llevó</span>, o <span class="b">Agregar más cosas</span>
+    si vuelve a buscar productos.</p>
+
+  <h4>C · Rendir la ronda</h4>
+  <ol class="pasos">
+    <li>Cuando vuelve, toque <span class="b">Rendir ronda</span>.</li>
+    <li>En cada producto, escriba el <b>Sobrante</b>: lo que trae de vuelta sin vender.</li>
+    <li>Revise el <b>Total vendido</b> que calcula la app y toque <span class="b">Confirmar Venta</span>.</li>
+  </ol>
+  <div class="caja ejemplo"><div class="t">Ejemplo</div>
+    Pedro salió con 20 bebidas y volvió con 5. Usted escribe <b>5</b> en Sobrante, y la app registra
+    <b>15 bebidas vendidas</b>.</div>
+
+  <h4>D · Cerrar el bandejeo</h4>
+  <p>Cuando el bandejero termina su turno, elija <span class="b">Cerrar bandejeo</span> y escriba el porcentaje de su
+    comisión. La app calcula cuánto debe entregar:</p>
+  <div class="formula">Total a recibir <em>=</em> total vendido <em>+</em> caja para vuelto</div>
+  <div class="caja ejemplo"><div class="t">Ejemplo</div>
+    Pedro vendió $30.000 y recibió $5.000 de caja para vuelto. Debe entregar <b>$35.000</b>. Si su comisión es 10 %,
+    le corresponden <b>$3.000</b>.</div>
+  <p>Toque <span class="b">Confirmar cierre</span>. Si un bandejero no vendió nada, use
+    <span class="b">Cerrar bandejeo (sin ventas)</span>.</p>
+  <div class="caja consejo"><img src="../appmovilsnack/assets/imagenes/mascota.png" alt="">
+    <div><div class="t">Consejo</div>Rinda siempre la ronda antes de entregar una bandeja nueva. Y recuerde: todos
+      los bandejeros deben quedar cerrados antes de cerrar el turno del puesto.</div></div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<section class="pagina">
+  <h3 style="margin-top:0">Traspasos entre puestos</h3>
+  <p>Un traspaso sirve para enviar productos de su puesto a otro. Las unidades <b>salen de su stock al enviarlas</b>,
+    y <b>entran al otro puesto cuando este confirma</b> que llegaron.</p>
+  <div class="par" style="margin-top:0">
+    <div>
+      <h4>Enviar un traspaso</h4>
+      <ol class="pasos">
+        <li>Toque <span class="b">Traspaso</span> y elija el <b>sector destino</b>.</li>
+        <li>Toque cada producto, escriba la cantidad y toque <span class="b">Agregar</span>. Así arma el pedido.</li>
+        <li>Revise el pedido y toque <span class="b">Enviar</span>, y luego <span class="b">Enviar pedido</span>.</li>
+      </ol>
+    </div>
+    <div>
+      <h4>Recibir un traspaso</h4>
+      <p class="chico" style="margin-bottom:1.5mm">Cuando otro puesto le envía productos, aparece un aviso de
+        <b>pedidos pendientes</b> en su panel.</p>
+      <ol class="pasos">
+        <li>Toque el aviso y abra el pedido.</li>
+        <li>Cuente lo que llegó y escríbalo en <b>Recibido</b>.</li>
+        <li>Si llegó menos de lo enviado, escriba el motivo.</li>
+        <li>Toque <span class="b">Confirmar</span>.</li>
+      </ol>
+    </div>
+  </div>
+  <div class="caja ejemplo"><div class="t">Ejemplo</div>
+    Galería Norte le envió 10 aguas, pero en la caja venían 8. Escriba <b>8</b> en Recibido y como motivo
+    “faltaron 2 en la caja”. Las 2 que faltan vuelven al stock de Galería Norte. Si ese puesto ya había cerrado su
+    turno, la diferencia queda como <b>incidencia</b> para que el administrador la revise.</div>
+
+  <h3>Mermas</h3>
+  <p>Una merma es un producto que se perdió y no se puede vender: se cayó, venció o se dañó. Registrarla evita que
+    parezca un faltante al final del turno.</p>
+  <ol class="pasos">
+    <li>Toque <span class="b">Mermas</span> y luego <span class="b">Registrar merma de productos</span>.</li>
+    <li>Toque cada producto perdido, escriba la cantidad y toque <span class="b">Agregar</span>.</li>
+    <li>Toque <span class="b">Registrar</span>, escriba el motivo (por ejemplo, “Se cayó”) y confirme.</li>
+  </ol>
+  <p>En la pestaña <b>Historial</b> puede ver todas las mermas registradas en su puesto.</p>
+  <div class="caja ejemplo"><div class="t">Ejemplo</div>
+    A un cliente se le cayeron 2 cafés. Registre una merma de <b>2 cafés</b> con el motivo “Se cayó”. Al cerrar el
+    turno, esos 2 cafés no aparecerán como un faltante.</div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<!-- ============ 4 CIERRE ============ -->
+<section class="pagina">
+  <div class="seccion"><div class="num">4</div><div><h2>Vendedor: cierre de turno</h2><p>Contar lo que queda y confirmar</p></div></div>
+  <p>Al cerrar el turno, usted cuenta lo que queda en su puesto. Con ese conteo, la app calcula cuánto se vendió y
+    cuánto dinero debe haber.</p>
+  <div class="formula">Vendido <em>=</em> lo que dice el sistema <em>−</em> lo que usted cuenta</div>
+  <div class="caja ejemplo"><div class="t">Ejemplo</div>
+    El sistema dice que hay 30 bebidas y usted cuenta 12. La app registra <b>18 bebidas vendidas</b>.</div>
+
+  <h3>Antes de contar</h3>
+  <p>Toque <span class="b">Ingresar stock final</span>. Si todavía hay traspasos por confirmar o bandejeros sin cerrar,
+    la app le muestra cuáles son y no le deja contar. Resuélvalos y toque <span class="b">Revisar de nuevo</span>.</p>
+
+  <h3>Contar</h3>
+  <ol class="pasos">
+    <li>En cada producto, escriba en <b>Quedan</b> cuántas unidades hay físicamente (o use <b>−</b> y <b>+</b>).</li>
+    <li>Cada tarjeta le muestra el <b>Sistema</b> (lo que la app espera que haya) y lo <b>Vendido</b>, que cambia
+      apenas escribe.</li>
+    <li>Toque <span class="b">Guardar y salir</span> para ver el resumen.</li>
+  </ol>
+  <div class="caja consejo"><img src="../appmovilsnack/assets/imagenes/mascota.png" alt="">
+    <div><div class="t">Consejo</div>Cuente con calma. Si tiene que salir, su conteo queda guardado como borrador, y
+      puede corregir cualquier número, hacia arriba o hacia abajo, todas las veces que necesite antes de confirmar.</div></div>
+
+  <h3>Si cuenta más de lo que dice el sistema</h3>
+  <p>Puede pasar, por ejemplo, si encuentra una caja que no estaba registrada. La app le pregunta:
+    <i>“Está contando X más de lo registrado. ¿Confirma?”</i></p>
+  <ul class="lista">
+    <li>Toque <span class="b">Corregir</span> si se equivocó al escribir.</li>
+    <li>Toque <span class="b">Confirmar</span> si de verdad hay más. La diferencia queda registrada como incidencia para
+      que el administrador la revise.</li>
+  </ul>
+
+  <h3>Si el stock cambió mientras contaba</h3>
+  <p>Si llegó un traspaso o más mercadería mientras usted contaba, la app no cierra el turno. Le muestra
+    <i>“El stock cambió mientras contabas”</i> y marca en <b style="color:var(--naranja)">naranja</b> los productos
+    afectados. Vuelva a contarlos y confirme otra vez.</p>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<section class="pagina">
+  <div class="dos">
+    <div>
+      <h3 style="margin-top:0">Confirmar el cierre</h3>
+      <ol class="pasos">
+        <li>Revise el resumen: el <b>dinero estimado del puesto</b>, las unidades vendidas, el gráfico
+          <b>Lo más vendido</b>, los bandejeros y el detalle por producto.</li>
+        <li>Si lo necesita, toque <span class="b">Exportar resumen</span> para guardarlo o compartirlo.</li>
+        <li>Toque <span class="b">Confirmar cierre y volver al inicio</span>.</li>
+      </ol>
+      <p>Verá la pantalla de ingreso con el aviso verde <b>¡Turno cerrado!</b>: su turno quedó registrado.</p>
+      <div class="caja importante"><div class="t">Importante</div>
+        Al confirmar, el puesto queda con el turno cerrado y la sesión se cierra. Si necesita volver a vender en ese
+        puesto, el administrador debe reabrirlo.</div>
+      <div class="caja ejemplo"><div class="t">Antes de irse</div>
+        Entregue el dinero según el resumen de cierre: lo vendido en el puesto más lo que rindieron sus
+        bandejeros.</div>
+    </div>
+    <div>
+      <div class="telefono"><img src="img/login_turno_cerrado.jpg" alt="Turno cerrado">
+        <div class="marca" style="top:39%">✓</div></div>
+      <div class="pie-foto">Después de confirmar: aviso “¡Turno cerrado!”</div>
+    </div>
+  </div>
+
+  <h3>Buenas prácticas del vendedor</h3>
+  <div class="glosario" style="grid-template-columns:1fr 1fr">
+    <div class="g"><div class="ico">⏱️</div><div><b>Al momento</b><span>Registre las mermas en el momento, no al final del turno.</span></div></div>
+    <div class="g"><div class="ico">📬</div><div><b>Traspasos al día</b><span>Confirme los traspasos apenas lleguen, contando lo que realmente recibió.</span></div></div>
+    <div class="g"><div class="ico">🧺</div><div><b>Una ronda a la vez</b><span>Rinda cada ronda antes de entregar una bandeja nueva.</span></div></div>
+    <div class="g"><div class="ico">🙋</div><div><b>Avise de inmediato</b><span>Si algo no calza, avise al administrador: es más fácil resolverlo en el momento.</span></div></div>
+  </div>
+
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<!-- ============ 5 ADMINISTRADOR ============ -->
+<section class="pagina">
+  <div class="seccion"><div class="num">5</div><div><h2>Administrador</h2><p>Ver las ventas, preparar el evento y revisar los resultados</p></div></div>
+  <p>El panel del administrador tiene solo <b>dos pestañas</b>, abajo en el teléfono y a la izquierda en la tablet:</p>
+  <div class="par" style="margin-top:0">
+    <div class="tarj oscura"><div class="t">📈 Ventas</div>Es la pantalla principal: lo primero que ve al entrar.
+      Muestra cuánto se vendió y los gráficos del día.</div>
+    <div class="tarj clara"><div class="t">▦ Panel</div>Cuatro botones grandes con todo lo demás: entrar como vendedor,
+      configurar eventos, seguir los eventos activos y ver reportes.</div>
+  </div>
+
+  <div class="dos">
+    <div>
+      <h3 style="margin-top:0">La pantalla Ventas</h3>
+      <ul class="leyenda">
+        <li><span class="marca">1</span><b>Requiere atención.</b> Si hay incidencias por resolver, aparecen
+          arriba de todo. Tóquelo para revisarlas.</li>
+        <li><span class="marca">2</span><b>Total vendido</b> en los cierres de turno y el bandejeo, y cuántos partidos
+          tienen ventas.</li>
+        <li><span class="marca">3</span><b>Cifras clave:</b> cierres de turno, promedio por cierre, rondas de
+          bandejeo y partidos activos.</li>
+        <li><span class="marca">4</span><b>Pestañas:</b> el número rojo sobre <b>Panel</b> avisa cuántas
+          incidencias hay pendientes.</li>
+      </ul>
+      <p>Deslice hacia abajo para ver los gráficos (página siguiente). Para actualizar las cifras, deslice la pantalla
+        hacia abajo desde arriba o toque ⟳.</p>
+    </div>
+    <div>
+      <div class="telefono">
+        <img src="img/admin_ventas.jpg" alt="Pantalla Ventas">
+        <div class="marca" style="top:28.5%">1</div>
+        <div class="marca" style="top:46%">2</div>
+        <div class="marca" style="top:69%">3</div>
+        <div class="marca" style="top:95%">4</div>
+      </div>
+      <div class="pie-foto">Ventas: la pantalla principal</div>
+    </div>
+  </div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<section class="pagina">
+  <div class="dos izq">
+    <div>
+      <div class="telefono"><img src="img/admin_ventas_graficos.jpg" alt="Gráficos de ventas"></div>
+      <div class="pie-foto">Gráficos de la pantalla Ventas</div>
+    </div>
+    <div>
+      <h3 style="margin-top:0">Los gráficos</h3>
+      <table>
+        <tr><th>Gráfico</th><th>Qué le muestra</th></tr>
+        <tr><td>Ventas en el tiempo</td><td>Cuánto se vendió en cada hora del partido (o en cada día, si mira varios).
+          La etiqueta <b>Hora peak</b> marca la hora con más venta.</td></tr>
+        <tr><td>¿De dónde vienen las ventas?</td><td>Qué parte viene de los cierres de turno y qué parte del bandejeo
+          en turnos todavía abiertos.</td></tr>
+        <tr><td>Por partido</td><td>Comparación entre partidos con ventas.</td></tr>
+        <tr><td>Por sector</td><td>Ranking de los puestos que más vendieron. Los tres primeros van en oro, plata y
+          bronce.</td></tr>
+      </table>
+      <div class="caja ejemplo"><div class="t">Ejemplo</div>
+        Si la hora peak es de 20:00 a 21:00, conviene tener más mercadería y más bandejeros listos antes de esa
+        hora en el próximo partido.</div>
+      <p class="chico">Toque cualquier barra o punto de un gráfico para ver el monto exacto.</p>
+    </div>
+  </div>
+
+  <h3>En tablet</h3>
+  <div class="tablet"><img src="img/tablet_ventas.jpg" alt="Ventas en tablet"></div>
+  <div class="pie-foto">En tablet, las pestañas van a la izquierda y los gráficos se ordenan de a dos por fila.</div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<section class="pagina">
+  <div class="dos">
+    <div>
+      <h3 style="margin-top:0">La pestaña Panel</h3>
+      <p>Toque <b>Panel</b> y elija uno de los cuatro botones. Cada uno abre sus módulos, y cada módulo dice para qué
+        sirve y trae un <b>ejemplo</b> 💡 de cuándo usarlo.</p>
+      <div class="cuatro" style="grid-template-columns:1fr">
+        <div class="c coral"><b>Entrar como vendedor</b><span>Abre el panel de vendedor en cualquier puesto, por
+          ejemplo para ayudar en un momento de mucha venta.</span></div>
+        <div class="c cian"><b>Configuración de eventos</b><span>Eventos y sectores · Productos y categorías ·
+          Personal · Usuarios y roles.</span></div>
+        <div class="c dorado"><b>Eventos activos</b><span>Agregar stock · Cierres de turno · Incidencias por
+          resolver · Bandejeo por sector.</span></div>
+        <div class="c violeta"><b>Reportes</b><span>Ventas por categoría · Stock por sector · Mermas · Diferencias
+          en traspasos · Ranking de vendedores.</span></div>
+      </div>
+      <p class="chico">Si hay incidencias pendientes, el botón <b>Eventos activos</b> se marca con un número rojo.</p>
+    </div>
+    <div>
+      <div class="telefono"><img src="img/admin_panel.jpg" alt="Pestaña Panel"></div>
+      <div class="pie-foto">Pestaña Panel: los cuatro botones</div>
+    </div>
+  </div>
+
+  <h3>Así se ve en tablet</h3>
+  <div class="tablet"><img src="img/tablet_panel.jpg" alt="Panel en tablet" style="height:66mm;object-fit:cover;object-position:top"></div>
+  <div class="pie-foto">En tablet horizontal, los cuatro botones quedan en una sola fila.</div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<section class="pagina">
+  <div class="dos">
+    <div>
+      <h3 style="margin-top:0">Antes del evento · Configuración de eventos</h3>
+      <h4>Productos y categorías <span class="ruta">· Panel › Configuración de eventos</span></h4>
+      <ol class="pasos">
+        <li>Toque <span class="b">Agregar Producto</span> y escriba nombre, precio y categoría.</li>
+        <li>Para editar o eliminar un producto, búsquelo en la lista y use sus opciones.</li>
+        <li>En <b>Categorías</b> puede crear categorías nuevas con nombre e ícono.</li>
+      </ol>
+      <p class="chico">Los vendedores solo pueden cargar productos que estén en este catálogo: revíselo antes de cada
+        evento. Un producto con precio 0 se cuenta, pero no suma dinero.</p>
+      <h4>Eventos y sectores <span class="ruta">· Panel › Configuración de eventos</span></h4>
+      <ol class="pasos">
+        <li>Toque <span class="b">Agregar Evento</span> y escriba su nombre.</li>
+        <li>Agregue los sectores. La app propone Galería Sur, Galería Norte, Andes y Pacífico; puede cambiarlos.</li>
+        <li>Deje marcado <b>Evento Activo</b>: solo los eventos activos aparecen para los vendedores.</li>
+        <li>Toque <span class="b">Guardar</span>.</li>
+      </ol>
+      <p>Más adelante, con <span class="b">Gestionar Sectores</span> puede agregar, renombrar o eliminar sectores.</p>
+    </div>
+    <div>
+      <div class="telefono"><img src="img/admin_configuracion.jpg" alt="Configuración de eventos"></div>
+      <div class="pie-foto">Configuración de eventos</div>
+    </div>
+  </div>
+  <h4>Personal <span class="ruta">· Panel › Configuración de eventos</span></h4>
+  <p>Registre a los trabajadores del evento con nombre y RUT. Marque a quienes trabajan en la jornada y toque
+    <span class="b">Exportar a Excel / CSV</span> para obtener la lista. Este listado es independiente de las cuentas
+    de la app.</p>
+  <h4>Usuarios y roles <span class="ruta">· Panel › Configuración de eventos</span></h4>
+  <p>Muestra todas las cuentas y si cada una es <b>administrador</b> o <b>vendedor</b>. Toda cuenta nueva nace como
+    vendedor.</p>
+  <div class="caja importante"><div class="t">Importante</div>
+    El rol <b>no se cambia desde la app</b>: lo cambia quien administra el sistema (en la consola de Firebase). Un
+    administrador puede modificar todo: productos, stock, eventos y usuarios. Pida ese rol solo para quien realmente
+    lo necesite.</div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<section class="pagina">
+  <div class="dos">
+    <div>
+      <h3 style="margin-top:0">Durante el evento · Eventos activos</h3>
+      <h4>Agregar stock <span class="ruta">· Panel › Eventos activos</span></h4>
+      <p>Úselo cuando llega mercadería nueva a un puesto que ya está funcionando.</p>
+      <ol class="pasos">
+        <li>Elija el evento y un sector abierto.</li>
+        <li>Toque el <b>⊕</b> dorado del producto.</li>
+        <li>Escriba las unidades a sumar y, si quiere, un motivo (por ejemplo, “compra durante el evento”).</li>
+        <li>Toque <span class="b">Agregar</span>.</li>
+      </ol>
+      <div class="caja ejemplo"><div class="t">Ejemplo</div>
+        Galería Sur tiene 12 bebidas y llega una caja de 24. Usted agrega 24, y el puesto queda con <b>36</b>. La app
+        siempre suma; nunca borra lo que ya había.</div>
+      <h4>Cierres de turno <span class="ruta">· Panel › Eventos activos</span></h4>
+      <p>Muestra qué puestos ya cerraron su turno y a qué hora.</p>
+      <h4>Bandejeo por sector <span class="ruta">· Panel › Eventos activos</span></h4>
+      <p>Siga a los bandejeros: lo vendido, lo que llevan en la bandeja, la caja para vuelto y el dinero estimado en
+        la calle.</p>
+    </div>
+    <div>
+      <div class="telefono"><img src="img/admin_eventos_activos.jpg" alt="Eventos activos"></div>
+      <div class="pie-foto">Eventos activos, con 2 incidencias</div>
+    </div>
+  </div>
+  <h4>Trabajar como vendedor <span class="ruta">· Panel › Entrar como vendedor</span></h4>
+  <p>Abre el panel de vendedor en cualquier puesto. Para volver, toque la flecha ← o
+    <span class="b">Panel admin</span> en la barra de abajo.</p>
+  <h4>Reabrir un puesto <span class="ruta">· Configuración de eventos › Eventos y sectores › Gestionar Sectores</span></h4>
+  <p>Si un puesto cerró por error o debe seguir vendiendo, toque <span class="b">Reabrir</span>. El vendedor continúa
+    con lo que contó en su último cierre; no vuelve a cargar el stock inicial. Si luego cierra de nuevo, el segundo
+    cierre suma solo lo vendido desde la reapertura.</p>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<section class="pagina">
+  <h3 style="margin-top:0">Incidencias por resolver <span class="ruta">· Panel › Eventos activos</span></h3>
+  <p>Aquí aparece todo lo que no calzó y necesita su revisión. También lo verá arriba en la pantalla Ventas, como
+    <b>Requiere atención</b>.</p>
+  <table>
+    <tr><th style="width:24%">Tipo</th><th style="width:38%">Cuándo aparece</th><th>Qué le muestra</th></tr>
+    <tr><td>Faltante en traspaso</td><td>Un puesto recibió menos de lo enviado, y el puesto que envió ya había
+      cerrado</td><td>Origen, destino, cantidades, quién confirmó y el motivo</td></tr>
+    <tr><td>Sobrante en conteo</td><td>Un vendedor contó más unidades que las del sistema al cerrar</td>
+      <td>Puesto, stock del sistema, lo contado y quién contó</td></tr>
+  </table>
+  <p>Revise cada una y toque <span class="b">Marcar resuelta</span>. Puede agregar una nota, por ejemplo “se encontró la
+    caja en bodega”. Las incidencias no se borran: quedan como registro.</p>
+
+  <div class="dos" style="margin-top:4mm">
+    <div>
+      <h3 style="margin-top:0">Después del evento · Reportes</h3>
+      <table>
+        <tr><th>Reporte</th><th>Para qué le sirve</th></tr>
+        <tr><td>Ventas por categoría</td><td>Saber qué tipo de producto se vende más.</td></tr>
+        <tr><td>Stock por sector</td><td>Cuánto queda de cada producto en cada puesto, con alertas de stock bajo y
+          sin stock.</td></tr>
+        <tr><td>Mermas</td><td>Las pérdidas por partido, puesto y motivo, con su valor en dinero y los productos con
+          más pérdida.</td></tr>
+        <tr><td>Diferencias en traspasos</td><td>Los traspasos que llegaron incompletos y el comentario de quien los
+          recibió.</td></tr>
+        <tr><td>Ranking de vendedores</td><td>Cuánto vendió cada vendedor en sus cierres, por año, con podio.</td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="telefono"><img src="img/admin_reportes.jpg" alt="Reportes"></div>
+      <div class="pie-foto">Reportes</div>
+    </div>
+  </div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<section class="pagina">
+  <h3 style="margin-top:0">Al terminar el evento</h3>
+  <ol class="pasos">
+    <li>En <b>Cierres de turno</b>, verifique que todos los puestos hayan cerrado.</li>
+    <li>Revise y resuelva las <b>Incidencias por resolver</b>.</li>
+    <li>Revise el reporte de <b>Mermas</b> y las <b>Diferencias en traspasos</b>.</li>
+    <li>Mire la pantalla <b>Ventas</b>: total, hora peak y puestos con más venta.</li>
+    <li>Cuando ya no necesite el evento, desmarque <b>Evento Activo</b> en Eventos y sectores.</li>
+  </ol>
+
+  <!-- ============ 6 PROBLEMAS ============ -->
+  <div class="seccion" style="margin-top:8mm"><div class="num">6</div><div><h2>Problemas frecuentes</h2><p>Qué significa cada mensaje y qué hacer</p></div></div>
+  <p>La mayoría de los mensajes de la app no son fallas: le avisan que falta un paso. Busque el mensaje que ve en
+    pantalla y siga la solución.</p>
+  <table>
+    <tr><th style="width:42%">Lo que ve</th><th>Qué hacer</th></tr>
+    <tr><td>“Usuario o contraseña incorrectos”</td><td>Revise cómo escribió el usuario y el PIN. Si no lo recuerda, use
+      <span class="b">¿Olvidó su contraseña?</span></td></tr>
+    <tr><td>“Sin conexión”</td><td>Busque mejor señal o cambie entre Wi‑Fi y datos móviles, y vuelva a intentar.</td></tr>
+    <tr><td>“Demasiados intentos”</td><td>Espere unos minutos antes de volver a intentar.</td></tr>
+    <tr><td>“No pudimos cargar su perfil”</td><td>Es la señal: su sesión sigue abierta. Toque
+      <span class="b">Reintentar</span> cuando tenga conexión.</td></tr>
+    <tr><td>“No encontramos su perfil”</td><td>Su cuenta no tiene perfil en la app. Pida al administrador que la
+      revise.</td></tr>
+    <tr><td>“Sin permiso para esta acción”</td><td>Esa acción es solo para administradores. Pida ayuda al
+      administrador.</td></tr>
+    <tr><td>El puesto dice “Turno cerrado”</td><td>El administrador debe reabrirlo.</td></tr>
+  </table>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<section class="pagina">
+  <table style="margin-top:0">
+    <tr><th style="width:42%">Lo que ve</th><th>Qué hacer</th></tr>
+    <tr><td>“Debe ingresar el stock inicial antes de usar esta operación”</td><td>Cargue primero el stock inicial y toque
+      <span class="b">Guardar y salir</span>.</td></tr>
+    <tr><td>“El stock inicial ya no se puede modificar”</td><td>El puesto ya tuvo movimientos. Para sumar unidades, el
+      administrador usa “Agregar stock”.</td></tr>
+    <tr><td>“Stock insuficiente”</td><td>No hay tantas unidades en su puesto. Revise <span class="b">Ver stock</span> y
+      ajuste la cantidad.</td></tr>
+    <tr><td>“No puede recibir más de lo enviado”</td><td>En Recibido, escriba lo que realmente llegó, sin pasar de lo
+      enviado.</td></tr>
+    <tr><td>“Antes de contar, resuelva estos movimientos”</td><td>Confirme los traspasos pendientes y cierre los
+      bandejeros de la lista. Luego toque <span class="b">Revisar de nuevo</span>.</td></tr>
+    <tr><td>“El stock cambió mientras contabas”</td><td>Vuelva a contar los productos marcados en naranja y confirme.</td></tr>
+    <tr><td>Las operaciones se ven apagadas</td><td>Falta cargar el stock inicial. Toque <span class="b">Ingresar stock inicial</span>.</td></tr>
+    <tr><td>No aparece el evento</td><td>El evento no está activo. Avise al administrador.</td></tr>
+    <tr><td>No aparece un producto</td><td>No está en el catálogo. El administrador debe agregarlo en Productos.</td></tr>
+    <tr><td>“Algo salió mal”</td><td>Cierre y vuelva a abrir la app. Si se repite, envíe una captura de pantalla al
+      administrador.</td></tr>
+  </table>
+  <div class="caja consejo" style="margin-top:6mm"><img src="../appmovilsnack/assets/imagenes/mascota.png" alt="">
+    <div><div class="t">¿Sin señal en el estadio?</div>Si ya había ingresado, la app abre igual y su sesión no se
+      cierra por falta de señal. Algunas operaciones, como cerrar el turno, confirmar un traspaso o agregar stock,
+      necesitan conexión: si no hay, la app le avisa. Busque señal y vuelva a intentar.</div></div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<!-- ============ 7 CHECKLIST ============ -->
+<section class="pagina">
+  <div class="seccion"><div class="num">7</div><div><h2>Checklist del día del evento</h2><p>Imprima esta página y marque cada punto</p></div></div>
+  <div class="check">
+    <div>
+      <h3 style="margin-top:0">Administrador · antes de abrir</h3>
+      <ul>
+        <li>Todos los vendedores tienen la app actualizada.</li>
+        <li>Todos tienen cuenta y conocen su usuario y contraseña.</li>
+        <li>El catálogo de productos y precios está al día.</li>
+        <li>El evento está creado, con sus sectores, y activo.</li>
+        <li>Cada vendedor sabe qué puesto le corresponde.</li>
+      </ul>
+      <h3>Vendedor · al comenzar</h3>
+      <ul>
+        <li>Ingresé y elegí el evento y el puesto correctos.</li>
+        <li>Confirmé los traspasos que ya me enviaron.</li>
+        <li>Conté y cargué el stock inicial con “Guardar y salir”.</li>
+        <li>El punto de mi panel dice <i>Turno en curso</i>.</li>
+      </ul>
+      <h3>Vendedor · durante el turno</h3>
+      <ul>
+        <li>Registro las mermas en el momento.</li>
+        <li>Confirmo los traspasos apenas llegan.</li>
+        <li>Rindo cada ronda antes de entregar otra bandeja.</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="margin-top:0">Vendedor · al cerrar</h3>
+      <ul>
+        <li>Cerré el bandejeo de todos los bandejeros.</li>
+        <li>No me quedan traspasos por confirmar.</li>
+        <li>Conté todo, revisé el resumen y confirmé el cierre.</li>
+        <li>Vi el aviso “¡Turno cerrado!”.</li>
+        <li>Entregué el dinero según el resumen de cierre.</li>
+      </ul>
+      <h3>Administrador · al terminar</h3>
+      <ul>
+        <li>Todos los puestos aparecen en “Cierres de turno”.</li>
+        <li>Revisé y resolví las incidencias.</li>
+        <li>Revisé mermas y diferencias en traspasos.</li>
+        <li>Revisé las ventas y la hora peak.</li>
+        <li>Desactivé el evento.</li>
+      </ul>
+      <div class="caja consejo" style="margin-top:6mm"><img src="../appmovilsnack/assets/imagenes/mascota.png" alt="">
+        <div><div class="t">¡Buen evento!</div>Ante cualquier duda durante el turno, pregunte al administrador. Es
+          mejor preguntar que adivinar.</div></div>
+    </div>
+  </div>
+
+  <div class="pie"><span>Manual de uso · App Fusión Eventos</span><span class="np"></span></div>
+</section>
+
+<script>
+  // Numera las páginas (la portada no lleva número).
+  const paginas = [...document.querySelectorAll('.pagina:not(.portada)')];
+  paginas.forEach((p, i) => {
+    const np = p.querySelector('.np');
+    if (np) np.textContent = `Página ${i + 1} de ${paginas.length}`;
+  });
+</script>
+</body>
+</html>

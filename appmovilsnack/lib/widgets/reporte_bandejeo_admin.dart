@@ -4,9 +4,15 @@ import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/admin_bandejeo_service.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
+import 'package:front_appsnack/core/precio.dart';
 
 class ReporteBandejeoAdmin extends StatefulWidget {
-  const ReporteBandejeoAdmin({super.key});
+  const ReporteBandejeoAdmin({super.key, this.eventoIdInicial});
+
+  /// Evento ya elegido (p. ej. desde "Eventos activos").
+  final String? eventoIdInicial;
 
   @override
   State<ReporteBandejeoAdmin> createState() => _ReporteBandejeoAdminState();
@@ -22,6 +28,7 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
   @override
   void initState() {
     super.initState();
+    _eventoSeleccionadoId = widget.eventoIdInicial;
     _inicializar();
   }
 
@@ -72,7 +79,6 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
     }
   }
 
-  String _fmt(double n) => '\$${n.toStringAsFixed(0)}';
 
   @override
   Widget build(BuildContext context) {
@@ -157,8 +163,8 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: const [
-          SizedBox(height: 120),
-          Center(child: CircularProgressIndicator()),
+          SizedBox(height: 16),
+          CargandoTarjetas(cantidad: 4, alto: 96, dentroDeLista: true),
         ],
       );
     }
@@ -202,9 +208,9 @@ class _ReporteBandejeoAdminState extends State<ReporteBandejeoAdmin> {
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) => _SectorBandejeoCard(
         resumen: _sectores[index],
-        fmt: _fmt,
+        fmt: formatearPesos,
         mostrarEvento: _eventoSeleccionadoId == null,
-      ),
+      ).entradaEnLista(index),
     );
   }
 }

@@ -11,6 +11,8 @@ import '../core/app_theme.dart';
 import '../services/firestore_helpers.dart';
 import '../services/incidencias_service.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 
 class IncidenciasPendientes extends StatefulWidget {
   const IncidenciasPendientes({super.key});
@@ -171,7 +173,7 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const CargandoTarjetas()
           : _errorMessage != null
           ? _buildError()
           : Column(
@@ -194,7 +196,7 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
                             ),
                             itemCount: _visibles.length,
                             itemBuilder: (context, i) =>
-                                _buildCard(_visibles[i]),
+                                _buildCard(_visibles[i]).entradaEnLista(i),
                           ),
                         ),
                 ),
@@ -262,7 +264,7 @@ class _IncidenciasPendientesState extends State<IncidenciasPendientes> {
     final evento =
         _nombresEventos[d['eventoId']] ?? d['eventoId']?.toString() ?? '';
     final comentario = d['comentario']?.toString();
-    final color = esSobrante ? Colors.blue[800]! : AppColors.aviso;
+    final color = esSobrante ? AppColors.cian : AppColors.aviso;
 
     TextStyle detalle() =>
         AppFonts.inter(fontSize: 14, color: AppColors.onSurfaceVariant);

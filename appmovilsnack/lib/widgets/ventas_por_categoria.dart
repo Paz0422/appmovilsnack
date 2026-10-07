@@ -7,6 +7,11 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:front_appsnack/services/admin_estadisticas_service.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
+import 'package:front_appsnack/widgets/comunes/animados.dart';
+import 'package:front_appsnack/widgets/graficos_admin.dart';
+import 'package:front_appsnack/core/precio.dart';
 
 class VentasPorCategoria extends StatefulWidget {
   const VentasPorCategoria({super.key});
@@ -31,18 +36,6 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
   void initState() {
     super.initState();
     _cargar();
-  }
-
-  String _fmtMonto(num valor) {
-    final s = valor.round().abs().toString();
-    final neg = valor < 0;
-    final buf = StringBuffer(neg ? '-' : '');
-    for (int i = 0; i < s.length; i++) {
-      buf.write(s[i]);
-      final resto = s.length - i - 1;
-      if (resto > 0 && resto % 3 == 0) buf.write('.');
-    }
-    return buf.toString();
   }
 
   Future<void> _cargar() async {
@@ -187,11 +180,24 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      PieChart(
-                        PieChartData(
-                          sectionsSpace: 3,
-                          centerSpaceRadius: hueco,
-                          sections: secciones,
+                      ProgresoEntrada(
+                        duracion: const Duration(milliseconds: 1200),
+                        curva: Curves.easeOutCubic,
+                        builder: (t) => PieChart(
+                          swapAnimationDuration: Duration.zero,
+                          PieChartData(
+                            startDegreeOffset: -90,
+                            sectionsSpace: t < 1 ? 0 : 3,
+                            centerSpaceRadius: hueco,
+                            sections: [
+                              ...secciones,
+                              ?seccionDibujo(
+                                total: _montoTotal,
+                                avance: t,
+                                radio: 48,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       SizedBox(
@@ -212,8 +218,9 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                             const SizedBox(height: 4),
                             FittedBox(
                               fit: BoxFit.scaleDown,
-                              child: Text(
-                                '\$${_fmtMonto(_montoTotal)}',
+                              child: CifraAnimada(
+                                valor: _montoTotal,
+                                formatear: formatearPesos,
                                 textAlign: TextAlign.center,
                                 style: AppFonts.inter(
                                   fontSize: 20,
@@ -234,7 +241,8 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
           ),
         ),
         const SizedBox(height: 12),
-        ...leyenda.map((e) {
+        ...leyenda.indexed.map((par) {
+          final (i, e) = par;
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(
@@ -270,7 +278,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  '\$${_fmtMonto(e.monto)}',
+                  formatearPesos(e.monto),
                   style: AppFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -279,7 +287,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                 ),
               ],
             ),
-          );
+          ).entradaLateral(orden: i + 3);
         }),
       ],
     );
@@ -305,7 +313,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
         ],
       ),
       body: _loading
-          ? Center(child: CircularProgressIndicator())
+          ? const CargandoTarjetas()
           : _error != null
           ? ErrorAmable(
               titulo: 'No pudimos cargar las ventas',
@@ -318,7 +326,13 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                 padding: conMargenInferior(context, const EdgeInsets.all(16)),
                 children: [
                   Card(
-                    color: AppColors.accent.withValues(alpha: 0.15),
+                    color: AppColors.doradoSuave,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.xl),
+                      side: BorderSide(
+                        color: AppColors.cafe.withValues(alpha: 0.6),
+                      ),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
@@ -330,12 +344,13 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                               color: AppColors.secondary,
                             ),
                           ),
-                          Text(
-                            '\$${_fmtMonto(_montoTotal)}',
+                          CifraAnimada(
+                            valor: _montoTotal,
+                            formatear: formatearPesos,
                             style: AppFonts.inter(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primaryLight,
+                              fontSize: 30,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.dorado,
                             ),
                           ),
                           Text(
@@ -357,29 +372,22 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                         ],
                       ),
                     ),
-                  ),
+                  ).entrada(),
                   const SizedBox(height: 24),
-                  Text(
-                    'Distribución por categoría',
-                    style: AppFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primaryLight,
-                    ),
-                  ),
+                  const TituloSeccion(
+                    icono: Icons.pie_chart_outline_rounded,
+                    titulo: 'Distribución por categoría',
+                  ).entrada(orden: 1),
                   const SizedBox(height: 16),
                   _buildGraficoCircular(),
                   const SizedBox(height: 24),
-                  Text(
-                    'Detalle por categoría',
-                    style: AppFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primaryLight,
-                    ),
-                  ),
+                  const TituloSeccion(
+                    icono: Icons.list_alt_rounded,
+                    titulo: 'Detalle por categoría',
+                  ).entrada(orden: 2),
                   const SizedBox(height: 12),
-                  ..._categorias.map((e) {
+                  ..._categorias.indexed.map((par) {
+                    final (i, e) = par;
                     final cat = e['nombre'] ?? '';
                     if (cat.isEmpty) return const SizedBox.shrink();
                     final monto = _montoPorCategoria[cat] ?? 0;
@@ -406,12 +414,19 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                           cat,
                           style: AppFonts.inter(fontWeight: FontWeight.w600),
                         ),
-                        subtitle: Text(
-                          '\$${_fmtMonto(monto)} · $cant u. · ${pct.toStringAsFixed(1)}%',
-                          style: AppFonts.inter(
-                            fontSize: 14,
-                            color: AppColors.secondary,
-                          ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${formatearPesos(monto)} · $cant u. · ${pct.toStringAsFixed(1)}%',
+                              style: AppFonts.inter(
+                                fontSize: 14,
+                                color: AppColors.secondary,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            _BarraPorcentaje(fraccion: pct / 100),
+                          ],
                         ),
                         trailing: Text(
                           '${pct.toStringAsFixed(1)}%',
@@ -422,7 +437,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                           ),
                         ),
                       ),
-                    );
+                    ).entradaEnLista(i + 3);
                   }),
                   if ((_montoPorCategoria[categoriaDefault] ?? 0) > 0 &&
                       !_categorias.any(
@@ -445,7 +460,7 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                           style: AppFonts.inter(fontWeight: FontWeight.w600),
                         ),
                         subtitle: Text(
-                          '\$${_fmtMonto(_montoPorCategoria[categoriaDefault] ?? 0)} · '
+                          '${formatearPesos(_montoPorCategoria[categoriaDefault] ?? 0)} · '
                           '${_cantidadPorCategoria[categoriaDefault] ?? 0} u.',
                           style: AppFonts.inter(
                             fontSize: 14,
@@ -457,6 +472,40 @@ class _VentasPorCategoriaState extends State<VentasPorCategoria> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+/// Barra fina dorado → café que crece hasta el porcentaje de la categoría.
+class _BarraPorcentaje extends StatelessWidget {
+  const _BarraPorcentaje({required this.fraccion});
+
+  final double fraccion;
+
+  @override
+  Widget build(BuildContext context) {
+    final destino = fraccion.clamp(0.0, 1.0);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: Stack(
+        children: [
+          Container(height: 6, color: AppColors.tarjetaAlta),
+          ProgresoEntrada(
+            duracion: const Duration(milliseconds: 1000),
+            curva: Curves.easeOutCubic,
+            builder: (t) => FractionallySizedBox(
+              widthFactor: destino * t,
+              child: Container(
+                height: 6,
+                decoration: BoxDecoration(
+                  gradient: AppGradientes.marca,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

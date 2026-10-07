@@ -11,9 +11,14 @@ import '../core/app_theme.dart';
 import '../services/firestore_helpers.dart';
 import '../services/stock_service.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 
 class AgregarStock extends StatefulWidget {
-  const AgregarStock({super.key});
+  const AgregarStock({super.key, this.eventoIdInicial});
+
+  /// Evento ya elegido (p. ej. desde "Eventos activos").
+  final String? eventoIdInicial;
 
   @override
   State<AgregarStock> createState() => _AgregarStockState();
@@ -38,7 +43,12 @@ class _AgregarStockState extends State<AgregarStock> {
       if (!mounted) return;
       setState(() {
         _eventos = snap.docs;
-        _eventoId = snap.docs.length == 1 ? snap.docs.first.id : null;
+        final inicial = widget.eventoIdInicial;
+        _eventoId = inicial != null && snap.docs.any((d) => d.id == inicial)
+            ? inicial
+            : snap.docs.length == 1
+            ? snap.docs.first.id
+            : null;
         _cargandoEventos = false;
       });
     } catch (_) {
@@ -177,7 +187,7 @@ class _AgregarStockState extends State<AgregarStock> {
         ),
       ),
       body: _cargandoEventos
-          ? Center(child: CircularProgressIndicator())
+          ? const CargandoTarjetas()
           : _eventos.isEmpty
           ? EstadoVacio(titulo: 'No hay eventos activos.')
           : Column(
@@ -276,7 +286,7 @@ class _AgregarStockState extends State<AgregarStock> {
           stream: sectorRef.collection('stock').snapshots(),
           builder: (context, snap) {
             if (!snap.hasData) {
-              return Center(child: CircularProgressIndicator());
+              return const Center(child: CargandoPuntos());
             }
             final docs = [...snap.data!.docs]
               ..sort(
@@ -299,7 +309,7 @@ class _AgregarStockState extends State<AgregarStock> {
               ),
               itemCount: docs.length,
               separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) {
+              itemBuilder: (context, i) => Builder(builder: (context) {
                 final d = docs[i].data();
                 final nombre = d['nombre']?.toString() ?? docs[i].id;
                 final cantidad = (d['cantidad'] as num?)?.toInt() ?? 0;
@@ -320,7 +330,7 @@ class _AgregarStockState extends State<AgregarStock> {
                     ),
                   ),
                 );
-              },
+              }).entradaEnLista(i),
             );
           },
         );

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:front_appsnack/services/incidencias_service.dart';
 import 'package:front_appsnack/utils/categorias_producto.dart';
 
 /// Agregación de datos reales desde Firestore para el panel administrador.
@@ -153,18 +154,23 @@ class AdminEstadisticasService {
       });
 
   /// KPIs y totales (cierres de turno + bandejeo en sectores abiertos).
+  /// KPIs y totales. Con [soloEvento], los de ese evento nada más.
   static Future<AdminResumenActivos> cargarResumenActivos({
     bool soloEventosActivos = false,
+    String? soloEvento,
   }) async {
     // Una sola lectura de eventos: de ahí salen los nombres y cuántos están
     // activos.
     final eventosSnap = await _leerEventos(soloActivos: soloEventosActivos);
+    final docsEventos = soloEvento == null
+        ? eventosSnap.docs
+        : eventosSnap.docs.where((d) => d.id == soloEvento);
     final nombresEventos = {
-      for (final d in eventosSnap.docs)
+      for (final d in docsEventos)
         d.id: d.data()['nombre']?.toString() ?? 'Sin nombre',
     };
     final eventosIds = nombresEventos.keys.toSet();
-    final cantidadActivosCatalogo = eventosSnap.docs
+    final cantidadActivosCatalogo = docsEventos
         .where((d) => soloEventosActivos || d.data()['activo'] == true)
         .length;
 
@@ -189,6 +195,14 @@ class AdminEstadisticasService {
 
     final porEvento = <String, double>{for (final id in eventosIds) id: 0};
     final porSector = <Map<String, dynamic>>[];
+    // Mismas ventas que el total, con su fecha: cada cierre en su hora y
+    // cada rendición de bandejeo del turno abierto en la suya.
+    final ventasConFecha = <VentaConFecha>[];
+    void conFecha(dynamic fecha, double monto) {
+      if (fecha is Timestamp && monto > 0) {
+        ventasConFecha.add((fecha: fecha.toDate(), monto: monto));
+      }
+    }
 
     for (final (:eventoId, :doc, cierres: cierresSector) in sectores) {
       final data = doc.data();
@@ -207,19 +221,24 @@ class AdminEstadisticasService {
         monto += montoTurnosCerrados;
         cierres += cierresSector.isEmpty ? 1 : cierresSector.length;
         fuente = 'cierre_turno';
+        for (final c in cierresSector) {
+          conFecha(c['fecha'], (c['totalEstimado'] as num?)?.toDouble() ?? 0);
+        }
       }
 
       // Turno en curso: solo el bandejeo posterior al último cierre.
       if (!turnoCerrado) {
-        final montoAbierto = _montoBandejeo(
-          _bandejeoDelTurno(
-            bandejeo,
-            eventoId,
-            sectorId,
-            fechaUltimoCierre(cierresSector),
-          ),
+        final delTurno = _bandejeoDelTurno(
+          bandejeo,
+          eventoId,
+          sectorId,
+          fechaUltimoCierre(cierresSector),
         );
+        final montoAbierto = _montoBandejeo(delTurno);
         if (montoAbierto > 0) {
+          for (final t in delTurno) {
+            conFecha(t['fecha'], (t['montoTotal'] as num?)?.toDouble() ?? 0);
+          }
           monto += montoAbierto;
           montoBandejeoTurnoAbierto += montoAbierto;
           fuente = fuente.isEmpty ? 'bandejeo' : 'cierre_turno+bandejeo';
@@ -272,6 +291,92 @@ class AdminEstadisticasService {
       montoBandejeoTurnosAbiertos: montoBandejeoTurnoAbierto.round(),
       ingresosPorEvento: eventosIngresos,
       ingresosPorSector: porSector,
+      ventasEnElTiempo: agruparVentasEnElTiempo(ventasConFecha),
+    );
+  }
+
+  /// Agrupa ventas por hora si caben en 24 horas (la curva de un partido,
+  /// aunque cierre pasada la medianoche, con las horas sin venta en 0) o por
+  /// día si abarcan más (solo los días con ventas: entre partidos no hay nada
+  /// que mostrar).
+  static VentasEnElTiempo agruparVentasEnElTiempo(List<VentaConFecha> ventas) {
+    if (ventas.isEmpty) {
+      return const VentasEnElTiempo(porHora: true, tramos: []);
+    }
+    DateTime dia(DateTime f) => DateTime(f.year, f.month, f.day);
+    DateTime hora(DateTime f) => DateTime(f.year, f.month, f.day, f.hour);
+
+    final ordenadas = [...ventas]..sort((a, b) => a.fecha.compareTo(b.fecha));
+    final porHora = ordenadas.last.fecha.difference(ordenadas.first.fecha) <=
+        const Duration(hours: 24);
+    final clave = porHora ? hora : dia;
+
+    final montos = <DateTime, double>{};
+    for (final v in ordenadas) {
+      final k = clave(v.fecha);
+      montos[k] = (montos[k] ?? 0) + v.monto;
+    }
+
+    if (porHora) {
+      // Horas seguidas desde la primera hasta la última venta.
+      final desde = clave(ordenadas.first.fecha);
+      final hasta = clave(ordenadas.last.fecha);
+      final tramos = <VentaConFecha>[];
+      for (var h = desde;
+          !h.isAfter(hasta);
+          h = DateTime(h.year, h.month, h.day, h.hour + 1)) {
+        tramos.add((fecha: h, monto: montos[h] ?? 0));
+      }
+      return VentasEnElTiempo(porHora: true, tramos: tramos);
+    }
+
+    return VentasEnElTiempo(
+      porHora: false,
+      tramos: [
+        for (final e in montos.entries) (fecha: e.key, monto: e.value),
+      ],
+    );
+  }
+
+  /// Eventos activos, ordenados por nombre (para elegir uno en el panel).
+  static Future<List<({String id, String nombre})>> listarEventosActivos() async {
+    final snap = await _leerEventos(soloActivos: true);
+    return [
+      for (final d in snap.docs)
+        (id: d.id, nombre: d.data()['nombre']?.toString() ?? 'Sin nombre'),
+    ]..sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+  }
+
+  /// Todo lo que el admin ve de un evento activo: ventas, el estado de cada
+  /// sector y sus incidencias pendientes. Solo lecturas.
+  static Future<ResumenEvento> cargarResumenEvento(String eventoId) async {
+    final lecturas = await Future.wait<Object>([
+      cargarResumenActivos(soloEvento: eventoId),
+      _db.collection('eventos').doc(eventoId).collection('sectores').get(),
+      IncidenciasService(_db).pendientes(eventoId: eventoId),
+    ]);
+    final ventas = lecturas[0] as AdminResumenActivos;
+    final sectoresSnap = lecturas[1] as QuerySnapshot<Map<String, dynamic>>;
+    final incidencias =
+        lecturas[2] as List<QueryDocumentSnapshot<Map<String, dynamic>>>;
+
+    final vendidoPorSector = {
+      for (final s in ventas.ingresosPorSector)
+        s['sectorId'] as String?: (s['total'] as num?)?.toDouble() ?? 0,
+    };
+    final sectores = [
+      for (final d in sectoresSnap.docs)
+        SectorDelEvento.desde(
+          d.id,
+          d.data(),
+          vendido: vendidoPorSector[d.id] ?? 0,
+        ),
+    ]..sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+
+    return ResumenEvento(
+      ventas: ventas,
+      sectores: sectores,
+      incidencias: [for (final d in incidencias) {'id': d.id, ...d.data()}],
     );
   }
 
@@ -397,6 +502,10 @@ class AdminResumenActivos {
   final List<Map<String, dynamic>> ingresosPorEvento;
   final List<Map<String, dynamic>> ingresosPorSector;
 
+  /// Ventas con fecha agrupadas por hora o por día (gráfico de evolución).
+  /// Los cierres antiguos sin fecha cuentan en el total pero no aquí.
+  final VentasEnElTiempo ventasEnElTiempo;
+
   const AdminResumenActivos({
     required this.totalVendido,
     required this.cantidadCierres,
@@ -407,6 +516,7 @@ class AdminResumenActivos {
     required this.montoBandejeoTurnosAbiertos,
     required this.ingresosPorEvento,
     required this.ingresosPorSector,
+    this.ventasEnElTiempo = const VentasEnElTiempo(porHora: true, tramos: []),
   });
 
   bool get sinVentasRegistradas =>
@@ -452,6 +562,18 @@ class VentasPorCategoriaResumen {
   });
 }
 
+typedef VentaConFecha = ({DateTime fecha, double monto});
+
+class VentasEnElTiempo {
+  /// true: un tramo por hora de un mismo día; false: uno por día con ventas.
+  final bool porHora;
+
+  /// En orden cronológico.
+  final List<VentaConFecha> tramos;
+
+  const VentasEnElTiempo({required this.porHora, required this.tramos});
+}
+
 typedef _SectorLeido = ({
   String eventoId,
   QueryDocumentSnapshot<Map<String, dynamic>> doc,
@@ -462,3 +584,63 @@ typedef _Bandejeo = ({
   int total,
   Map<String, List<Map<String, dynamic>>> porSector,
 });
+
+/// Cómo está el turno de un sector.
+enum EstadoTurno { sinAbrir, enCurso, cerrado }
+
+/// Un sector de un evento, visto desde el panel del admin.
+class SectorDelEvento {
+  final String id;
+  final String nombre;
+  final EstadoTurno estado;
+
+  /// Hora del cierre (solo si está cerrado y se registró).
+  final DateTime? cerradoA;
+  final double vendido;
+
+  const SectorDelEvento({
+    required this.id,
+    required this.nombre,
+    required this.estado,
+    this.cerradoA,
+    this.vendido = 0,
+  });
+
+  /// Sin abrir = todavía no cargó el stock inicial; en curso = lo cargó y no
+  /// ha cerrado; cerrado = `turnoCerrado`.
+  factory SectorDelEvento.desde(
+    String id,
+    Map<String, dynamic> data, {
+    double vendido = 0,
+  }) {
+    final cerrado = data['turnoCerrado'] == true;
+    final ts = data['turnoCerradoAt'];
+    return SectorDelEvento(
+      id: id,
+      nombre: data['nombre']?.toString() ?? 'Sector',
+      estado: cerrado
+          ? EstadoTurno.cerrado
+          : data['stockInicialIngresado'] == true
+          ? EstadoTurno.enCurso
+          : EstadoTurno.sinAbrir,
+      cerradoA: cerrado && ts is Timestamp ? ts.toDate() : null,
+      vendido: vendido,
+    );
+  }
+}
+
+class ResumenEvento {
+  final AdminResumenActivos ventas;
+  final List<SectorDelEvento> sectores;
+
+  /// Incidencias pendientes del evento (datos del documento + `id`).
+  final List<Map<String, dynamic>> incidencias;
+
+  const ResumenEvento({
+    required this.ventas,
+    required this.sectores,
+    required this.incidencias,
+  });
+
+  int cuantos(EstadoTurno e) => sectores.where((s) => s.estado == e).length;
+}

@@ -5,11 +5,11 @@ import 'package:front_appsnack/auth/auth_manager.dart';
 import 'package:front_appsnack/auth/firebase_auth_messages.dart';
 import 'package:front_appsnack/auth/auth_layout.dart';
 import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 // Necessário para ImageFilter.blur
 
 // Paleta de cores baseada no logo "Fusión"
-const Color primaryColor = AppColors.primaryLight; // Preto/marrón oscuro
 const Color accentColor = AppColors.accent; // Dorado brillante
 const Color secondaryColor = AppColors.secondary; // Marrón medio
 
@@ -118,9 +118,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: primaryColor, strokeWidth: 5),
-      ),
+      builder: (context) => const Center(child: CargandoPuntos()),
     );
 
     final usernameRef = _firestore.collection('usernames').doc(usernameId);

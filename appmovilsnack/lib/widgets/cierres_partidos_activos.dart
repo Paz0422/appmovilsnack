@@ -9,6 +9,8 @@ import '../core/app_theme.dart';
 import '../services/firestore_helpers.dart';
 import 'resumen_cierre_turno.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 
 class CierresPartidosActivos extends StatefulWidget {
   const CierresPartidosActivos({super.key});
@@ -110,7 +112,7 @@ class _CierresPartidosActivosState extends State<CierresPartidosActivos> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const CargandoTarjetas()
           : _errorMessage != null
           ? ErrorAmable(
               titulo: 'No pudimos cargar los cierres',
@@ -125,10 +127,10 @@ class _CierresPartidosActivosState extends State<CierresPartidosActivos> {
               child: ListView.builder(
                 padding: conMargenInferior(context, const EdgeInsets.all(16)),
                 itemCount: _eventosConCierres.length,
-                itemBuilder: (context, index) {
+                itemBuilder: (context, index) => Builder(builder: (context) {
                   final evento = _eventosConCierres[index];
                   return _buildCardEvento(evento);
-                },
+                }).entradaEnLista(index),
               ),
             ),
     );

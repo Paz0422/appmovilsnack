@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:front_appsnack/screens/vendedores/home_vendedor.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/widgets/comunes/animados.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
 import 'package:front_appsnack/widgets/comunes/marca.dart';
 
 class EstadioSelection extends StatefulWidget {
@@ -46,7 +49,7 @@ class _EstadioSelectionState extends State<EstadioSelection> {
               "assets/imagenes/logo.png",
               height: 40,
               excludeFromSemantics: true,
-            ),
+            ).aparicionRebote(),
             const SizedBox(width: 10),
             const MarcaFusion(tamano: 28),
           ],
@@ -70,7 +73,7 @@ class _EstadioSelectionState extends State<EstadioSelection> {
               }
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
+                return const CargandoTarjetas(cantidad: 3, alto: 84);
               }
 
               final eventos = snapshot.data?.docs ?? [];
@@ -92,16 +95,32 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                 itemBuilder: (context, index) {
                   if (index == 0) {
                     return Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-                      child: Text(
-                        '¿Dónde trabaja hoy?',
-                        style: AppFonts.inter(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.tinta,
-                        ),
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '¿Dónde trabaja hoy?',
+                            style: AppFonts.inter(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.tinta,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const FiletMarca(ancho: 56),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Abra el partido y elija su sector.',
+                            style: AppFonts.inter(
+                              fontSize: 15,
+                              color: AppColors.tintaSecundaria,
+                            ),
+                          ),
+                        ],
                       ),
-                    );
+                    ).entrada();
                   }
                   final eventoDoc = eventos[index - 1];
                   final eventoData = eventoDoc.data() as Map<String, dynamic>;
@@ -130,9 +149,9 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                           horizontal: 16,
                           vertical: 6,
                         ),
-                        leading: const CircleAvatar(
-                          radius: 24,
-                          backgroundColor: AppColors.negro,
+                        leading: const AnilloMarca(
+                          grosor: 2,
+                          padding: EdgeInsets.all(9),
                           child: Icon(
                             Icons.stadium_outlined,
                             color: AppColors.dorado,
@@ -177,14 +196,15 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                         ],
                       ),
                     ),
-                  );
+                  ).entrada(orden: index);
                 },
               );
             },
           ),
 
           // --- PANEL DE CONFIRMACIÓN ---
-          if (_sectorSeleccionadoId != null) _buildConfirmPanel(),
+          if (_sectorSeleccionadoId != null)
+            _buildConfirmPanel().entradaDesdeAbajo(),
         ],
       ),
     );
@@ -213,6 +233,8 @@ class _EstadioSelectionState extends State<EstadioSelection> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            const FiletMarca(ancho: 56),
+            const SizedBox(height: 14),
             Text(
               '$_nombreEventoSeleccionado',
               textAlign: TextAlign.center,
@@ -222,17 +244,31 @@ class _EstadioSelectionState extends State<EstadioSelection> {
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              'Sector: $_sectorSeleccionado',
-              textAlign: TextAlign.center,
-              style: AppFonts.inter(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: AppColors.tinta,
+            // Al cambiar de sector, el nombre nuevo entra con un rebote.
+            AnimatedSwitcher(
+              duration: Movimiento.reducido ? Duration.zero : Movimiento.normal,
+              switchInCurve: Movimiento.resorte,
+              transitionBuilder: (hijo, animacion) => FadeTransition(
+                opacity: animacion,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.85, end: 1).animate(animacion),
+                  child: hijo,
+                ),
+              ),
+              child: Text(
+                'Sector: $_sectorSeleccionado',
+                key: ValueKey(_sectorSeleccionadoId),
+                textAlign: TextAlign.center,
+                style: AppFonts.inter(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.tinta,
+                ),
               ),
             ),
             const SizedBox(height: 20),
-            SizedBox(
+            Presionable(
+              child: SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () async {
@@ -295,6 +331,7 @@ class _EstadioSelectionState extends State<EstadioSelection> {
                 child: const Text('CONTINUAR'),
               ),
             ),
+            ),
           ],
         ),
       ),
@@ -356,9 +393,11 @@ class _SectoresListState extends State<SectoresList> {
         }
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
-          return const Padding(
-            padding: EdgeInsets.all(20.0),
-            child: LinearProgressIndicator(),
+          return const CargandoTarjetas(
+            cantidad: 2,
+            alto: 56,
+            padding: EdgeInsets.fromLTRB(16, 4, 16, 16),
+            dentroDeLista: true,
           );
         }
 
@@ -378,15 +417,35 @@ class _SectoresListState extends State<SectoresList> {
         }
 
         return Column(
-          children: sectores.map((doc) {
+          children: sectores.indexed.map((e) {
+            final (i, doc) = e;
             final data = doc.data() as Map<String, dynamic>;
             final nombre = data['nombre'] ?? 'Sector';
             final turnoCerrado = data['turnoCerrado'] == true;
             final isSelected = widget.sectorSeleccionadoId == doc.id;
 
-            return ListTile(
+            // El elegido se pinta de dorado suave con un borde dorado que
+            // aparece animado; el check entra con un rebote.
+            return AnimatedContainer(
+              duration: Movimiento.reducido ? Duration.zero : Movimiento.rapido,
+              curve: Curves.easeOut,
+              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.doradoSuave : Colors.transparent,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: isSelected ? AppColors.dorado : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                child: ListTile(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
               minTileHeight: 60,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
               title: Row(
                 children: [
                   Expanded(
@@ -431,23 +490,34 @@ class _SectoresListState extends State<SectoresList> {
                       color: AppColors.tintaSecundaria,
                       size: 24,
                     )
-                  : (isSelected
-                        ? const Icon(
-                            Icons.check_circle,
-                            color: AppColors.negro,
-                            size: 28,
-                          )
-                        : const Icon(
-                            Icons.circle_outlined,
-                            color: AppColors.bordeCampo,
-                            size: 26,
-                          )),
-              tileColor: isSelected ? AppColors.doradoSuave : null,
+                  : AnimatedSwitcher(
+                      duration: Movimiento.reducido
+                          ? Duration.zero
+                          : const Duration(milliseconds: 500),
+                      switchInCurve: Movimiento.rebote,
+                      transitionBuilder: (hijo, animacion) =>
+                          ScaleTransition(scale: animacion, child: hijo),
+                      child: isSelected
+                          ? const Icon(
+                              Icons.check_circle,
+                              key: ValueKey('elegido'),
+                              color: AppColors.dorado,
+                              size: 28,
+                            )
+                          : const Icon(
+                              Icons.circle_outlined,
+                              key: ValueKey('libre'),
+                              color: AppColors.bordeCampo,
+                              size: 26,
+                            ),
+                    ),
               onTap: turnoCerrado
                   ? null
                   : () => widget.onSectorTap(doc.id, nombre),
               enabled: !turnoCerrado,
-            );
+                ),
+              ),
+            ).entradaLateral(orden: i);
           }).toList(),
         );
       },

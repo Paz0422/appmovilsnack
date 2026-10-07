@@ -33,16 +33,19 @@ class IncidenciasService {
   CollectionReference<Map<String, dynamic>> _col(String eventoId) =>
       _db.collection('eventos').doc(eventoId).collection('discrepancias');
 
-  /// Pendientes de todos los eventos, más recientes primero. [tipo] filtra por
-  /// [TipoIncidencia]; `null` trae todas.
+  /// Pendientes de todos los eventos (o solo de [eventoId]), más recientes
+  /// primero. [tipo] filtra por [TipoIncidencia]; `null` trae todas.
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> pendientes({
     String? tipo,
+    String? eventoId,
   }) async {
-    final eventos = await _db.collection('eventos').get();
+    final ids = eventoId != null
+        ? [eventoId]
+        : (await _db.collection('eventos').get()).docs.map((e) => e.id);
     // Una consulta por evento, en paralelo.
     final snaps = await Future.wait(
-      eventos.docs.map(
-        (e) => _col(e.id).where('estado', isEqualTo: 'pendiente').get(),
+      ids.map(
+        (id) => _col(id).where('estado', isEqualTo: 'pendiente').get(),
       ),
     );
     // Filtro en el cliente: evita un índice compuesto estado + tipo.

@@ -7,6 +7,11 @@ import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/services/firestore_helpers.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
+import 'package:front_appsnack/widgets/comunes/animados.dart';
+import 'package:front_appsnack/widgets/graficos_admin.dart';
+import 'package:front_appsnack/core/precio.dart';
 
 class ReporteMermas extends StatefulWidget {
   const ReporteMermas({super.key});
@@ -214,7 +219,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
               children: [
                 Text(
                   'Solo activos',
-                  style: AppFonts.inter(fontSize: 14, color: Colors.white70),
+                  style: AppFonts.inter(fontSize: 14, color: AppColors.tintaSecundaria),
                 ),
                 const SizedBox(width: 6),
                 Switch(
@@ -231,7 +236,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? const CargandoTarjetas()
           : _errorMessage != null
           ? ErrorAmable(
               titulo: 'No pudimos cargar las mermas',
@@ -250,18 +255,22 @@ class _ReporteMermasState extends State<ReporteMermas> {
               child: ListView(
                 padding: conMargenInferior(context, const EdgeInsets.all(16)),
                 children: [
-                  _buildFiltros(),
+                  _buildFiltros().entrada(),
                   const SizedBox(height: 16),
-                  _buildCardPerdidaTotal(),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Detalle de mermas',
-                    style: AppFonts.inter(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: AppColors.primaryLight,
-                    ),
+                  _buildCardPerdidaTotal().entrada(orden: 1),
+                  Aparece(
+                    child: _perdidaPorProducto().isEmpty
+                        ? null
+                        : Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: _buildGraficoPerdida().entrada(orden: 2),
+                          ),
                   ),
+                  const SizedBox(height: 20),
+                  const TituloSeccion(
+                    icono: Icons.receipt_long_rounded,
+                    titulo: 'Detalle de mermas',
+                  ).entrada(orden: 3),
                   const SizedBox(height: 12),
                   if (_mermasFiltradas.isEmpty)
                     Padding(
@@ -271,7 +280,8 @@ class _ReporteMermasState extends State<ReporteMermas> {
                       ),
                     )
                   else
-                    ..._mermasFiltradas.map((m) => _buildCardMerma(m)),
+                    for (final (i, m) in _mermasFiltradas.indexed)
+                      _buildCardMerma(m).entradaEnLista(i + 4),
                 ],
               ),
             ),
@@ -396,7 +406,7 @@ class _ReporteMermasState extends State<ReporteMermas> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: AppGradientes.perdida,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
         boxShadow: [
           BoxShadow(
             color: AppColors.error.withValues(alpha: 0.3),
@@ -410,39 +420,87 @@ class _ReporteMermasState extends State<ReporteMermas> {
         children: [
           Row(
             children: [
-              Icon(Icons.trending_down, color: Colors.white70, size: 22),
+              Icon(Icons.trending_down, color: AppColors.tinta, size: 22),
               const SizedBox(width: 8),
               Text(
                 'Pérdida total',
                 style: AppFonts.inter(
                   fontSize: 14,
-                  color: Colors.white70,
+                  color: AppColors.tinta,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            '$totalUnidades unidades',
+          CifraAnimada(
+            valor: totalUnidades.toDouble(),
+            formatear: (v) => '${v.round()} unidades',
             style: AppFonts.inter(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: AppColors.tinta,
             ),
           ),
           if (totalValor > 0) ...[
             const SizedBox(height: 4),
-            Text(
-              '\$${totalValor.toStringAsFixed(0)}',
+            CifraAnimada(
+              valor: totalValor,
+              formatear: formatearPesos,
               style: AppFonts.inter(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: AppColors.tinta,
               ),
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  /// Pérdida de las mermas filtradas, sumada por producto y ordenada de
+  /// mayor a menor. En dinero si hay precios; si no, en unidades.
+  List<({String nombre, String? detalle, double monto})> _perdidaPorProducto() {
+    final unidades = <String, int>{};
+    final dinero = <String, double>{};
+    for (final m in _mermasFiltradas) {
+      final nombre = m['nombreProducto'] as String? ?? 'Sin nombre';
+      final cant = m['cantidadPerdida'] as int? ?? 0;
+      final precio = (m['precio'] as num?)?.toDouble() ?? 0;
+      unidades[nombre] = (unidades[nombre] ?? 0) + cant;
+      dinero[nombre] = (dinero[nombre] ?? 0) + cant * precio;
+    }
+    final porDinero = dinero.values.any((v) => v > 0);
+    final items = [
+      for (final nombre in unidades.keys)
+        if ((unidades[nombre] ?? 0) > 0)
+          (
+            nombre: nombre,
+            detalle: porDinero ? '${unidades[nombre]} unidades' : null,
+            monto: porDinero
+                ? dinero[nombre]!
+                : unidades[nombre]!.toDouble(),
+          ),
+    ]..sort((a, b) => b.monto.compareTo(a.monto));
+    return items;
+  }
+
+  Widget _buildGraficoPerdida() {
+    final items = _perdidaPorProducto();
+    final porDinero = items.any((i) => i.detalle != null);
+    return TarjetaGrafico(
+      titulo: 'Productos con más pérdida',
+      subtitulo: porDinero
+          ? 'Valor perdido según el precio de cada producto'
+          : 'Unidades perdidas',
+      child: RankingBarras(
+        // Un key por filtro: al cambiarlo, las barras vuelven a crecer.
+        key: ValueKey('$_eventoSeleccionadoId|$_sectorSeleccionadoId'),
+        formatear: porDinero
+            ? formatearPesos
+            : (v) => '${v.round()} u.',
+        items: items.take(6).toList(),
       ),
     );
   }
@@ -462,8 +520,10 @@ class _ReporteMermasState extends State<ReporteMermas> {
     }
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        side: const BorderSide(color: AppColors.separador),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(

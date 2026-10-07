@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:front_appsnack/core/app_theme.dart';
 import 'package:front_appsnack/core/tipografia.dart';
+import 'package:front_appsnack/widgets/comunes/animados.dart';
 
 /// Tarjetas del panel de estadísticas del admin.
 ///
@@ -8,9 +9,14 @@ import 'package:front_appsnack/core/tipografia.dart';
 ///   en azul noche (≥ 9:1).
 /// - [DashboardCard.stat]: métrica secundaria sobre pizarra, con un ícono de
 ///   color ([acento]) para distinguirlas de un vistazo.
+///
+/// Con [cifra] y [formatearCifra] el valor cuenta hasta su número al
+/// aparecer (y [value] queda como texto final y para el lector de pantalla).
 class DashboardCard extends StatelessWidget {
   final String title;
   final String value;
+  final double? cifra;
+  final String Function(double)? formatearCifra;
   final IconData icon;
   final Color? iconColor;
   final VoidCallback? onTap;
@@ -25,6 +31,8 @@ class DashboardCard extends StatelessWidget {
     this.iconColor,
     this.onTap,
     this.subtitle,
+    this.cifra,
+    this.formatearCifra,
     required bool destacada,
   }) : _destacada = destacada;
 
@@ -37,6 +45,8 @@ class DashboardCard extends StatelessWidget {
     String? subtitle,
     Color? iconColor,
     VoidCallback? onTap,
+    double? cifra,
+    String Function(double)? formatearCifra,
   }) => DashboardCard._(
     key: key,
     title: title,
@@ -45,6 +55,8 @@ class DashboardCard extends StatelessWidget {
     subtitle: subtitle,
     iconColor: iconColor,
     onTap: onTap,
+    cifra: cifra,
+    formatearCifra: formatearCifra,
     destacada: true,
   );
 
@@ -57,6 +69,8 @@ class DashboardCard extends StatelessWidget {
     String? subtitle,
     Color? acento,
     VoidCallback? onTap,
+    double? cifra,
+    String Function(double)? formatearCifra,
   }) => DashboardCard._(
     key: key,
     title: title,
@@ -65,13 +79,29 @@ class DashboardCard extends StatelessWidget {
     subtitle: subtitle,
     iconColor: acento,
     onTap: onTap,
+    cifra: cifra,
+    formatearCifra: formatearCifra,
     destacada: false,
   );
+
+  /// El valor: animado si hay [cifra], si no el texto tal cual.
+  Widget _valor(TextStyle style) {
+    if (cifra == null || formatearCifra == null) {
+      return Text(value, style: style);
+    }
+    return CifraAnimada(
+      valor: cifra!,
+      formatear: (v) => v == cifra ? value : formatearCifra!(v),
+      style: style,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       container: true,
+      button: onTap != null,
+      onTap: onTap,
       label: '$title: $value${subtitle == null ? '' : '. $subtitle'}',
       excludeSemantics: true,
       child: Material(
@@ -128,9 +158,8 @@ class DashboardCard extends StatelessWidget {
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        value,
-                        style: AppFonts.inter(
+                      child: _valor(
+                        AppFonts.inter(
                           fontSize: 40,
                           fontWeight: FontWeight.w800,
                           color: AppColors.negro,
@@ -168,9 +197,10 @@ class DashboardCard extends StatelessWidget {
               Container(
                 width: 56,
                 height: 56,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: AppColors.negro,
                   shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.cafe, width: 2.5),
                 ),
                 child: Icon(
                   icon,
@@ -225,9 +255,8 @@ class DashboardCard extends StatelessWidget {
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
-                  child: Text(
-                    value,
-                    style: AppFonts.inter(
+                  child: _valor(
+                    AppFonts.inter(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                       color: AppColors.tinta,

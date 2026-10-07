@@ -6,8 +6,10 @@
 // Contraste (WCAG, ver test/core/contraste_test.dart): el texto claro y el
 // dorado se leen sobre fondo y tarjetas (≥ 7:1); sobre dorado o sobre los
 // colores de estado (éxito, error, aviso) el texto va en azul noche [negro].
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 
 /// Paleta de la marca y del tema.
@@ -20,7 +22,20 @@ class AppColors {
   static const Color negro = Color(0xFF081221);
   static const Color dorado = Color(0xFFEDC661);
   static const Color doradoOscuro = Color(0xFFD4A63E);
+
+  /// Café del anillo del logo. Acento secundario de detalle: filetes de
+  /// títulos, anillos de marca, tercer puesto del podio, etiquetas. Se lee
+  /// como texto sobre fondo y tarjetas (≥ 4,5:1).
   static const Color cafe = Color(0xFFC79A5B);
+
+  /// Fondo de etiquetas café (texto [cafeClaro] encima).
+  static const Color cafeSuave = Color(0xFF33291D);
+
+  /// Texto café sobre [cafeSuave] (≥ 4,5:1).
+  static const Color cafeClaro = Color(0xFFE2BE8A);
+
+  /// Segundo puesto del podio.
+  static const Color plata = Color(0xFFCBD5E1);
 
   // --- Superficies ---
   static const Color fondo = Color(0xFF0E1A2B);
@@ -67,7 +82,10 @@ class AppColors {
   static const Color violeta = Color(0xFFA99BFF);
 
   /// Serie de colores para gráficos (el primero es el de la marca).
-  static const List<Color> grafico = [dorado, cian, coral, violeta, exito];
+  static const List<Color> grafico = [dorado, cian, coral, violeta, exito, cafe];
+
+  /// Oro, plata y bronce (café) para los tres primeros de un ranking.
+  static const List<Color> podio = [dorado, plata, cafe];
 
   // --- Nombres usados en toda la app (mismos roles, valores nuevos) ---
   /// Zonas de marca (cabeceras).
@@ -102,6 +120,32 @@ class AppGradientes {
     end: Alignment.bottomRight,
     colors: [Color(0xFFF7DB86), AppColors.doradoOscuro],
   );
+
+  /// Filete de marca (dorado → café, como el logo): subrayado de títulos y
+  /// anillos. Solo decorativo, nunca de fondo de texto.
+  static const LinearGradient marca = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [AppColors.dorado, AppColors.cafe],
+  );
+
+  /// Relleno bajo la línea de los gráficos de evolución.
+  static LinearGradient areaGrafico(Color color) => LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [color.withValues(alpha: 0.38), color.withValues(alpha: 0)],
+  );
+
+  /// Barras de los gráficos (claro arriba → oscuro abajo), en el orden de
+  /// [AppColors.grafico]: dorado, cian, coral, violeta, verde y café.
+  static const List<List<Color>> barras = [
+    [Color(0xFFF7DB86), AppColors.doradoOscuro],
+    [Color(0xFF7FDBF7), Color(0xFF2E9FC7)],
+    [Color(0xFFFFB3AB), Color(0xFFE0645A)],
+    [Color(0xFFC8BEFF), Color(0xFF7D6BE0)],
+    [Color(0xFF86E6B3), Color(0xFF2FA86A)],
+    [AppColors.cafeClaro, Color(0xFF9C7542)],
+  ];
 
   /// Totales de pérdida (rojo oscuro: el texto blanco se lee sobre él).
   static const LinearGradient perdida = LinearGradient(
@@ -214,6 +258,17 @@ class AppTheme {
       ),
       scaffoldBackgroundColor: AppColors.fondo,
       canvasColor: AppColors.fondo,
+      // iOS conserva su transición para no perder el gesto de volver.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: TransicionFusion(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.windows: TransicionFusion(),
+          TargetPlatform.linux: TransicionFusion(),
+          TargetPlatform.fuchsia: TransicionFusion(),
+        },
+      ),
       textTheme: textTheme,
       primaryTextTheme: textTheme,
       // Cabecera integrada al fondo (sin franja), título claro e íconos dorados.

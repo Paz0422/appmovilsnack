@@ -3,8 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/widgets/comunes/animados.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
 import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/widgets/graficos_admin.dart';
 import 'package:front_appsnack/core/avisos_sesion.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 import 'package:share_plus/share_plus.dart';
@@ -750,7 +754,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
     buffer.writeln('───────────────────────────────────────');
     buffer.writeln('Unidades vendidas (estimadas): $_totalUnidadesVendidas');
     buffer.writeln(
-      'Dinero estimado del punto: \$${_totalEstimado.toStringAsFixed(0)}',
+      'Dinero estimado del punto: ${formatearPesos(_totalEstimado)}',
     );
     if (_bandejerosCierre.isNotEmpty) {
       buffer.writeln();
@@ -763,10 +767,10 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
             : b.porcentajeComision.toStringAsFixed(1);
         buffer.writeln('• ${b.nombre}');
         buffer.writeln(
-          '  Vendido: \$${b.totalVendido.toStringAsFixed(0)} | '
-          'Caja vuelto: \$${b.cajaVuelto.toStringAsFixed(0)} | '
-          'A recibir: \$${b.totalARecibir.toStringAsFixed(0)} | '
-          'Comisión al cierre $pct%: \$${b.comision.toStringAsFixed(0)}',
+          '  Vendido: ${formatearPesos(b.totalVendido)} | '
+          'Caja vuelto: ${formatearPesos(b.cajaVuelto)} | '
+          'A recibir: ${formatearPesos(b.totalARecibir)} | '
+          'Comisión al cierre $pct%: ${formatearPesos(b.comision)}',
         );
       }
     }
@@ -778,7 +782,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       buffer.writeln('• ${p.nombre}');
       buffer.writeln(
         '  Inicial: ${p.cantidadInicial} | Final: ${p.cantidadFinal} | '
-        'Vendido: ${p.cantidadVendida} | Subtotal: \$${p.subtotal.toStringAsFixed(0)}'
+        'Vendido: ${p.cantidadVendida} | Subtotal: ${formatearPesos(p.subtotal)}'
         '${p.tieneSobrante ? ' | Sobrante: ${p.sobrante}' : ''}',
       );
     }
@@ -981,7 +985,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
           ],
         ),
         body: _isLoading
-            ? Center(child: CircularProgressIndicator())
+            ? const CargandoTarjetas(alto: 120)
             : _error != null
             ? _buildError()
             : _movimientosPendientes.isNotEmpty
@@ -1007,7 +1011,11 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(Icons.pending_actions, size: 48, color: AppColors.aviso),
+          Icon(
+            Icons.pending_actions,
+            size: 48,
+            color: AppColors.aviso,
+          ).aparicionRebote(),
           const SizedBox(height: 12),
           Text(
             'Antes de contar, resuelva estos movimientos',
@@ -1027,15 +1035,14 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
             style: AppFonts.inter(fontSize: 14, color: AppColors.secondary),
           ),
           const SizedBox(height: 16),
-          ..._movimientosPendientes.map(
-            (m) => Card(
+          for (final (i, m) in _movimientosPendientes.indexed)
+            Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
                 leading: Icon(Icons.warning_amber, color: AppColors.aviso),
                 title: Text(m, style: AppFonts.inter(fontSize: 14)),
               ),
-            ),
-          ),
+            ).entradaLateral(orden: i + 1),
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: _cargarDatos,
@@ -1058,18 +1065,26 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
-          color: AppColors.accent.withValues(alpha: 0.15),
+          decoration: const BoxDecoration(
+            color: AppColors.doradoSuave,
+            border: Border(
+              bottom: BorderSide(color: AppColors.cafe, width: 1.5),
+            ),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Inventario final — ${widget.nombreSector}',
                 style: AppFonts.inter(
-                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
                   color: AppColors.primaryLight,
                 ),
               ),
               const SizedBox(height: 4),
+              const FiletMarca(ancho: 44),
+              const SizedBox(height: 8),
               Text(
                 'Ingrese cuántas unidades quedan. Si cuenta más que el stock del '
                 'sistema, se registrará como sobrante para el administrador.',
@@ -1085,13 +1100,29 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
             itemBuilder: (context, index) {
               final p = _productos[index];
               final cambio = _productosCambiados.contains(p.productoId);
-              return Card(
+              return AnimatedContainer(
+                duration: Movimiento.reducido
+                    ? Duration.zero
+                    : Movimiento.normal,
                 margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  boxShadow: cambio
+                      ? [
+                          BoxShadow(
+                            color: AppColors.aviso.withValues(alpha: 0.35),
+                            blurRadius: 14,
+                          ),
+                        ]
+                      : const [],
+                ),
+                child: Card(
+                margin: EdgeInsets.zero,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
                   side: cambio
                       ? BorderSide(color: AppColors.aviso, width: 2)
-                      : BorderSide.none,
+                      : const BorderSide(color: AppColors.separador),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(14),
@@ -1127,7 +1158,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                               ),
                             ),
                           ],
-                        ),
+                        ).temblor(),
                       ],
                       const SizedBox(height: 4),
                       Text(
@@ -1212,7 +1243,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                           ),
                           const SizedBox(width: 6),
                           if (p.tieneSobrante)
-                            Text(
+                            TextoCambiante(
                               'Sobrante: +${p.sobrante}',
                               style: AppFonts.inter(
                                 fontSize: 14,
@@ -1221,7 +1252,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                               ),
                             )
                           else
-                            Text(
+                            TextoCambiante(
                               'Vendido: ${p.cantidadVendida}',
                               style: AppFonts.inter(
                                 fontSize: 14,
@@ -1234,32 +1265,24 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                     ],
                   ),
                 ),
-              );
+              ),
+              ).entradaEnLista(index);
             },
           ),
         ),
         Padding(
           padding: conMargenInferior(context, const EdgeInsets.all(16)),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _guardarYSalirInventarioFinal,
-              icon: const Icon(Icons.check_circle_outline),
-              label: Text(
-                'Guardar y salir',
-                style: AppFonts.inter(fontWeight: FontWeight.w600),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                foregroundColor: AppColors.primaryLight,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+          child: Presionable(
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _guardarYSalirInventarioFinal,
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('Guardar y salir'),
               ),
             ),
           ),
-        ),
+        ).entradaDesdeAbajo(demora: const Duration(milliseconds: 300)),
       ],
     );
   }
@@ -1271,12 +1294,18 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeaderCard(),
+          _buildHeaderCard().entrada(),
           const SizedBox(height: 20),
-          _buildTotalCard(),
+          _buildTotalCard()
+              .aparicionRebote(demora: const Duration(milliseconds: 150))
+              .destello(demora: const Duration(milliseconds: 1400)),
+          if (_productos.any((p) => p.cantidadVendida > 0)) ...[
+            const SizedBox(height: 20),
+            _buildMasVendidosCard().entrada(orden: 3),
+          ],
           if (_bandejerosCierre.isNotEmpty) ...[
             const SizedBox(height: 20),
-            _buildBandejerosCard(),
+            _buildBandejerosCard().entrada(orden: 4),
           ],
           if (hayDiscrepancias) ...[
             const SizedBox(height: 12),
@@ -1307,51 +1336,34 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                   ),
                 ],
               ),
-            ),
+            ).entrada(orden: 5).latido(),
           ],
           const SizedBox(height: 20),
-          _buildDetalleCard(),
+          _buildDetalleCard().entrada(orden: 6),
           const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _exportarTexto,
-              icon: const Icon(Icons.share),
-              label: Text(
-                'Exportar resumen',
-                style: AppFonts.inter(fontWeight: FontWeight.w600),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                foregroundColor: AppColors.primaryLight,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+          // Exportar es secundario: contorno. Confirmar es la acción principal.
+          Presionable(
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _exportarTexto,
+                icon: const Icon(Icons.share),
+                label: const Text('Exportar resumen'),
               ),
             ),
-          ),
+          ).entrada(orden: 7),
           if (!widget.soloVerReporte) ...[
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _confirmarCierre,
-                icon: const Icon(Icons.check_circle_outline),
-                label: Text(
-                  'Confirmar cierre y volver al inicio',
-                  style: AppFonts.inter(fontWeight: FontWeight.w600),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.dorado,
-                  foregroundColor: AppColors.negro,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+            Presionable(
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _confirmarCierre,
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('Confirmar cierre y volver al inicio'),
                 ),
               ),
-            ),
+            ).entrada(orden: 8),
           ],
         ],
       ),
@@ -1363,31 +1375,42 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.tarjeta,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        gradient: AppGradientes.tarjeta,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: AppColors.separador),
+        boxShadow: AppShadows.card,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            'Evento: $_nombreEvento',
-            style: AppFonts.inter(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.primaryLight,
+          const AnilloMarca(
+            grosor: 2,
+            padding: EdgeInsets.all(9),
+            child: Icon(
+              Icons.storefront_rounded,
+              color: AppColors.dorado,
+              size: 24,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Sector: ${widget.nombreSector}',
-            style: AppFonts.inter(fontSize: 14, color: AppColors.secondary),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.nombreSector,
+                  style: AppFonts.inter(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primaryLight,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                EtiquetaCafe(
+                  icono: Icons.stadium_outlined,
+                  texto: '$_nombreEvento',
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1400,9 +1423,9 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.negro,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(color: AppColors.dorado, width: 2),
-        boxShadow: AppShadows.card,
+        boxShadow: AppShadows.dorado,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1412,23 +1435,32 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
             style: AppFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFFD8D2C4),
+              color: AppColors.tintaSecundaria,
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            '\$${_totalEstimado.toStringAsFixed(0)}',
-            style: AppFonts.inter(
-              fontSize: 40,
-              fontWeight: FontWeight.w800,
-              color: AppColors.dorado,
-              height: 1.1,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: CifraAnimada(
+              valor: _totalEstimado.toDouble(),
+              formatear: formatearPesos,
+              duracion: const Duration(milliseconds: 1500),
+              style: AppFonts.inter(
+                fontSize: 40,
+                fontWeight: FontWeight.w800,
+                color: AppColors.dorado,
+                height: 1.1,
+              ),
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            '$_totalUnidadesVendidas unidades vendidas (inicial − final)',
-            style: AppFonts.inter(fontSize: 16, color: Colors.white),
+          CifraAnimada(
+            valor: _totalUnidadesVendidas.toDouble(),
+            formatear: (v) =>
+                '${v.round()} unidades vendidas (inicial − final)',
+            duracion: const Duration(milliseconds: 1500),
+            style: AppFonts.inter(fontSize: 16, color: AppColors.tinta),
           ),
         ],
       ),
@@ -1440,15 +1472,10 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.tarjeta,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        gradient: AppGradientes.tarjeta,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: AppColors.separador),
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1457,11 +1484,13 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
             'Bandejeros — cierre de bandejeo',
             style: AppFonts.inter(
               fontSize: 18,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w800,
               color: AppColors.primaryLight,
             ),
           ),
           const SizedBox(height: 4),
+          const FiletMarca(ancho: 32),
+          const SizedBox(height: 6),
           Text(
             'Ventas y comisión registrada al cerrar cada bandejero.',
             style: AppFonts.inter(fontSize: 14, color: AppColors.secondary),
@@ -1497,21 +1526,21 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Vendido: \$${b.totalVendido.toStringAsFixed(0)}',
+                      'Vendido: ${formatearPesos(b.totalVendido)}',
                       style: AppFonts.inter(
                         fontSize: 14,
                         color: AppColors.secondary,
                       ),
                     ),
                     Text(
-                      'Caja para vuelto: \$${b.cajaVuelto.toStringAsFixed(0)}',
+                      'Caja para vuelto: ${formatearPesos(b.cajaVuelto)}',
                       style: AppFonts.inter(
                         fontSize: 14,
                         color: AppColors.secondary,
                       ),
                     ),
                     Text(
-                      'Comisión al cierre: \$${b.comision.toStringAsFixed(0)} ($pct%)',
+                      'Comisión al cierre: ${formatearPesos(b.comision)} ($pct%)',
                       style: AppFonts.inter(
                         fontSize: 14,
                         color: AppColors.secondary,
@@ -1519,7 +1548,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Total a recibir: \$${b.totalARecibir.toStringAsFixed(0)}',
+                      'Total a recibir: ${formatearPesos(b.totalARecibir)}',
                       style: AppFonts.inter(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -1541,15 +1570,10 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.tarjeta,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        gradient: AppGradientes.tarjeta,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: AppColors.separador),
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1558,15 +1582,19 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
             'Detalle por producto',
             style: AppFonts.inter(
               fontSize: 18,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w800,
               color: AppColors.primaryLight,
             ),
           ),
+          const SizedBox(height: 4),
+          const FiletMarca(ancho: 32),
           const SizedBox(height: 12),
-          ..._productos.map(
-            (p) => Padding(
+          ..._productos.indexed.map(
+            (e) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
+              child: Builder(builder: (context) {
+                final (i, p) = e;
+                return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
@@ -1605,7 +1633,7 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                         ),
                       ),
                       Text(
-                        '\$${p.subtotal.toStringAsFixed(0)}',
+                        formatearPesos(p.subtotal),
                         style: AppFonts.inter(
                           fontSize: 14,
                           color: AppColors.secondary,
@@ -1614,9 +1642,43 @@ class _ResumenCierreTurnoState extends State<ResumenCierreTurno> {
                     ],
                   ),
                 ],
-              ),
+              ).entradaLateral(orden: i.clamp(0, 8));
+              }),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Lo más vendido del turno, con los datos de la conciliación (ya en
+  /// pantalla). Por dinero si hay precios; si todo es sin precio, por unidades.
+  Widget _buildMasVendidosCard() {
+    final vendidos = _productos.where((p) => p.cantidadVendida > 0).toList();
+    final porDinero = vendidos.any((p) => p.subtotal > 0);
+    vendidos.sort(
+      (a, b) => porDinero
+          ? b.subtotal.compareTo(a.subtotal)
+          : b.cantidadVendida.compareTo(a.cantidadVendida),
+    );
+    return TarjetaGrafico(
+      titulo: 'Lo más vendido',
+      subtitulo: porDinero
+          ? 'Productos que más dinero dejaron en este turno'
+          : 'Productos con más unidades vendidas en este turno',
+      child: RankingBarras(
+        formatear: porDinero
+            ? formatearPesos
+            : (v) => '${v.round()} u.',
+        items: [
+          for (final p in vendidos.take(6))
+            (
+              nombre: p.nombre,
+              detalle: porDinero ? '${p.cantidadVendida} unidades' : null,
+              monto: porDinero
+                  ? p.subtotal
+                  : p.cantidadVendida.toDouble(),
+            ),
         ],
       ),
     );

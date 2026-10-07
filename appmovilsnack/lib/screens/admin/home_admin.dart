@@ -25,6 +25,11 @@ import 'package:front_appsnack/services/incidencias_service.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 import 'package:front_appsnack/core/margen_inferior.dart';
 import 'package:front_appsnack/widgets/comunes/marca.dart';
+import 'package:front_appsnack/widgets/comunes/animados.dart';
+import 'package:front_appsnack/widgets/comunes/cargando.dart';
+import 'package:front_appsnack/core/animaciones.dart';
+import 'package:front_appsnack/core/precio.dart';
+import 'package:front_appsnack/screens/admin/panel_funciones.dart';
 
 class HomeAdmin extends StatefulWidget {
   const HomeAdmin({super.key, this.cargarResumen, this.contarIncidencias});
@@ -41,54 +46,25 @@ class HomeAdmin extends StatefulWidget {
   State<HomeAdmin> createState() => _HomeAdminState();
 }
 
-/// Una opción del panel: abre una pantalla existente.
-class _Opcion {
-  const _Opcion({
-    required this.icono,
-    required this.titulo,
-    required this.descripcion,
-    required this.abrir,
-    this.contador = 0,
-  });
-
-  final IconData icono;
-  final String titulo;
-  final String descripcion;
-  final Widget Function() abrir;
-
-  /// Pendientes a destacar (p. ej. incidencias). 0 = sin contador.
-  final int contador;
-}
-
 /// Sección de la navegación principal del admin.
 class _Seccion {
-  const _Seccion(this.titulo, this.icono, this.iconoActivo, [String? corta])
-    : etiquetaCorta = corta ?? titulo;
+  const _Seccion(this.titulo, this.icono, this.iconoActivo);
 
   final String titulo;
-
-  /// Nombre en la barra inferior del teléfono (sin cortarse en 4 columnas).
-  final String etiquetaCorta;
   final IconData icono;
   final IconData iconoActivo;
 }
 
+/// Solo dos secciones: "Ventas" (la principal, con cifras y gráficos) y
+/// "Panel" con todos los módulos a la vista.
 const _secciones = [
-  _Seccion('Inicio', Icons.home_outlined, Icons.home_rounded),
-  _Seccion(
-    'Evento en curso',
-    Icons.stadium_outlined,
-    Icons.stadium_rounded,
-    'Evento',
-  ),
-  _Seccion('Reportes', Icons.bar_chart_outlined, Icons.bar_chart_rounded),
-  _Seccion(
-    'Configuración',
-    Icons.settings_outlined,
-    Icons.settings_rounded,
-    'Ajustes',
-  ),
+  _Seccion('Ventas', Icons.insights_outlined, Icons.insights_rounded),
+  _Seccion('Panel', Icons.dashboard_outlined, Icons.dashboard_rounded),
 ];
+
+/// Índices de [_secciones].
+const _seccionVentas = 0;
+const _seccionPanel = 1;
 
 class _HomeAdminState extends State<HomeAdmin> {
   AdminResumenActivos? _resumen;
@@ -96,7 +72,7 @@ class _HomeAdminState extends State<HomeAdmin> {
   String? _errorCarga;
 
   /// Sección visible (índice en [_secciones]).
-  int _seccion = 0;
+  int _seccion = _seccionVentas;
 
   /// Incidencias pendientes de revisar (null mientras carga o si falló).
   int? _incidencias;
@@ -146,116 +122,159 @@ class _HomeAdminState extends State<HomeAdmin> {
     }
   }
 
-  Future<void> _abrir(_Opcion opcion) async {
+  Future<void> _abrir(Widget Function() pantalla) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => opcion.abrir()),
+      MaterialPageRoute(builder: (_) => pantalla()),
     );
     // Al volver (p. ej. tras resolver incidencias) se actualiza el contador.
-    if (mounted) _cargarIncidencias();
+    if (mounted) await _cargarIncidencias();
   }
 
-  // --- Opciones de cada sección ---
+  // --- Funciones del panel ---
 
-  _Opcion get _opIncidencias => _Opcion(
-    icono: Icons.report_problem_outlined,
-    titulo: 'Incidencias por resolver',
-    descripcion: 'Faltantes en traspasos y sobrantes en conteos',
+  OpcionPanel _op(
+    IconData icono,
+    String titulo,
+    String descripcion,
+    Widget Function() pantalla, {
+    String? ejemplo,
+    int contador = 0,
+  }) => OpcionPanel(
+    icono: icono,
+    titulo: titulo,
+    descripcion: descripcion,
+    ejemplo: ejemplo,
+    contador: contador,
+    abrir: () => _abrir(pantalla),
+  );
+
+  OpcionPanel get _opIncidencias => _op(
+    Icons.report_problem_outlined,
+    'Incidencias por resolver',
+    'Faltantes en traspasos y sobrantes en conteos',
+    () => const IncidenciasPendientes(),
+    ejemplo: 'Llegaron 2 bebidas menos de las que se enviaron',
     contador: _incidencias ?? 0,
-    abrir: () => const IncidenciasPendientes(),
   );
 
-  _Opcion get _opAgregarStock => _Opcion(
-    icono: Icons.add_box_outlined,
-    titulo: 'Agregar stock',
-    descripcion: 'Sumar unidades a un sector abierto',
-    abrir: () => const AgregarStock(),
-  );
-
-  _Opcion get _opCierres => _Opcion(
-    icono: Icons.lock_clock_outlined,
-    titulo: 'Cierres de turno',
-    descripcion: 'Qué sectores cerraron y a qué hora',
-    abrir: () => const CierresPartidosActivos(),
-  );
-
-  _Opcion get _opVendedor => _Opcion(
-    icono: Icons.storefront_outlined,
-    titulo: 'Entrar como vendedor',
-    descripcion: 'Operar un sector desde el panel de vendedor',
-    abrir: () => const EstadioSelection(fromAdmin: true),
-  );
-
-  List<_Opcion> get _opcionesEvento => [
-    _opCierres,
-    _opAgregarStock,
-    _opIncidencias,
-    _Opcion(
-      icono: Icons.directions_walk_outlined,
-      titulo: 'Bandejeo por sector',
-      descripcion: 'Rondas y ventas de los bandejeros',
-      abrir: () => const ReporteBandejeoAdmin(),
+  /// Los cuatro botones del panel y sus módulos.
+  List<CategoriaPanel> get _categorias => [
+    CategoriaPanel(
+      titulo: 'Entrar como vendedor',
+      descripcion: 'Operar un sector como lo hace el vendedor',
+      icono: Icons.storefront_rounded,
+      color: AppColors.coral,
+      abrirDirecto: () => _abrir(() => const EstadioSelection(fromAdmin: true)),
     ),
-    _opVendedor,
-  ];
-
-  List<_Opcion> get _opcionesReportes => [
-    _Opcion(
-      icono: Icons.pie_chart_outline,
-      titulo: 'Ventas por categoría',
-      descripcion: 'Qué tipo de producto se vende más',
-      abrir: () => const VentasPorCategoria(),
+    CategoriaPanel(
+      titulo: 'Configuración de eventos',
+      descripcion: 'Partidos, sectores, productos y equipo',
+      icono: Icons.tune_rounded,
+      color: AppColors.cian,
+      opciones: [
+        _op(
+          Icons.event_rounded,
+          'Crear evento',
+          'Crear partidos, sectores y reabrir turnos',
+          () => const EventosManagement(),
+          ejemplo: 'Armar el partido del domingo con Norte, Sur y Pacífico',
+        ),
+        _op(
+          Icons.fastfood_outlined,
+          'Crear producto',
+          'Catálogo, precios y categorías',
+          () => const InventoryManagement(),
+          ejemplo: 'Subir el precio del café o agregar un snack nuevo',
+        ),
+        _op(
+          Icons.people_outline_rounded,
+          'Listado de personal',
+          'Empleados (nombre y RUT) y exportación',
+          () => const AsignacionPersonal(),
+          ejemplo: 'Registrar a un bandejero nuevo con su RUT',
+        ),
+        _op(
+          Icons.badge_outlined,
+          'Usuarios y roles',
+          'Ver y cambiar quién es administrador',
+          () => const GestionRolesUsuarios(),
+          ejemplo: 'Darle permisos de administrador al encargado del día',
+        ),
+      ],
     ),
-    _Opcion(
-      icono: Icons.inventory_2_outlined,
-      titulo: 'Stock por sector',
-      descripcion: 'Cuánto queda de cada producto',
-      abrir: () => const StockReports(),
+    CategoriaPanel(
+      titulo: 'Eventos activos',
+      descripcion: 'Stock, cierres e incidencias del partido en curso',
+      icono: Icons.stadium_rounded,
+      color: AppColors.dorado,
+      opciones: [
+        _op(
+          Icons.add_box_outlined,
+          'Agregar stock',
+          'Sumar unidades a un sector abierto',
+          () => const AgregarStock(),
+          ejemplo: 'Al puesto Norte se le acabaron las bebidas',
+        ),
+        _op(
+          Icons.lock_clock_outlined,
+          'Cierres de turno',
+          'Qué sectores cerraron y a qué hora',
+          () => const CierresPartidosActivos(),
+          ejemplo: 'Saber si Pacífico ya entregó su conteo final',
+        ),
+        _opIncidencias,
+        _op(
+          Icons.directions_walk_outlined,
+          'Bandejeo por sector',
+          'Rondas y ventas de los bandejeros',
+          () => const ReporteBandejeoAdmin(),
+          ejemplo: 'Cuánto vendió cada bandejero en sus rondas',
+        ),
+      ],
     ),
-    _Opcion(
-      icono: Icons.remove_circle_outline,
-      titulo: 'Mermas',
-      descripcion: 'Productos perdidos y su motivo',
-      abrir: () => const ReporteMermas(),
-    ),
-    _Opcion(
-      icono: Icons.sync_problem_rounded,
-      titulo: 'Diferencias en traspasos',
-      descripcion: 'Traspasos que llegaron con menos unidades',
-      abrir: () => const ReporteDiferenciasTraspaso(),
-    ),
-    _Opcion(
-      icono: Icons.leaderboard_outlined,
-      titulo: 'Ranking de vendedores',
-      descripcion: 'Ventas acumuladas del año por vendedor',
-      abrir: () => const RankingVendedores(),
-    ),
-  ];
-
-  List<_Opcion> get _opcionesConfiguracion => [
-    _Opcion(
-      icono: Icons.event_rounded,
-      titulo: 'Eventos y sectores',
-      descripcion: 'Crear partidos, sectores y reabrir turnos',
-      abrir: () => const EventosManagement(),
-    ),
-    _Opcion(
-      icono: Icons.fastfood_outlined,
-      titulo: 'Productos y categorías',
-      descripcion: 'Catálogo, precios y categorías',
-      abrir: () => const InventoryManagement(),
-    ),
-    _Opcion(
-      icono: Icons.people_outline_rounded,
-      titulo: 'Personal',
-      descripcion: 'Empleados (nombre y RUT) y exportación',
-      abrir: () => const AsignacionPersonal(),
-    ),
-    _Opcion(
-      icono: Icons.badge_outlined,
-      titulo: 'Usuarios y roles',
-      descripcion: 'Quién es administrador y quién vendedor',
-      abrir: () => const GestionRolesUsuarios(),
+    CategoriaPanel(
+      titulo: 'Reportes',
+      descripcion: 'Categorías, stock, mermas, traspasos y ranking',
+      icono: Icons.bar_chart_rounded,
+      color: AppColors.violeta,
+      opciones: [
+        _op(
+          Icons.pie_chart_outline,
+          'Ventas por categoría',
+          'Qué tipo de producto se vende más',
+          () => const VentasPorCategoria(),
+          ejemplo: '¿Se venden más bebidas o snacks?',
+        ),
+        _op(
+          Icons.inventory_2_outlined,
+          'Stock por sector',
+          'Cuánto queda de cada producto',
+          () => const StockReports(),
+          ejemplo: 'Revisar qué sobró para el próximo partido',
+        ),
+        _op(
+          Icons.remove_circle_outline,
+          'Mermas',
+          'Productos perdidos y su motivo',
+          () => const ReporteMermas(),
+          ejemplo: 'Ver cuántos productos se botaron y por qué',
+        ),
+        _op(
+          Icons.sync_problem_rounded,
+          'Diferencias en traspasos',
+          'Traspasos que llegaron con menos unidades',
+          () => const ReporteDiferenciasTraspaso(),
+          ejemplo: 'Encontrar dónde se perdió mercadería en un envío',
+        ),
+        _op(
+          Icons.leaderboard_outlined,
+          'Ranking de vendedores',
+          'Ventas acumuladas del año por vendedor',
+          () => const RankingVendedores(),
+          ejemplo: 'Premiar al vendedor que más vendió en el año',
+        ),
+      ],
     ),
   ];
 
@@ -266,27 +285,7 @@ class _HomeAdminState extends State<HomeAdmin> {
 
     final cuerpo = IndexedStack(
       index: _seccion,
-      children: [
-        _buildInicio(context),
-        _ListaOpciones(
-          descripcion: 'Lo que se hace mientras se juega el partido.',
-          opciones: _opcionesEvento,
-          onAbrir: _abrir,
-        ),
-        _ListaOpciones(
-          descripcion: 'Para analizar ventas, stock y pérdidas.',
-          opciones: _opcionesReportes,
-          onAbrir: _abrir,
-        ),
-        _ListaOpciones(
-          descripcion: 'Para preparar todo antes del evento.',
-          opciones: _opcionesConfiguracion,
-          onAbrir: _abrir,
-          alFinal: _BotonCerrarSesion(
-            onPressed: () => AuthManager().cerrarSesion(),
-          ),
-        ),
-      ],
+      children: [_buildVentas(context), _buildPanel(context)],
     );
 
     return Scaffold(
@@ -323,7 +322,7 @@ class _HomeAdminState extends State<HomeAdmin> {
                   NavigationDestination(
                     icon: _iconoSeccion(i, activo: false),
                     selectedIcon: _iconoSeccion(i, activo: true),
-                    label: _secciones[i].etiquetaCorta,
+                    label: _secciones[i].titulo,
                     tooltip: _secciones[i].titulo,
                   ),
               ],
@@ -331,26 +330,35 @@ class _HomeAdminState extends State<HomeAdmin> {
     );
   }
 
-  /// Ícono de la sección; "Evento en curso" lleva el contador de incidencias.
+  /// Ícono de la sección; "Panel" lleva el contador de incidencias.
   Widget _iconoSeccion(int i, {required bool activo}) {
     final icono = Icon(
       activo ? _secciones[i].iconoActivo : _secciones[i].icono,
     );
     final pendientes = _incidencias ?? 0;
-    if (i != 1 || pendientes == 0) return icono;
+    if (i != _seccionPanel || pendientes == 0) return icono;
     return Badge(
       label: Text('$pendientes'),
       backgroundColor: AppColors.error,
-      textColor: Colors.white,
+      textColor: AppColors.negro,
       child: icono,
     );
   }
 
   PreferredSizeWidget _buildAppBar() {
-    if (_seccion != 0) {
+    final actualizar = [
+      IconButton(
+        tooltip: 'Actualizar',
+        icon: const Icon(Icons.refresh_rounded),
+        onPressed: _cargando ? null : _cargarEstadisticas,
+      ),
+      const SizedBox(width: 4),
+    ];
+    if (_seccion == _seccionPanel) {
       return AppBar(
         automaticallyImplyLeading: false,
-        title: Text(_secciones[_seccion].titulo),
+        title: const Text('Panel'),
+        actions: actualizar,
       );
     }
     return AppBar(
@@ -363,7 +371,7 @@ class _HomeAdminState extends State<HomeAdmin> {
             'assets/imagenes/logo.png',
             height: 40,
             excludeFromSemantics: true,
-          ),
+          ).aparicionRebote(),
           const SizedBox(width: 10),
           Flexible(
             child: Column(
@@ -378,7 +386,7 @@ class _HomeAdminState extends State<HomeAdmin> {
                   style: AppFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: AppColors.tinta,
                   ),
                 ),
               ],
@@ -386,57 +394,114 @@ class _HomeAdminState extends State<HomeAdmin> {
           ),
         ],
       ),
-      actions: [
-        IconButton(
-          tooltip: 'Actualizar estadísticas',
-          icon: const Icon(Icons.refresh_rounded),
-          onPressed: _cargando ? null : _cargarEstadisticas,
-        ),
-        const SizedBox(width: 4),
-      ],
+      actions: actualizar,
     );
   }
 
-  /// Lo urgente y lo más usado, antes del resumen de ventas.
-  List<Widget> _buildAtencionYAccesos() {
-    final pendientes = _incidencias ?? 0;
-    return [
-      if (pendientes > 0) ...[
-        _TarjetaOpcion(
-          opcion: _opIncidencias,
-          onTap: () => _abrir(_opIncidencias),
-          urgente: true,
-        ),
-        const SizedBox(height: 16),
-      ],
-      const _TituloSeccion(
-        icono: Icons.bolt_rounded,
-        titulo: 'Accesos rápidos',
-      ),
-      const SizedBox(height: 10),
-      IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final (i, o) in [_opAgregarStock, _opCierres, _opVendedor].indexed) ...[
-              if (i > 0) const SizedBox(width: 10),
-              Expanded(
-                child: _AccesoRapido(
-                  opcion: o,
-                  color: AppColors.grafico[i],
-                  onTap: () => _abrir(o),
-                ),
-              ),
-            ],
-          ],
+  /// Un botón del panel: directo a su pantalla o a la lista de sus módulos.
+  Future<void> _abrirCategoria(CategoriaPanel categoria) async {
+    final directo = categoria.abrirDirecto;
+    if (directo != null) return directo();
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PantallaCategoria(
+          // Se vuelve a pedir para que los contadores estén al día.
+          obtener: () =>
+              _categorias.firstWhere((c) => c.titulo == categoria.titulo),
         ),
       ),
-      const SizedBox(height: 20),
-    ];
+    );
   }
 
-  /// Sección Inicio: lo urgente, accesos rápidos y el resumen de ventas.
-  Widget _buildInicio(BuildContext context) {
+  /// Lo urgente (incidencias), arriba de Ventas.
+  Widget _avisoIncidencias() {
+    final pendientes = _incidencias ?? 0;
+    return Aparece(
+      child: pendientes == 0
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _TarjetaOpcion(
+                opcion: _opIncidencias,
+                onTap: _opIncidencias.abrir,
+                urgente: true,
+              ).latido(demora: const Duration(milliseconds: 700)),
+            ),
+    );
+  }
+
+  /// Panel: todos los módulos, agrupados por momento del partido, cada uno
+  /// con para qué sirve y un ejemplo.
+  Widget _buildPanel(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _cargarEstadisticas,
+      child: ListView(
+        padding: conMargenInferior(
+          context,
+          const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        ),
+        children: [
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '¿Qué quiere hacer?',
+                              style: AppFonts.inter(
+                                color: AppColors.tinta,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            const FiletMarca(ancho: 56),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Elija una sección. Cada módulo dice para qué '
+                              'sirve y trae un ejemplo.',
+                              style: AppFonts.inter(
+                                color: AppColors.tintaSecundaria,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const _LiveReloj(),
+                    ],
+                  ).entrada(),
+                  const SizedBox(height: 18),
+                  CategoriasPanel(
+                    categorias: _categorias,
+                    onAbrir: _abrirCategoria,
+                    ordenInicial: 1,
+                  ),
+                  const SizedBox(height: 28),
+                  _BotonCerrarSesion(
+                    onPressed: () => AuthManager().cerrarSesion(),
+                  ).entrada(orden: 5),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Sección Ventas: total, métricas y gráficos.
+  Widget _buildVentas(BuildContext context) {
     return RefreshIndicator(
       onRefresh: _cargarEstadisticas,
       child: SingleChildScrollView(
@@ -462,11 +527,14 @@ class _HomeAdminState extends State<HomeAdmin> {
                             'Resumen de ventas',
                             style: AppFonts.inter(
                               color: AppColors.tinta,
-                              fontSize: 24,
+                              fontSize: 26,
                               fontWeight: FontWeight.w800,
+                              letterSpacing: -0.4,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
+                          const FiletMarca(ancho: 56),
+                          const SizedBox(height: 8),
                           Text(
                             'Cierres de turno en sectores y ventas de bandejeo',
                             style: AppFonts.inter(
@@ -477,15 +545,17 @@ class _HomeAdminState extends State<HomeAdmin> {
                         ],
                       ),
                     ),
-                    const _LiveReloj(darkText: true),
+                    const _LiveReloj(),
                   ],
-                ),
+                ).entrada(),
                 const SizedBox(height: 16),
-                ..._buildAtencionYAccesos(),
+                _avisoIncidencias(),
                 if (_cargando)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 48),
-                    child: Center(child: CircularProgressIndicator()),
+                  const CargandoTarjetas(
+                    cantidad: 4,
+                    alto: 92,
+                    padding: EdgeInsets.zero,
+                    dentroDeLista: true,
                   )
                 else if (_errorCarga != null)
                   _buildErrorCarga()
@@ -526,12 +596,16 @@ class _HomeAdminState extends State<HomeAdmin> {
                   ],
                   DashboardCard.kpi(
                     title: 'Total vendido',
-                    value: '\$${_fmtMiles(_resumen!.totalVendido)}',
+                    value: formatearPesos(_resumen!.totalVendido),
+                    cifra: _resumen!.totalVendido.toDouble(),
+                    formatearCifra: formatearPesos,
                     subtitle:
                         '${_resumen!.eventosConVentas} partido${_resumen!.eventosConVentas == 1 ? '' : 's'} con ventas · '
                         '${_resumen!.cantidadEventosActivos} activo${_resumen!.cantidadEventosActivos == 1 ? '' : 's'} ahora',
                     icon: Icons.payments_outlined,
-                  ),
+                  ).entrada(orden: 4).destello(
+                        demora: const Duration(milliseconds: 1300),
+                      ),
                   const SizedBox(height: 16),
                   _buildMetricas(),
                   const SizedBox(height: 16),
@@ -564,19 +638,25 @@ class _HomeAdminState extends State<HomeAdmin> {
           children: [
             DashboardCard.stat(
               title: 'Cierres de turno',
-              value: _fmtMiles(r.cantidadCierres),
+              value: separarMiles(r.cantidadCierres),
+              cifra: r.cantidadCierres.toDouble(),
+              formatearCifra: separarMiles,
               icon: Icons.receipt_long_outlined,
               acento: AppColors.dorado,
             ),
             DashboardCard.stat(
               title: 'Promedio por cierre',
-              value: '\$${_fmtMiles(r.promedioPorCierre.round())}',
+              value: formatearPesos(r.promedioPorCierre.round()),
+              cifra: r.promedioPorCierre,
+              formatearCifra: formatearPesos,
               icon: Icons.trending_up_rounded,
               acento: AppColors.cian,
             ),
             DashboardCard.stat(
               title: 'Rondas bandejeo',
-              value: _fmtMiles(r.transaccionesBandejeo),
+              value: separarMiles(r.transaccionesBandejeo),
+              cifra: r.transaccionesBandejeo.toDouble(),
+              formatearCifra: separarMiles,
               icon: Icons.shopping_basket_outlined,
               acento: AppColors.coral,
             ),
@@ -584,9 +664,9 @@ class _HomeAdminState extends State<HomeAdmin> {
               title: 'Partidos activos',
               value: '${r.cantidadEventosActivos}',
               icon: Icons.event_available_outlined,
-              acento: AppColors.violeta,
+              acento: AppColors.cafe,
             ),
-          ],
+          ].indexed.map((e) => e.$2.entrada(orden: e.$1 + 5)).toList(),
         );
       },
     );
@@ -603,7 +683,7 @@ class _HomeAdminState extends State<HomeAdmin> {
       titulo: '¿De dónde vienen las ventas?',
       subtitulo: 'Cierres de turno y bandejeo en turnos abiertos',
       child: GraficoDona(
-        formatear: _formatearMonto,
+        formatear: formatearPesos,
         textoCentro: abreviarMonto(r.totalVendido.toDouble()),
         partes: [
           (
@@ -629,33 +709,51 @@ class _HomeAdminState extends State<HomeAdmin> {
       subtitulo: 'Puestos con más venta (cierre o bandejeo)',
       child: _AnalisisSectoresWidget(sectores: r.ingresosPorSector),
     );
+    final serie = r.ventasEnElTiempo;
+    final evolucion = TarjetaGrafico(
+      titulo: 'Ventas en el tiempo',
+      subtitulo: serie.porHora
+          ? 'Por hora, según la hora de cada cierre y rendición'
+          : 'Por día, según la fecha de cada cierre y rendición',
+      child: serie.tramos.isEmpty
+          ? const _SinDatos('Aún no hay ventas con fecha registrada')
+          : GraficoEvolucion(
+              tramos: serie.tramos,
+              porHora: serie.porHora,
+              formatear: formatearPesos,
+            ),
+    );
 
     return LayoutBuilder(
       builder: (context, c) {
         if (c.maxWidth < 760) {
           return Column(
             children: [
-              origen,
+              evolucion.entrada(orden: 8),
               const SizedBox(height: 16),
-              porPartido,
+              origen.entrada(orden: 9),
               const SizedBox(height: 16),
-              porSector,
+              porPartido.entrada(orden: 10),
+              const SizedBox(height: 16),
+              porSector.entrada(orden: 11),
             ],
           );
         }
         return Column(
           children: [
+            evolucion.entrada(orden: 8),
+            const SizedBox(height: 16),
             // Sin IntrinsicHeight: los gráficos usan LayoutBuilder.
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: origen),
+                Expanded(child: origen.entrada(orden: 9)),
                 const SizedBox(width: 16),
-                Expanded(child: porPartido),
+                Expanded(child: porPartido.entrada(orden: 10)),
               ],
             ),
             const SizedBox(height: 16),
-            porSector,
+            porSector.entrada(orden: 11),
           ],
         );
       },
@@ -671,7 +769,7 @@ class _HomeAdminState extends State<HomeAdmin> {
           constraints: const BoxConstraints(maxWidth: 420),
           child: Column(
             children: [
-              const Mascota(alto: 110),
+              const Mascota(alto: 110).aparicionRebote(),
               const SizedBox(height: 12),
               Text(
                 'No pudimos cargar las estadísticas',
@@ -707,21 +805,10 @@ class _HomeAdminState extends State<HomeAdmin> {
     );
   }
 
-  String _fmtMiles(int n) {
-    final s = n.toString();
-    final buf = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      buf.write(s[i]);
-      final posFromEnd = s.length - i - 1;
-      if (posFromEnd > 0 && posFromEnd % 3 == 0) buf.write('.');
-    }
-    return buf.toString();
-  }
 }
 
 class _LiveReloj extends StatefulWidget {
-  final bool darkText;
-  const _LiveReloj({this.darkText = false});
+  const _LiveReloj();
 
   @override
   State<_LiveReloj> createState() => _LiveRelojState();
@@ -750,10 +837,8 @@ class _LiveRelojState extends State<_LiveReloj> {
     String two(int n) => n.toString().padLeft(2, '0');
     final hora = '${two(now.hour)}:${two(now.minute)}:${two(now.second)}';
     final fecha = '${two(now.day)}/${two(now.month)}/${now.year}';
-    final color = widget.darkText ? AppColors.tinta : Colors.white;
-    final sub = widget.darkText
-        ? AppColors.tintaSecundaria
-        : const Color(0xFFD8D2C4);
+    const color = AppColors.tinta;
+    const sub = AppColors.tintaSecundaria;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
@@ -770,55 +855,6 @@ class _LiveRelojState extends State<_LiveReloj> {
       ],
     );
   }
-}
-
-/// Título de sección del panel.
-class _TituloSeccion extends StatelessWidget {
-  const _TituloSeccion({
-    required this.icono,
-    required this.titulo,
-  });
-
-  final IconData icono;
-  final String titulo;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: AppColors.dorado.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-          ),
-          child: Icon(icono, color: AppColors.dorado, size: 20),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                titulo,
-                style: AppFonts.inter(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.tinta,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-String _formatearMonto(double monto) {
-  return '\$${monto.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}';
 }
 
 class _SinDatos extends StatelessWidget {
@@ -858,7 +894,7 @@ class _AnalisisSectoresWidget extends StatelessWidget {
             monto: (e['total'] as num?)?.toDouble() ?? 0,
           ),
         );
-    return RankingBarras(items: top.toList(), formatear: _formatearMonto);
+    return RankingBarras(items: top.toList(), formatear: formatearPesos);
   }
 }
 
@@ -885,57 +921,7 @@ class _EventosIngresosWidget extends StatelessWidget {
     );
     return GraficoBarras(
       items: [for (final i in items.take(6)) (nombre: i.nombre, monto: i.monto)],
-      formatear: _formatearMonto,
-    );
-  }
-}
-
-/// Lista de opciones de una sección, como tarjetas grandes.
-class _ListaOpciones extends StatelessWidget {
-  const _ListaOpciones({
-    required this.descripcion,
-    required this.opciones,
-    required this.onAbrir,
-    this.alFinal,
-  });
-
-  final String descripcion;
-  final List<_Opcion> opciones;
-  final void Function(_Opcion) onAbrir;
-  final Widget? alFinal;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: conMargenInferior(
-        context,
-        const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      ),
-      children: [
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  descripcion,
-                  style: AppFonts.inter(
-                    fontSize: 16,
-                    color: AppColors.tintaSecundaria,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                for (final o in opciones) ...[
-                  _TarjetaOpcion(opcion: o, onTap: () => onAbrir(o)),
-                  const SizedBox(height: 10),
-                ],
-                if (alFinal != null) ...[const SizedBox(height: 24), alFinal!],
-              ],
-            ),
-          ),
-        ),
-      ],
+      formatear: formatearPesos,
     );
   }
 }
@@ -949,7 +935,7 @@ class _TarjetaOpcion extends StatelessWidget {
     this.urgente = false,
   });
 
-  final _Opcion opcion;
+  final OpcionPanel opcion;
   final VoidCallback onTap;
 
   /// Resaltada como "requiere atención" (fondo de aviso).
@@ -958,8 +944,10 @@ class _TarjetaOpcion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final contador = opcion.contador;
-    return Semantics(
+    return Presionable(
+      child: Semantics(
       button: true,
+      onTap: onTap,
       label:
           '${opcion.titulo}. ${opcion.descripcion}'
           '${contador > 0 ? '. $contador pendientes' : ''}',
@@ -982,13 +970,9 @@ class _TarjetaOpcion extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    color: AppColors.negro,
-                    shape: BoxShape.circle,
-                  ),
+                AnilloMarca(
+                  grosor: 2,
+                  padding: const EdgeInsets.all(9),
                   child: Icon(opcion.icono, color: AppColors.dorado, size: 26),
                 ),
                 const SizedBox(width: 14),
@@ -1046,7 +1030,7 @@ class _TarjetaOpcion extends StatelessWidget {
                       style: AppFonts.inter(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        color: AppColors.negro,
                       ),
                     ),
                   )
@@ -1061,63 +1045,6 @@ class _TarjetaOpcion extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Acceso rápido del inicio: mosaico con ícono de color y el nombre debajo.
-class _AccesoRapido extends StatelessWidget {
-  const _AccesoRapido({
-    required this.opcion,
-    required this.color,
-    required this.onTap,
-  });
-
-  final _Opcion opcion;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.tarjeta,
-      borderRadius: BorderRadius.circular(AppRadius.xl),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 104),
-          padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.xl),
-            border: Border.all(color: AppColors.separador),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.16),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(opcion.icono, color: color, size: 24),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                opcion.titulo,
-                textAlign: TextAlign.center,
-                style: AppFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.tinta,
-                  height: 1.2,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

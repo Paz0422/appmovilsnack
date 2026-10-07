@@ -9,7 +9,9 @@ import 'package:front_appsnack/widgets/traspaso_stock.dart';
 import 'package:front_appsnack/widgets/confirmacion_traspasos.dart';
 import 'package:front_appsnack/widgets/bandejeo_flow.dart';
 import 'package:front_appsnack/widgets/estadio_selection.dart';
+import 'package:front_appsnack/core/animaciones.dart';
 import 'package:front_appsnack/core/app_theme.dart';
+import 'package:front_appsnack/widgets/comunes/animados.dart';
 import 'package:front_appsnack/widgets/comunes/marca.dart';
 import 'package:front_appsnack/core/tipografia.dart';
 
@@ -185,7 +187,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
               "assets/imagenes/logo.png",
               height: 40,
               excludeFromSemantics: true,
-            ),
+            ).aparicionRebote(),
             const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,7 +198,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                   'Panel de Vendedor',
                   style: AppFonts.inter(
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: AppColors.tinta,
                     fontSize: 14,
                   ),
                 ),
@@ -229,41 +231,63 @@ class _HomeVendedorState extends State<HomeVendedor> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                _buildEncabezadoTurno(compacto: false),
+                                _buildEncabezadoTurno(compacto: false).entrada(),
                                 SizedBox(height: layout.sectionGap),
-                                if (!_stockInicialAgregado) ...[
-                                  _buildAvisoStockInicialPendiente(),
-                                  SizedBox(height: layout.sectionGap),
-                                ],
+                                Aparece(
+                                  child: _stockInicialAgregado
+                                      ? null
+                                      : Padding(
+                                          padding: EdgeInsets.only(
+                                            bottom: layout.sectionGap,
+                                          ),
+                                          child:
+                                              _buildAvisoStockInicialPendiente(),
+                                        ),
+                                ),
                                 _buildBannerTraspasosPendientes(),
                                 SizedBox(height: layout.sectionGap),
                                 Expanded(
                                   child: _buildStockPrincipal(
                                     compacto: false,
                                     expandir: true,
-                                  ),
+                                  ).entrada(orden: 2),
                                 ),
                               ],
                             ),
                           ),
                           const SizedBox(width: 16),
-                          Expanded(flex: 6, child: _buildPanelAcciones(layout)),
+                          Expanded(
+                            flex: 6,
+                            child: _buildPanelAcciones(layout).entrada(orden: 3),
+                          ),
                         ],
                       )
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _buildEncabezadoTurno(compacto: layout.compacto),
+                          _buildEncabezadoTurno(
+                            compacto: layout.compacto,
+                          ).entrada(),
                           SizedBox(height: layout.sectionGap),
-                          if (!_stockInicialAgregado) ...[
-                            _buildAvisoStockInicialPendiente(),
-                            SizedBox(height: layout.sectionGap),
-                          ],
+                          Aparece(
+                            child: _stockInicialAgregado
+                                ? null
+                                : Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom: layout.sectionGap,
+                                    ),
+                                    child: _buildAvisoStockInicialPendiente(),
+                                  ),
+                          ),
                           _buildBannerTraspasosPendientes(),
                           SizedBox(height: layout.sectionGap),
-                          _buildStockPrincipal(compacto: layout.compacto),
+                          _buildStockPrincipal(
+                            compacto: layout.compacto,
+                          ).entrada(orden: 2),
                           SizedBox(height: layout.sectionGap),
-                          Expanded(child: _buildPanelAcciones(layout)),
+                          Expanded(
+                            child: _buildPanelAcciones(layout).entrada(orden: 3),
+                          ),
                         ],
                       ),
               ),
@@ -330,7 +354,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
     required Color borde,
     required Color fondo,
   }) {
-    return Material(
+    return Presionable(
+      child: Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
@@ -365,6 +390,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -422,7 +448,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
           ),
         ],
       ),
-    );
+    ).entrada(orden: 1).latido(demora: const Duration(milliseconds: 900));
   }
 
   Widget _buildBannerTraspasosPendientes() {
@@ -444,7 +470,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
           sectorId: _currentSectorId,
           nombreSector: _currentSectorNombre,
           resumen: resumen,
-        );
+        ).entrada().latido(demora: const Duration(milliseconds: 700));
       },
     );
   }
@@ -478,6 +504,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                       decoration: BoxDecoration(
                         color: AppColors.dorado,
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.cafe, width: 2),
                       ),
                       child: Icon(
                         Icons.storefront_rounded,
@@ -508,9 +535,11 @@ class _HomeVendedorState extends State<HomeVendedor> {
                             style: AppFonts.inter(
                               fontSize: compacto ? 20 : 22,
                               fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                              color: AppColors.tinta,
                             ),
                           ),
+                          const SizedBox(height: 2),
+                          _EstadoTurno(listo: _stockInicialAgregado),
                         ],
                       ),
                     ),
@@ -611,7 +640,9 @@ class _HomeVendedorState extends State<HomeVendedor> {
       ),
     );
 
-    return Material(
+    return Presionable(
+      escala: 0.97,
+      child: Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: esFinal ? _ingresarStockFinal : _agregarStockInicial,
@@ -632,7 +663,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
               : contenido,
         ),
       ),
-    );
+      ),
+    ).destello(demora: const Duration(milliseconds: 1100));
   }
 
   Widget _buildPanelAcciones(_VendedorPanelLayout layout) {
@@ -735,7 +767,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 layout.stockYOperacionesEnFila
@@ -747,6 +780,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
                   color: AppColors.tinta,
                 ),
               ),
+              const SizedBox(height: 4),
+              const FiletMarca(ancho: 36),
             ],
           ),
           SizedBox(height: layout.compacto ? 8 : 12),
@@ -764,7 +799,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                                 !acciones[i].requiereStockInicial ||
                                 _stockInicialAgregado,
                             compacto: layout.compacto,
-                          ),
+                          ).entrada(orden: 4 + i),
                         ),
                       ],
                     ],
@@ -782,7 +817,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                                     !acciones[0].requiereStockInicial ||
                                     _stockInicialAgregado,
                                 compacto: layout.compacto,
-                              ),
+                              ).entrada(orden: 4),
                             ),
                             SizedBox(width: layout.gridSpacing),
                             Expanded(
@@ -792,7 +827,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                                     !acciones[1].requiereStockInicial ||
                                     _stockInicialAgregado,
                                 compacto: layout.compacto,
-                              ),
+                              ).entrada(orden: 5),
                             ),
                           ],
                         ),
@@ -809,7 +844,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                                     !acciones[2].requiereStockInicial ||
                                     _stockInicialAgregado,
                                 compacto: layout.compacto,
-                              ),
+                              ).entrada(orden: 6),
                             ),
                             SizedBox(width: layout.gridSpacing),
                             Expanded(
@@ -819,7 +854,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
                                     !acciones[3].requiereStockInicial ||
                                     _stockInicialAgregado,
                                 compacto: layout.compacto,
-                              ),
+                              ).entrada(orden: 7),
                             ),
                           ],
                         ),
@@ -837,7 +872,8 @@ class _HomeVendedorState extends State<HomeVendedor> {
     bool habilitado = true,
     bool compacto = false,
   }) {
-    return Material(
+    return Presionable(
+      child: Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: habilitado ? accion.onTap : _mostrarAvisoStockInicial,
@@ -916,6 +952,7 @@ class _HomeVendedorState extends State<HomeVendedor> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -1017,6 +1054,49 @@ class _HomeVendedorState extends State<HomeVendedor> {
 
   Future<void> _cerrarSesion() async {
     await AuthManager().cerrarSesion();
+  }
+}
+
+/// Estado del turno bajo el nombre del sector: punto de color que late al
+/// aparecer y el texto ("Turno en curso" o "Falta stock inicial").
+class _EstadoTurno extends StatelessWidget {
+  const _EstadoTurno({required this.listo});
+
+  final bool listo;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = listo ? AppColors.exito : AppColors.aviso;
+    final punto = Container(
+      width: 9,
+      height: 9,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: 0.55), blurRadius: 6),
+        ],
+      ),
+    );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        punto.aparicionRebote(demora: const Duration(milliseconds: 500)),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            listo ? 'Turno en curso' : 'Falta stock inicial',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: listo ? AppColors.exito : AppColors.avisoTexto,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
